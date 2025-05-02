@@ -1,70 +1,62 @@
 package com.gmail.bobason01.gui;
 
-import com.gmail.bobason01.MailManager;
+import com.gmail.bobason01.mail.MailDataManager;
+import com.gmail.bobason01.utils.ConfigLoader;
 import com.gmail.bobason01.utils.ItemBuilder;
-import com.gmail.bobason01.utils.LangUtil;
-import com.gmail.bobason01.utils.MailNotifySettingsManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 
 public class MailSettingGUI implements Listener {
+    private final Plugin plugin;
 
-    private final MailManager plugin;
-    private final Map<UUID, Inventory> inventoryMap = new HashMap<>();
-
-    public MailSettingGUI(MailManager plugin) {
+    public MailSettingGUI(Plugin plugin) {
         this.plugin = plugin;
+        ConfigLoader.load(plugin);
     }
 
     public void open(Player player) {
+        Inventory inv = Bukkit.createInventory(player, 27, "⚙ 메일 설정");
         UUID uuid = player.getUniqueId();
-        Inventory inv = Bukkit.createInventory(player, 27, LangUtil.get(uuid, "gui.setting.title"));
-        inventoryMap.put(uuid, inv);
+        boolean notify = MailDataManager.getInstance().isNotifyEnabled(uuid);
 
-        boolean notify = MailNotifySettingsManager.isNotifyEnabled(uuid);
-        Material bell = notify ? Material.BELL : Material.REDSTONE;
-        String bellName = LangUtil.get(uuid, notify ? "gui.setting.notify.on" : "gui.setting.notify.off");
+        inv.setItem(11, new ItemBuilder(notify ? Material.LIME_DYE : Material.GRAY_DYE)
+                .name(notify ? "§a메일 수신 알림: ON" : "§7메일 수신 알림: OFF")
+                .lore("§7메일 수신 시 알림 여부를 설정합니다.")
+                .build());
 
-        inv.setItem(11, new ItemBuilder(bell).name(bellName).build());
-        inv.setItem(15, new ItemBuilder(Material.BOOK).name(LangUtil.get(uuid, "gui.setting.blacklist")).build());
-        inv.setItem(26, new ItemBuilder(Material.BARRIER).name(LangUtil.get(uuid, "gui.back")).build());
+        inv.setItem(15, ConfigLoader.getGuiItem("blacklist"));
+        inv.setItem(26, ConfigLoader.getGuiItem("back"));
 
         player.openInventory(inv);
     }
 
     @EventHandler
-    public void onClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)) return;
+    public void onClick(InventoryClickEvent e) {
+        ItemStack clicked = e.getCurrentItem();
+        if (clicked == null || clicked.getType() == Material.AIR || !clicked.hasItemMeta()) return;
+        if (!(e.getWhoClicked() instanceof Player player)) return;
+        if (!e.getView().getTitle().equals("⚙ 메일 설정")) return;
+
+        e.setCancelled(true);
         UUID uuid = player.getUniqueId();
-        Inventory inv = inventoryMap.get(uuid);
-        if (inv == null || !event.getInventory().equals(inv)) return;
 
-        event.setCancelled(true);
-        int slot = event.getRawSlot();
-
-        if (slot == 11) {
-            MailNotifySettingsManager.toggle(uuid);
-            MailNotifySettingsManager.save();
-            player.sendMessage(LangUtil.get(uuid,
-                    MailNotifySettingsManager.isNotifyEnabled(uuid)
-                            ? "notify.enabled"
-                            : "notify.disabled"));
-            player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
-            open(player); // 갱신
-        } else if (slot == 15) {
-            new BlacklistSelectGUI(plugin).open(player);
-        } else if (slot == 26) {
-            player.closeInventory();
+        switch (e.getRawSlot()) {
+            case 11 -> {
+                boolean newState = MailDataManager.getInstance().toggleNotify(uuid);
+                player.sendMessage(newState ? "§a메일 수신 알림이 활성화되었습니다." : "§7메일 수신 알림이 비활성화되었습니다.");
+                open(player);
+            }
+            case 15 -> new BlacklistSelectGUI(plugin).open(player);
+            case 26 -> new MailGUI(plugin).open(player);
         }
     }
 }

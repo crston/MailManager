@@ -1,0 +1,52 @@
+gui:
+  mail:
+    title: "§f받은 메일"
+
+  mail-send:
+    title: "§f메일 보내기"
+    time: "§c유효 기간 설정"
+    time-lore: "§7메일의 유효 기간을 설정합니다"
+    target: "§e대상 설정"
+    target-lore: "§7메일을 보낼 대상을 선택합니다"
+    send: "§a보내기"
+    send-lore: "§7메일을 발송합니다"
+
+  mail-sendall:
+    title: "§f전체 발송"
+
+  mail-time:
+    title: "§f유효 기간 설정"
+    permanent-set: "§a유효 기간이 제거되었습니다"
+    unit:
+      second: "초"
+      minute: "분"
+      hour: "시간"
+      day: "일"
+      month: "개월"
+      year: "년"
+
+  mail-target:
+    title: "§f대상 선택"
+    cannot-target-self: "§c자기 자신을 대상으로 설정할 수 없습니다"
+
+  sendall-exclude:
+    title: "§f제외 대상"
+    excluded: "§c제외됨"
+    included: "§a포함됨"
+    cannot-exclude-self: "§c자기 자신은 제외할 수 없습니다"
+
+  blacklist:
+    title: "§f차단 목록"
+    blocked: "§c차단됨"
+    allowed: "§a허용됨"
+    cannot-block-self: "§c자기 자신을 차단할 수 없습니다"
+
+mail:
+  deleted: "§c메일이 삭제되었습니다"
+  received: "§a메일을 수신했습니다"
+  invalid-args: "§c메일을 보낼 수 없습니다"
+  sent-success: "§a메일을 성공적으로 보냈습니다"
+  sent-fail: "§c메일 발송에 실패했습니다. 대상, 아이템, 시간을 설정했는지 확인하세요"
+  from: "§a보낸 사람: "
+  sent-at: "§a보낸 시간: "
+  expires: "§c만료일: "

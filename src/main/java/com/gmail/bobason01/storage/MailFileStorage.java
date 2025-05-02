@@ -1,77 +1,115 @@
 package com.gmail.bobason01.storage;
 
-import com.gmail.bobason01.MailManager;
 import com.gmail.bobason01.mail.Mail;
-import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.*;
+import java.util.logging.Level;
 
 public class MailFileStorage {
 
-    private static final File folder = new File(MailManager.getInstance().getDataFolder(), "mails");
+    public static void loadAll(Plugin plugin,
+                               Map<UUID, List<Mail>> inboxMap,
+                               Map<UUID, Set<UUID>> blacklistMap,
+                               Set<UUID> notifyEnabled,
+                               Map<UUID, Set<UUID>> excludeMap) {
 
-    public static Map<UUID, List<Mail>> loadAll() {
-        Map<UUID, List<Mail>> data = new HashMap<>();
+        File folder = new File(plugin.getDataFolder(), "data");
         if (!folder.exists()) folder.mkdirs();
 
-        File[] files = folder.listFiles((dir, name) -> name.endsWith(".yml"));
-        if (files == null) return data;
+        for (File file : Objects.requireNonNull(folder.listFiles())) {
+            if (!file.getName().endsWith(".yml")) continue;
 
-        for (File file : files) {
-            try {
-                UUID uuid = UUID.fromString(file.getName().replace(".yml", ""));
-                YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
-                List<Mail> mails = new ArrayList<>();
+            UUID playerId = UUID.fromString(file.getName().replace(".yml", ""));
+            FileConfiguration config = YamlConfiguration.loadConfiguration(file);
 
-                ConfigurationSection section = config.getConfigurationSection("mails");
-                if (section != null) {
-                    for (String key : section.getKeys(false)) {
-                        String path = "mails." + key;
-                        UUID sender = UUID.fromString(config.getString(path + ".sender"));
-                        ItemStack item = config.getItemStack(path + ".item");
-                        long expire = config.getLong(path + ".expire");
-
-                        if (sender != null && item != null) {
-                            mails.add(new Mail(sender, item, expire));
-                        }
-                    }
+            // 메일
+            List<Mail> mails = new ArrayList<>();
+            if (config.contains("mails")) {
+                for (String key : Objects.requireNonNull(config.getConfigurationSection("mails")).getKeys(false)) {
+                    String path = "mails." + key + ".";
+                    UUID sender = UUID.fromString(Objects.requireNonNull(config.getString(path + "sender")));
+                    ItemStack item = config.getItemStack(path + "item");
+                    LocalDateTime sentAt = LocalDateTime.parse(Objects.requireNonNull(config.getString(path + "sentAt")));
+                    String expireStr = config.getString(path + "expireAt");
+                    LocalDateTime expireAt = expireStr == null ? null : LocalDateTime.parse(expireStr);
+                    mails.add(new Mail(sender, playerId, item, sentAt, expireAt));
                 }
+            }
+            inboxMap.put(playerId, mails);
 
-                data.put(uuid, mails);
-            } catch (Exception e) {
-                MailManager.getInstance().getLogger().warning("Failed to load mail file: " + file.getName());
+            // 블랙리스트
+            Set<UUID> blockedSet = new HashSet<>();
+            for (String s : config.getStringList("blacklist")) {
+                blockedSet.add(UUID.fromString(s));
+            }
+            blacklistMap.put(playerId, blockedSet);
+
+            // 제외 대상
+            Set<UUID> excludedSet = new HashSet<>();
+            for (String s : config.getStringList("excluded")) {
+                excludedSet.add(UUID.fromString(s));
+            }
+            excludeMap.put(playerId, excludedSet);
+
+            // 알림 여부
+            if (config.getBoolean("notify", true)) {
+                notifyEnabled.add(playerId);
             }
         }
-
-        return data;
     }
 
-    public static void saveAll(Map<UUID, List<Mail>> data) {
+    public static void saveAll(Plugin plugin,
+                               Map<UUID, List<Mail>> inboxMap,
+                               Map<UUID, Set<UUID>> blacklistMap,
+                               Set<UUID> notifyEnabled,
+                               Map<UUID, Set<UUID>> excludeMap) {
+
+        File folder = new File(plugin.getDataFolder(), "data");
         if (!folder.exists()) folder.mkdirs();
 
-        for (Map.Entry<UUID, List<Mail>> entry : data.entrySet()) {
-            UUID uuid = entry.getKey();
-            List<Mail> mails = entry.getValue();
+        for (UUID playerId : inboxMap.keySet()) {
+            File file = new File(folder, playerId + ".yml");
+            FileConfiguration config = new YamlConfiguration();
 
-            File file = new File(folder, uuid + ".yml");
-            YamlConfiguration config = new YamlConfiguration();
-
-            int index = 0;
-            for (Mail mail : mails) {
-                String path = "mails." + index++;
-                config.set(path + ".sender", mail.getSender().toString());
-                config.set(path + ".item", mail.getItem());
-                config.set(path + ".expire", mail.getExpireAtMillis());
+            // 메일
+            List<Mail> mails = inboxMap.get(playerId);
+            for (int i = 0; i < mails.size(); i++) {
+                Mail mail = mails.get(i);
+                String path = "mails." + i + ".";
+                config.set(path + "sender", mail.getSender().toString());
+                config.set(path + "item", mail.getItem());
+                config.set(path + "sentAt", mail.getSentAt().toString());
+                config.set(path + "expireAt", mail.getExpireAt() == null ? null : mail.getExpireAt().toString());
             }
+
+            // 블랙리스트
+            List<String> blockedList = new ArrayList<>();
+            for (UUID id : blacklistMap.getOrDefault(playerId, new HashSet<>())) {
+                blockedList.add(id.toString());
+            }
+            config.set("blacklist", blockedList);
+
+            // 제외 대상
+            List<String> excludedList = new ArrayList<>();
+            for (UUID id : excludeMap.getOrDefault(playerId, new HashSet<>())) {
+                excludedList.add(id.toString());
+            }
+            config.set("excluded", excludedList);
+
+            // 알림
+            config.set("notify", notifyEnabled.contains(playerId));
 
             try {
                 config.save(file);
             } catch (IOException e) {
-                e.printStackTrace();
+                plugin.getLogger().log(Level.SEVERE, "Error saving mail data for " + playerId, e);
             }
         }
     }

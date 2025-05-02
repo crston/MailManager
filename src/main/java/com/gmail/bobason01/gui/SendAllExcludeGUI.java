@@ -1,6 +1,7 @@
 package com.gmail.bobason01.gui;
 
-import com.gmail.bobason01.MailManager;
+import com.gmail.bobason01.mail.MailDataManager;
+import com.gmail.bobason01.utils.ConfigLoader;
 import com.gmail.bobason01.utils.ItemBuilder;
 import com.gmail.bobason01.utils.LangUtil;
 import org.bukkit.Bukkit;
@@ -12,105 +13,67 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.plugin.Plugin;
 
-import java.util.*;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 
 public class SendAllExcludeGUI implements Listener {
 
-    private final MailManager plugin;
-    private final Map<UUID, Inventory> inventoryMap = new HashMap<>();
-    private final Map<UUID, Integer> pageMap = new HashMap<>();
+    private final Plugin plugin;
 
-    // 발신자 UUID → 제외 대상 UUID 목록
-    private static final Map<UUID, Set<UUID>> excludeMap = new HashMap<>();
-
-    public SendAllExcludeGUI(MailManager plugin) {
+    public SendAllExcludeGUI(Plugin plugin) {
         this.plugin = plugin;
+        ConfigLoader.load(plugin);
     }
 
     public void open(Player player) {
-        UUID sender = player.getUniqueId();
-        int page = pageMap.getOrDefault(sender, 0);
-        Inventory gui = Bukkit.createInventory(player, 54, LangUtil.get(sender, "gui.exclude.title"));
-        inventoryMap.put(sender, gui);
+        Inventory inv = Bukkit.createInventory(player, 54, LangUtil.get("gui.sendall-exclude.title"));
+        Set<UUID> excluded = MailDataManager.getInstance().getExcluded(player.getUniqueId());
 
-        List<OfflinePlayer> players = Arrays.asList(Bukkit.getOfflinePlayers());
-        players.sort(Comparator.comparing(p -> Optional.ofNullable(p.getName()).orElse("~")));
+        int i = 0;
+        for (OfflinePlayer p : Bukkit.getOfflinePlayers()) {
+            if (i >= 45) break;
+            if (p.getUniqueId().equals(player.getUniqueId())) continue;
 
-        Set<UUID> excluded = excludeMap.computeIfAbsent(sender, k -> new HashSet<>());
-
-        int start = page * 36;
-        int end = Math.min(start + 36, players.size());
-
-        int slot = 9;
-        for (int i = start; i < end; i++) {
-            OfflinePlayer target = players.get(i);
-            if (!target.hasPlayedBefore() || target.getName() == null || target.getUniqueId().equals(sender))
-                continue;
-
-            boolean isExcluded = excluded.contains(target.getUniqueId());
-
-            ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
-            SkullMeta meta = (SkullMeta) skull.getItemMeta();
-            assert meta != null;
-            meta.setOwningPlayer(target);
-            meta.setDisplayName((isExcluded ? "§c" : "§a") + target.getName());
-
-            List<String> lore = new ArrayList<>();
-            lore.add(LangUtil.get(sender, isExcluded ? "gui.exclude.selected" : "gui.exclude.unselected"));
-            meta.setLore(lore);
-            skull.setItemMeta(meta);
-
-            gui.setItem(slot++, skull);
+            ItemStack head = new ItemBuilder(Material.PLAYER_HEAD)
+                    .owner(p.getName())
+                    .name("§f" + p.getName())
+                    .lore(excluded.contains(p.getUniqueId())
+                            ? LangUtil.get("gui.sendall-exclude.excluded")
+                            : LangUtil.get("gui.sendall-exclude.included"))
+                    .build();
+            inv.setItem(i++, head);
         }
 
-        gui.setItem(48, new ItemBuilder(Material.ARROW).name(LangUtil.get(sender, "gui.previous")).build());
-        gui.setItem(50, new ItemBuilder(Material.ARROW).name(LangUtil.get(sender, "gui.next")).build());
-        gui.setItem(53, new ItemBuilder(Material.BARRIER).name(LangUtil.get(sender, "gui.back")).build());
-
-        player.openInventory(gui);
-    }
-
-    public static boolean isExcluded(UUID sender, UUID target) {
-        return excludeMap.getOrDefault(sender, Collections.emptySet()).contains(target);
+        inv.setItem(53, ConfigLoader.getGuiItem("back"));
+        player.openInventory(inv);
     }
 
     @EventHandler
-    public void onClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)) return;
-        UUID sender = player.getUniqueId();
+    public void onClick(InventoryClickEvent e) {
+        ItemStack clicked = e.getCurrentItem();
+        if (clicked == null || clicked.getType() == Material.AIR || !clicked.hasItemMeta()) return;
+        if (!(e.getWhoClicked() instanceof Player player)) return;
+        if (!e.getView().getTitle().equals(LangUtil.get("gui.sendall-exclude.title"))) return;
 
-        Inventory gui = inventoryMap.get(sender);
-        if (gui == null || !event.getInventory().equals(gui)) return;
+        e.setCancelled(true);
+        int slot = e.getRawSlot();
+        Set<UUID> excluded = MailDataManager.getInstance().getExcluded(player.getUniqueId());
 
-        event.setCancelled(true);
-        int slot = event.getRawSlot();
-
-        if (slot >= 9 && slot < 45) {
-            ItemStack clicked = gui.getItem(slot);
-            if (clicked == null || !(clicked.getItemMeta() instanceof SkullMeta meta)) return;
-            OfflinePlayer target = meta.getOwningPlayer();
-            if (target == null) return;
-
-            UUID targetId = target.getUniqueId();
-            Set<UUID> excluded = excludeMap.computeIfAbsent(sender, k -> new HashSet<>());
-
-            if (excluded.contains(targetId)) {
-                excluded.remove(targetId);
-            } else {
-                excluded.add(targetId);
+        if (slot < 45) {
+            String name = Objects.requireNonNull(clicked.getItemMeta()).getDisplayName().replace("§f", "");
+            OfflinePlayer target = Bukkit.getOfflinePlayer(name);
+            if (target.getUniqueId().equals(player.getUniqueId())) {
+                player.sendMessage(LangUtil.get("gui.sendall-exclude.cannot-exclude-self"));
+                return;
             }
 
-            open(player); // refresh
-        } else if (slot == 48) {
-            int page = pageMap.getOrDefault(sender, 0);
-            if (page > 0) {
-                pageMap.put(sender, page - 1);
-                open(player);
-            }
-        } else if (slot == 50) {
-            pageMap.put(sender, pageMap.getOrDefault(sender, 0) + 1);
+            UUID uuid = target.getUniqueId();
+            if (excluded.contains(uuid)) excluded.remove(uuid);
+            else excluded.add(uuid);
+
             open(player);
         } else if (slot == 53) {
             new MailSendAllGUI(plugin).open(player);

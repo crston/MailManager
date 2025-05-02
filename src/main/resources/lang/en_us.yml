@@ -1,48 +1,52 @@
-gui.mail.title: "📥 Inbox"
-gui.send.title: "📤 Send Mail"
-gui.sendall.title: "📢 Send to All"
-gui.time.title: "⏳ Set Expiration Time"
-gui.target.title: "🎯 Select Target"
-gui.setting.title: "⚙ Settings"
-gui.blacklist.title: "🚫 Blacklist"
-gui.exclude.title: "❌ Excluded Players"
+gui:
+  mail:
+    title: "§fInbox"
 
-gui.back: "⬅ Back"
-gui.previous: "◀ Previous"
-gui.next: "▶ Next"
-gui.confirm: "✔ Confirm"
-gui.send.set-time: "⏳ Set Expiration Time"
-gui.send.set-target: "🎯 Set Target"
-gui.send.confirm: "📨 Send Mail"
-gui.send.no-item: "No item to send."
-gui.send.no-target: "No target selected."
-gui.send.success: "Mail sent to %target%."
-gui.sendall.success: "Sent mail to %count% players."
-gui.send.select-time: "Currently using default (7 days)."
+  mail-send:
+    title: "§fSend Mail"
+    time: "§cSet Expiration"
+    time-lore: "§7Set the expiration time of this mail."
+    target: "§eSet Target"
+    target-lore: "§7Choose who to send the mail to."
+    send: "§aSend"
+    send-lore: "§7Send this mail."
 
-gui.mail.item.title: "Sender: %sender%"
-gui.mail.item.lore.received: "Click to receive | Shift+Right-click to delete"
-gui.mail.item.lore.expires: "Expires in: %time%"
-gui.mail.delete: "Mail deleted."
-gui.mail.receive: "Mail received."
-gui.mail.full: "Not enough space in your inventory."
+  mail-sendall:
+    title: "§fSend to All"
 
-notify.enabled: "Mail notification enabled."
-notify.disabled: "Mail notification disabled."
-notify.new-mail: "📬 You have received a new mail!"
+  mail-time:
+    title: "§fSet Expiration"
+    permanent-set: "§aExpiration removed."
+    unit:
+      second: "Seconds"
+      minute: "Minutes"
+      hour: "Hours"
+      day: "Days"
+      month: "Months"
+      year: "Years"
 
-gui.setting.notify.on: "📢 Mail Notify: ON"
-gui.setting.notify.off: "🔕 Mail Notify: OFF"
-gui.setting.blacklist: "🚫 View Blacklist"
+  mail-target:
+    title: "§fSelect Target"
+    cannot-target-self: "§cYou cannot target yourself."
 
-gui.blacklist.is: "❌ This player is blacklisted"
-gui.blacklist.not: "✅ This player is not blacklisted"
+  sendall-exclude:
+    title: "§fExclude Targets"
+    excluded: "§cExcluded"
+    included: "§aIncluded"
+    cannot-exclude-self: "§cYou cannot exclude yourself."
 
-gui.exclude.lore.excluded: "❌ Will be excluded from sending"
-gui.exclude.lore.included: "✅ Will receive mail"
+  blacklist:
+    title: "§fBlocked Players"
+    blocked: "§cBlocked"
+    allowed: "§aAllowed"
+    cannot-block-self: "§cYou cannot block yourself."
 
-command.usage: "Usage: /mail [send|sendall|reset|reload|notify]"
-command.reset.usage: "Usage: /mail reset <player>"
-no-permission: "You do not have permission to use this command."
-reload-success: "Reloaded config and language file."
-reset-success: "Cleared inbox for %target%."
+mail:
+  deleted: "§cMail deleted."
+  received: "§aMail received."
+  invalid-args: "§cCannot send mail. Please check target, item, and time settings."
+  sent-success: "§aMail sent successfully."
+  sent-fail: "§cFailed to send mail. Please check if target, item, and time are set."
+  from: "§aFrom: "
+  sent-at: "§aSent At: "
+  expires: "§cExpires: "

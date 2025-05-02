@@ -1,9 +1,8 @@
 package com.gmail.bobason01.gui;
 
-import com.gmail.bobason01.MailManager;
 import com.gmail.bobason01.mail.Mail;
-import com.gmail.bobason01.mail.MailService;
-import com.gmail.bobason01.utils.ItemBuilder;
+import com.gmail.bobason01.mail.MailDataManager;
+import com.gmail.bobason01.utils.ConfigLoader;
 import com.gmail.bobason01.utils.LangUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -11,101 +10,92 @@ import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
 
 import java.util.*;
 
 public class MailGUI implements Listener {
 
-    private final MailManager plugin;
+    private final Plugin plugin;
     private final Map<UUID, Integer> pageMap = new HashMap<>();
-    private final Map<UUID, Inventory> inventoryMap = new HashMap<>();
+    private static final int PAGE_SIZE = 27;
 
-    public MailGUI(MailManager plugin) {
+    public MailGUI(Plugin plugin) {
         this.plugin = plugin;
+        ConfigLoader.load(plugin);
     }
 
     public void open(Player player) {
-        UUID uuid = player.getUniqueId();
-        int page = pageMap.getOrDefault(uuid, 0);
+        open(player, 0);
+    }
 
-        List<Mail> inbox = MailService.getInbox(uuid);
-        int total = inbox.size();
-        int start = page * 27;
-        int end = Math.min(start + 27, total);
+    public void open(Player player, int page) {
+        List<Mail> mails = MailDataManager.getInstance().getMails(player.getUniqueId());
+        int totalPages = (int) Math.ceil((double) mails.size() / PAGE_SIZE);
+        page = Math.max(0, Math.min(page, totalPages - 1));
+        pageMap.put(player.getUniqueId(), page);
 
-        Inventory gui = Bukkit.createInventory(player, 54, LangUtil.get(uuid, "gui.mail.title"));
-        inventoryMap.put(uuid, gui);
+        Inventory inv = Bukkit.createInventory(player, 54, LangUtil.get("gui.mail.title"));
+
+        int start = page * PAGE_SIZE;
+        int end = Math.min(start + PAGE_SIZE, mails.size());
 
         for (int i = start; i < end; i++) {
-            Mail mail = inbox.get(i);
-            gui.setItem(i - start, mail.getItem().clone());
+            inv.setItem(i - start, mails.get(i).toItemStack());
         }
 
-        gui.setItem(8, new ItemBuilder(Material.COMPARATOR).name(LangUtil.get(uuid, "gui.mail.settings")).build());
-        gui.setItem(45, new ItemBuilder(Material.WRITABLE_BOOK).name(LangUtil.get(uuid, "gui.mail.send")).build());
-        gui.setItem(48, new ItemBuilder(Material.ARROW).name(LangUtil.get(uuid, "gui.previous")).build());
-        gui.setItem(50, new ItemBuilder(Material.ARROW).name(LangUtil.get(uuid, "gui.next")).build());
+        if (page > 0)
+            inv.setItem(48, ConfigLoader.getGuiItem("previous-page"));
+        if (end < mails.size())
+            inv.setItem(50, ConfigLoader.getGuiItem("next-page"));
 
-        player.openInventory(gui);
+        inv.setItem(45, ConfigLoader.getGuiItem("mail-send"));
+        inv.setItem(8, ConfigLoader.getGuiItem("setting"));
+
+        player.openInventory(inv);
     }
 
     @EventHandler
-    public void onClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)) return;
+    public void onClick(InventoryClickEvent e) {
+        if (!(e.getWhoClicked() instanceof Player player)) return;
+        if (!e.getView().getTitle().equals(LangUtil.get("gui.mail.title"))) return;
 
+        e.setCancelled(true);
+        ItemStack clicked = e.getCurrentItem();
+        if (clicked == null || clicked.getType() == Material.AIR) return;
+
+        int rawSlot = e.getRawSlot();
         UUID uuid = player.getUniqueId();
-        Inventory gui = inventoryMap.get(uuid);
-        if (gui == null) return;
+        List<Mail> mails = MailDataManager.getInstance().getMails(uuid);
+        int page = pageMap.getOrDefault(uuid, 0);
+        int index = page * PAGE_SIZE + rawSlot;
 
-        // 메뉴 GUI 확인
-        if (!event.getView().getTopInventory().equals(gui)) return;
+        if (rawSlot < PAGE_SIZE && index < mails.size()) {
+            Mail mail = mails.get(index);
 
-        int rawSlot = event.getRawSlot();
-        Inventory clicked = event.getClickedInventory();
+            if (e.getClick() == ClickType.SHIFT_RIGHT) {
+                MailDataManager.getInstance().removeMail(uuid, mail);
+                player.sendMessage(LangUtil.get("mail.deleted"));
+            } else {
+                mail.give(player);
+                MailDataManager.getInstance().removeMail(uuid, mail);
+                player.sendMessage(LangUtil.get("mail.received"));
+                player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 1, 1);
+            }
 
-        // 보호: 메뉴 클릭만 차단 (player 인벤토리는 허용)
-        if (clicked != null && clicked.equals(event.getView().getTopInventory())) {
-            event.setCancelled(true);
-        } else {
-            return; // 플레이어 인벤토리는 차단 안 함
+            open(player, page);
+            return;
         }
 
-        int page = pageMap.getOrDefault(uuid, 0);
-        List<Mail> inbox = MailService.getInbox(uuid);
-
-        if (rawSlot >= 0 && rawSlot < 27) {
-            int index = page * 27 + rawSlot;
-            if (index >= inbox.size()) return;
-
-            Mail mail = inbox.get(index);
-            if (event.isShiftClick() && event.isRightClick()) {
-                inbox.remove(index);
-                player.sendMessage(LangUtil.get(uuid, "gui.mail.deleted"));
-            } else {
-                player.getInventory().addItem(mail.getItem().clone());
-                inbox.remove(index);
-                player.sendMessage(LangUtil.get(uuid, "gui.mail.received"));
-            }
-
-            player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 1f, 1f);
-            open(player);
-        } else if (rawSlot == 45) {
-            new MailSendGUI(plugin).open(player);
-        } else if (rawSlot == 48) {
-            if (page > 0) {
-                pageMap.put(uuid, page - 1);
-                open(player);
-            }
-        } else if (rawSlot == 50) {
-            if ((page + 1) * 27 < inbox.size()) {
-                pageMap.put(uuid, page + 1);
-                open(player);
-            }
-        } else if (rawSlot == 8) {
-            new MailSettingGUI(plugin).open(player);
+        switch (rawSlot) {
+            case 45 -> new MailSendGUI(plugin).open(player);
+            case 48 -> open(player, page - 1);
+            case 50 -> open(player, page + 1);
+            case 8 -> new MailSettingGUI(plugin).open(player);
         }
     }
 }

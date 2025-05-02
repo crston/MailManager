@@ -1,100 +1,77 @@
 package com.gmail.bobason01.mail;
 
-import org.bukkit.Bukkit;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.inventory.ItemStack;
+import com.gmail.bobason01.storage.MailFileStorage;
+import org.bukkit.plugin.Plugin;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.*;
 
 public class MailDataManager {
 
-    private static final File folder = new File(Bukkit.getPluginManager().getPlugin("MailManager").getDataFolder(), "mails");
+    private static final MailDataManager instance = new MailDataManager();
+    public static MailDataManager getInstance() {
+        return instance;
+    }
 
-    // UUID → 메일 리스트
-    private static final Map<UUID, List<Mail>> mailMap = new HashMap<>();
+    private final Map<UUID, List<Mail>> inboxMap = new HashMap<>();
+    private final Map<UUID, Set<UUID>> blacklistMap = new HashMap<>();
+    private final Map<UUID, Set<UUID>> excludeMap = new HashMap<>();
+    private final Set<UUID> notifyEnabled = new HashSet<>();
 
-    /**
-     * 메일 전체 불러오기 (플러그인 시작 시)
-     */
-    public static void loadAll() {
-        mailMap.clear();
-        if (!folder.exists()) folder.mkdirs();
+    public void load(Plugin plugin) {
+        MailFileStorage.loadAll(plugin, inboxMap, blacklistMap, notifyEnabled, excludeMap);
+    }
 
-        File[] files = folder.listFiles((f, name) -> name.endsWith(".yml"));
-        if (files == null) return;
+    public void save(Plugin plugin) {
+        MailFileStorage.saveAll(plugin, inboxMap, blacklistMap, notifyEnabled, excludeMap);
+    }
 
-        for (File file : files) {
-            try {
-                UUID uuid = UUID.fromString(file.getName().replace(".yml", ""));
-                YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+    public void reset(UUID uniqueId) {
+        inboxMap.clear();
+        blacklistMap.clear();
+        excludeMap.clear();
+        notifyEnabled.clear();
+    }
 
-                List<Mail> list = new ArrayList<>();
-                ConfigurationSection section = config.getConfigurationSection("mails");
-                if (section != null) {
-                    for (String key : section.getKeys(false)) {
-                        UUID sender = UUID.fromString(section.getString(key + ".sender"));
-                        ItemStack item = section.getItemStack(key + ".item");
-                        long expire = section.getLong(key + ".expire");
+    public List<Mail> getMails(UUID player) {
+        return inboxMap.computeIfAbsent(player, k -> new ArrayList<>());
+    }
 
-                        if (sender != null && item != null) {
-                            list.add(new Mail(sender, item, expire));
-                        }
-                    }
-                }
+    public void addMail(UUID player, Mail mail) {
+        getMails(player).add(mail);
+    }
 
-                mailMap.put(uuid, list);
-            } catch (Exception e) {
-                Bukkit.getLogger().warning("[MailManager] Failed to load mail: " + file.getName());
-                e.printStackTrace();
-            }
+    public boolean removeMail(UUID player, Mail mail) {
+        List<Mail> inbox = inboxMap.get(player);
+        return inbox != null && inbox.remove(mail);
+    }
+
+    public Set<UUID> getBlacklist(UUID player) {
+        return blacklistMap.computeIfAbsent(player, k -> new HashSet<>());
+    }
+
+    public Set<UUID> getExcluded(UUID player) {
+        return excludeMap.computeIfAbsent(player, k -> new HashSet<>());
+    }
+
+    public boolean isNotifyEnabled(UUID player) {
+        return notifyEnabled.contains(player);
+    }
+
+    public boolean toggleNotify(UUID player) {
+        if (notifyEnabled.contains(player)) {
+            notifyEnabled.remove(player);
+            return false;
+        } else {
+            notifyEnabled.add(player);
+            return true;
         }
     }
 
-    /**
-     * 메일 전체 저장 (플러그인 종료 시)
-     */
-    public static void saveAll() {
-        if (!folder.exists()) folder.mkdirs();
-
-        for (Map.Entry<UUID, List<Mail>> entry : mailMap.entrySet()) {
-            UUID uuid = entry.getKey();
-            List<Mail> mails = entry.getValue();
-
-            File file = new File(folder, uuid + ".yml");
-            YamlConfiguration config = new YamlConfiguration();
-
-            int index = 0;
-            for (Mail mail : mails) {
-                String path = "mails." + index++;
-                config.set(path + ".sender", mail.getSender().toString());
-                config.set(path + ".item", mail.getItem());
-                config.set(path + ".expire", mail.getExpireAtMillis());
-            }
-
-            try {
-                config.save(file);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    public static List<Mail> getInbox(UUID uuid) {
-        return mailMap.computeIfAbsent(uuid, k -> new ArrayList<>());
-    }
-
-    public static void addMail(UUID receiver, Mail mail) {
-        getInbox(receiver).add(mail);
-    }
-
-    public static void removeMail(UUID receiver, Mail mail) {
-        getInbox(receiver).remove(mail);
-    }
-
-    public static void clearInbox(UUID receiver) {
-        getInbox(receiver).clear();
+    public void reload(Plugin plugin) {
+        inboxMap.clear();
+        blacklistMap.clear();
+        excludeMap.clear();
+        notifyEnabled.clear();
+        load(plugin);
     }
 }

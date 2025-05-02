@@ -1,47 +1,33 @@
 package com.gmail.bobason01.utils;
 
-import org.bukkit.Bukkit;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.entity.Player;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Consumer;
 
-public class ChatSearchRegistry implements Listener {
+public class ChatSearchRegistry {
 
-    private static final Map<UUID, Consumer<String>> pending = new HashMap<>();
+    private static final Map<UUID, ChatCallback> registry = new HashMap<>();
 
-    public static void registerListener(Plugin plugin) {
-        Bukkit.getPluginManager().registerEvents(new ChatSearchRegistry(), plugin);
+    public static void register(Player player, ChatCallback callback) {
+        registry.put(player.getUniqueId(), callback);
     }
 
-    public static void startSearch(UUID uuid, Consumer<String> callback) {
-        pending.put(uuid, callback);
+    public static void unregister(UUID uuid) {
+        registry.remove(uuid);
     }
 
-    public static boolean isSearching(UUID uuid) {
-        return pending.containsKey(uuid);
+    public static boolean has(UUID uuid) {
+        return registry.containsKey(uuid);
     }
 
-    public static void cancel(UUID uuid) {
-        pending.remove(uuid);
+    public static void handle(UUID uuid, String input) {
+        ChatCallback callback = registry.remove(uuid);
+        if (callback != null) callback.onChat(input);
     }
 
-    @EventHandler
-    public void onChat(AsyncPlayerChatEvent event) {
-        UUID uuid = event.getPlayer().getUniqueId();
-        if (!pending.containsKey(uuid)) return;
-
-        event.setCancelled(true);
-        Consumer<String> callback = pending.remove(uuid);
-        if (callback != null) {
-            Bukkit.getScheduler().runTask(JavaPlugin.getProvidingPlugin(ChatSearchRegistry.class),
-                    () -> callback.accept(event.getMessage()));
-        }
+    public interface ChatCallback {
+        void onChat(String message);
     }
 }
