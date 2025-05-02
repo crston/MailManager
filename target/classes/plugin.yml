@@ -1,0 +1,25 @@
+name: MailManager
+version: 1.0.0
+main: com.gmail.bobason01.MailManager
+api-version: 1.16
+author: bobason01
+commands:
+  mail:
+    description: 메일 시스템 명령어
+    usage: /mail [send|sendall|reset|reload|notify]
+permissions:
+  mail.send:
+    description: 메일을 보낼 수 있는 권한
+    default: true
+  mail.sendall:
+    description: 전체 유저에게 메일을 보낼 수 있는 권한
+    default: op
+  mail.reset:
+    description: 다른 플레이어의 메일함을 초기화
+    default: op
+  mail.reload:
+    description: 설정과 메시지를 다시 불러오기
+    default: op
+  mail.notify:
+    description: 알림 설정을 제어할 수 있는 권한
+    default: true

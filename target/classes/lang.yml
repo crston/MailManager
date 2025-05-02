@@ -1,0 +1,56 @@
+# GUI Titles
+gui.mail.title: "📥 받은 메일함"
+gui.send.title: "📤 메일 보내기"
+gui.sendall.title: "📢 전체 발송"
+gui.time.title: "⏳ 유효 시간 설정"
+gui.target.title: "🎯 대상 선택"
+gui.setting.title: "⚙ 설정"
+gui.blacklist.title: "🚫 차단 목록"
+gui.exclude.title: "❌ 제외 대상 선택"
+
+# Buttons
+gui.back: "⬅ 돌아가기"
+gui.previous: "◀ 이전"
+gui.next: "▶ 다음"
+gui.confirm: "✔ 확인"
+gui.send.set-time: "⏳ 유효 시간 설정"
+gui.send.set-target: "🎯 대상 설정"
+gui.send.confirm: "📨 메일 보내기"
+gui.send.no-item: "보낼 아이템이 없습니다."
+gui.send.no-target: "대상이 설정되지 않았습니다."
+gui.send.success: "%target%에게 메일을 보냈습니다."
+gui.sendall.success: "%count%명의 플레이어에게 메일을 보냈습니다."
+gui.send.select-time: "현재는 기본 7일로 설정됩니다."
+
+# Mail GUI
+gui.mail.item.title: "보낸 사람: %sender%"
+gui.mail.item.lore.received: "클릭: 수령 | 쉬프트 우클릭: 삭제"
+gui.mail.item.lore.expires: "만료까지 남은 시간: %time%"
+gui.mail.delete: "메일을 삭제했습니다."
+gui.mail.receive: "메일을 수령했습니다."
+gui.mail.full: "인벤토리에 공간이 부족합니다."
+
+# Notify
+notify.enabled: "메일 수신 알림이 활성화되었습니다."
+notify.disabled: "메일 수신 알림이 비활성화되었습니다."
+notify.new-mail: "📬 새로운 메일이 도착했습니다!"
+
+# Setting GUI
+gui.setting.notify.on: "📢 메일 알림: 켜짐"
+gui.setting.notify.off: "🔕 메일 알림: 꺼짐"
+gui.setting.blacklist: "🚫 차단 목록 보기"
+
+# Blacklist GUI
+gui.blacklist.is: "❌ 이 플레이어는 차단됨"
+gui.blacklist.not: "✅ 이 플레이어는 차단되지 않음"
+
+# Exclude GUI
+gui.exclude.lore.excluded: "❌ 전체 발송에서 제외됨"
+gui.exclude.lore.included: "✅ 전체 발송 대상"
+
+# Commands
+command.usage: "사용법: /mail [send|sendall|reset|reload|notify]"
+command.reset.usage: "사용법: /mail reset <플레이어>"
+no-permission: "이 명령어를 사용할 권한이 없습니다."
+reload-success: "설정과 메시지가 성공적으로 리로드되었습니다."
+reset-success: "%target%의 메일함을 초기화했습니다."
