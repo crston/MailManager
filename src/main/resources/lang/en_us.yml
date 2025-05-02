@@ -1,36 +1,37 @@
 gui:
   mail:
     title: "§fInbox"
+    blacklisted: "§cThis player has blocked your mail."
 
   mail-send:
     title: "§fSend Mail"
     time: "§cSet Expiration"
-    time-lore: "§7Set the expiration time of this mail."
-    target: "§eSet Target"
-    target-lore: "§7Choose who to send the mail to."
+    time-lore: "§7Configure the expiration time of the mail."
+    target: "§eSelect Recipient"
+    target-lore: "§7Choose the recipient of the mail."
     send: "§aSend"
-    send-lore: "§7Send this mail."
+    send-lore: "§7Send the mail."
 
   mail-sendall:
     title: "§fSend to All"
 
   mail-time:
     title: "§fSet Expiration"
-    permanent-set: "§aExpiration removed."
+    permanent-set: "§aExpiration removed. The mail will be permanent."
     unit:
-      second: "Seconds"
-      minute: "Minutes"
-      hour: "Hours"
-      day: "Days"
-      month: "Months"
-      year: "Years"
+      second: "second(s)"
+      minute: "minute(s)"
+      hour: "hour(s)"
+      day: "day(s)"
+      month: "month(s)"
+      year: "year(s)"
 
   mail-target:
-    title: "§fSelect Target"
-    cannot-target-self: "§cYou cannot target yourself."
+    title: "§fSelect Recipient"
+    cannot-target-self: "§cYou cannot select yourself as the recipient."
 
   sendall-exclude:
-    title: "§fExclude Targets"
+    title: "§fExclude Recipients"
     excluded: "§cExcluded"
     included: "§aIncluded"
     cannot-exclude-self: "§cYou cannot exclude yourself."
@@ -41,12 +42,28 @@ gui:
     allowed: "§aAllowed"
     cannot-block-self: "§cYou cannot block yourself."
 
+  mail-setting:
+    title: "⚙ Mail Settings"
+    notify-on: "§aMail Notifications: ON"
+    notify-off: "§7Mail Notifications: OFF"
+    notify-lore: "§7Toggle whether to receive notifications when mail arrives."
+    notify-enabled: "§aMail notifications have been enabled."
+    notify-disabled: "§7Mail notifications have been disabled."
+
 mail:
-  deleted: "§cMail deleted."
-  received: "§aMail received."
-  invalid-args: "§cCannot send mail. Please check target, item, and time settings."
-  sent-success: "§aMail sent successfully."
-  sent-fail: "§cFailed to send mail. Please check if target, item, and time are set."
+  deleted: "§cThe mail has been deleted."
+  received: "§aYou have received mail."
+  invalid-args: "§cUnable to send mail. Please check the recipient and item."
+  sent: "§aMail has been sent to {player}."
+  sent-fail: "§cFailed to send mail. Make sure recipient, item, and time are set."
   from: "§aFrom: "
   sent-at: "§aSent At: "
   expires: "§cExpires: "
+
+only-player: "§cOnly players can use this command."
+player-not-found: "§cCould not find the specified player."
+reload-success: "§aConfiguration and mail data reloaded successfully."
+reset-success: "§cThe player's mail data has been reset."
+
+notify-on: "§aMail notifications have been enabled."
+notify-off: "§7Mail notifications have been disabled."

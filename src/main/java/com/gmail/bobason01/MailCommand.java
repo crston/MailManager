@@ -1,9 +1,6 @@
 package com.gmail.bobason01;
 
-import com.gmail.bobason01.gui.MailGUI;
-import com.gmail.bobason01.gui.MailSendAllGUI;
-import com.gmail.bobason01.gui.MailSendGUI;
-import com.gmail.bobason01.gui.MailSettingGUI;
+import com.gmail.bobason01.gui.*;
 import com.gmail.bobason01.mail.MailDataManager;
 import com.gmail.bobason01.utils.LangUtil;
 import org.bukkit.Bukkit;
@@ -23,56 +20,68 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
-
-        // Only players can use this command
         if (!(sender instanceof Player player)) {
             sender.sendMessage(LangUtil.get("only-player"));
             return true;
         }
 
-        // /mail
         if (args.length == 0) {
             new MailGUI(MailManager.getInstance()).open(player);
             return true;
         }
 
         switch (args[0].toLowerCase()) {
-            case "send" -> new MailSendGUI(MailManager.getInstance()).open(player);
-            case "sendall" -> new MailSendAllGUI(MailManager.getInstance()).open(player);
+            case "send" -> {
+                new MailSendGUI(MailManager.getInstance()).open(player);
+                return true;
+            }
+            case "sendall" -> {
+                new MailSendAllGUI(MailManager.getInstance()).open(player);
+                return true;
+            }
             case "notify" -> {
-                boolean result = MailDataManager.getInstance().toggleNotify(player.getUniqueId());
-                player.sendMessage(LangUtil.get(result ? "notify-on" : "notify-off"));
+                boolean newState = MailDataManager.getInstance().toggleNotify(player.getUniqueId());
+                player.sendMessage(LangUtil.get(newState ? "notify-on" : "notify-off"));
+                return true;
             }
             case "reload" -> {
                 MailDataManager.getInstance().reload(MailManager.getInstance());
                 LangUtil.load(MailManager.getInstance());
                 player.sendMessage(LangUtil.get("reload-success"));
+                return true;
             }
             case "reset" -> {
                 if (args.length < 2) {
                     player.sendMessage(LangUtil.get("invalid-args"));
                     return true;
                 }
+
                 OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
-                if (target == null || !target.hasPlayedBefore()) {
+                if (target == null || target.getName() == null) {
                     player.sendMessage(LangUtil.get("player-not-found"));
                     return true;
                 }
+
                 MailDataManager.getInstance().reset(target.getUniqueId());
                 player.sendMessage(LangUtil.get("reset-success"));
+                return true;
             }
-            case "setting" -> new MailSettingGUI(MailManager.getInstance()).open(player);
-            default -> player.sendMessage(LangUtil.get("invalid-args"));
+            case "setting" -> {
+                new MailSettingGUI(MailManager.getInstance()).open(player);
+                return true;
+            }
+            default -> {
+                player.sendMessage(LangUtil.get("invalid-args"));
+                return true;
+            }
         }
-
-        return true;
     }
 
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, String[] args) {
         if (args.length == 1) {
             return Stream.of("send", "sendall", "notify", "reset", "reload", "setting")
-                    .filter(s -> s.startsWith(args[0].toLowerCase()))
+                    .filter(sub -> sub.startsWith(args[0].toLowerCase()))
                     .collect(Collectors.toList());
         }
 

@@ -24,27 +24,30 @@ public class MailManager extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        // 설정 파일 로딩
+        // 1. 설정 및 다국어 파일 로드
         saveDefaultConfig();
         ConfigLoader.load(this);
-
-        // 다국어 메시지 로딩
         LangUtil.load(this);
 
-        // 메일 데이터 로드
-        MailDataManager.getInstance().load(this);
+        // 2. 메일 데이터 초기화 (plugin 참조 저장 포함)
+        MailDataManager.getInstance().init(this);
 
-        // 명령어 등록
-        Objects.requireNonNull(getCommand("mail")).setExecutor(new MailCommand());
-        Objects.requireNonNull(getCommand("mail")).setTabCompleter(new MailCommand());
+        // 3. 명령어 등록
+        registerCommands();
 
-        // GUI 이벤트 등록
+        // 4. GUI 이벤트 등록
         registerListeners();
     }
 
     @Override
     public void onDisable() {
-        MailDataManager.getInstance().save(this);
+        // 서버 종료 시 메일 저장
+        MailDataManager.getInstance().save();
+    }
+
+    private void registerCommands() {
+        Objects.requireNonNull(getCommand("mail")).setExecutor(new MailCommand());
+        Objects.requireNonNull(getCommand("mail")).setTabCompleter(new MailCommand());
     }
 
     private void registerListeners() {

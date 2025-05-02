@@ -34,10 +34,13 @@ public class MailGUI implements Listener {
     }
 
     public void open(Player player, int page) {
-        List<Mail> mails = MailDataManager.getInstance().getMails(player.getUniqueId());
+        UUID uuid = player.getUniqueId();
+        List<Mail> mails = MailDataManager.getInstance().getMails(uuid);
+
         int totalPages = (int) Math.ceil((double) mails.size() / PAGE_SIZE);
+        if (totalPages == 0) totalPages = 1;
         page = Math.max(0, Math.min(page, totalPages - 1));
-        pageMap.put(player.getUniqueId(), page);
+        pageMap.put(uuid, page);
 
         Inventory inv = Bukkit.createInventory(player, 54, LangUtil.get("gui.mail.title"));
 
@@ -48,11 +51,9 @@ public class MailGUI implements Listener {
             inv.setItem(i - start, mails.get(i).toItemStack());
         }
 
-        if (page > 0)
-            inv.setItem(48, ConfigLoader.getGuiItem("previous-page"));
-        if (end < mails.size())
-            inv.setItem(50, ConfigLoader.getGuiItem("next-page"));
-
+        // 컨트롤 버튼
+        if (page > 0) inv.setItem(48, ConfigLoader.getGuiItem("previous-page"));
+        if (end < mails.size()) inv.setItem(50, ConfigLoader.getGuiItem("next-page"));
         inv.setItem(45, ConfigLoader.getGuiItem("mail-send"));
         inv.setItem(8, ConfigLoader.getGuiItem("setting"));
 
@@ -65,25 +66,27 @@ public class MailGUI implements Listener {
         if (!e.getView().getTitle().equals(LangUtil.get("gui.mail.title"))) return;
 
         e.setCancelled(true);
+
         ItemStack clicked = e.getCurrentItem();
         if (clicked == null || clicked.getType() == Material.AIR) return;
 
-        int rawSlot = e.getRawSlot();
         UUID uuid = player.getUniqueId();
-        List<Mail> mails = MailDataManager.getInstance().getMails(uuid);
+        int rawSlot = e.getRawSlot();
         int page = pageMap.getOrDefault(uuid, 0);
+        List<Mail> mails = MailDataManager.getInstance().getMails(uuid);
         int index = page * PAGE_SIZE + rawSlot;
 
+        // 메일 클릭 처리
         if (rawSlot < PAGE_SIZE && index < mails.size()) {
             Mail mail = mails.get(index);
 
             if (e.getClick() == ClickType.SHIFT_RIGHT) {
                 MailDataManager.getInstance().removeMail(uuid, mail);
-                player.sendMessage(LangUtil.get("mail.deleted"));
+                player.sendMessage(LangUtil.get("gui.mail.deleted"));
             } else {
                 mail.give(player);
                 MailDataManager.getInstance().removeMail(uuid, mail);
-                player.sendMessage(LangUtil.get("mail.received"));
+                player.sendMessage(LangUtil.get("gui.mail.received"));
                 player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 1, 1);
             }
 
@@ -91,6 +94,7 @@ public class MailGUI implements Listener {
             return;
         }
 
+        // 하단 버튼 처리
         switch (rawSlot) {
             case 45 -> new MailSendGUI(plugin).open(player);
             case 48 -> open(player, page - 1);

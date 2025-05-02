@@ -2,6 +2,7 @@ package com.gmail.bobason01.mail;
 
 import com.gmail.bobason01.utils.LangUtil;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -14,50 +15,22 @@ public class MailService {
     private static final Map<UUID, OfflinePlayer> targetMap = new HashMap<>();
     private static final Map<UUID, ItemStack> attachedItemMap = new HashMap<>();
     private static final Map<UUID, Map<String, Integer>> timeDataMap = new HashMap<>();
-    private static final Map<UUID, String> contextMap = new HashMap<>(); // send or sendall
+    private static final Map<UUID, String> contextMap = new HashMap<>();
 
-    public static void giveMail(Player sender, OfflinePlayer target, ItemStack item, Map<String, Integer> timeData) {
-        UUID senderId = sender.getUniqueId();
-        UUID targetId = target.getUniqueId();
-
-        if (MailDataManager.getInstance().getBlacklist(targetId).contains(senderId)) {
-            sender.sendMessage(LangUtil.get("mail.blacklisted"));
-            return;
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime expire = null;
-
-        if (!timeData.isEmpty()) {
-            expire = now
-                    .plusSeconds(timeData.getOrDefault("second", 0))
-                    .plusMinutes(timeData.getOrDefault("minute", 0))
-                    .plusHours(timeData.getOrDefault("hour", 0))
-                    .plusDays(timeData.getOrDefault("day", 0))
-                    .plusMonths(timeData.getOrDefault("month", 0))
-                    .plusYears(timeData.getOrDefault("year", 0));
-        }
-
-        Mail mail = new Mail(senderId, targetId, item.clone(), now, expire);
-        MailDataManager.getInstance().addMail(targetId, mail);
-
-        sender.sendMessage(LangUtil.get("mail.sent").replace("{player}", Objects.requireNonNull(target.getName())));
-    }
-
-    public static void send(Player sender) {
+    public static boolean send(Player sender) {
         UUID uuid = sender.getUniqueId();
         OfflinePlayer target = getTarget(uuid);
         ItemStack item = getAttachedItem(uuid);
         Map<String, Integer> timeData = getTimeData(uuid);
 
-        if (target == null || item == null) {
+        if (target == null || item == null || item.getType() == Material.AIR) {
             sender.sendMessage(LangUtil.get("mail.invalid-args"));
-            return;
+            return false;
         }
 
-        giveMail(sender, target, item, timeData);
-
-        clear(uuid);
+        boolean result = giveMail(sender, target, item, timeData);
+        if (result) clear(uuid);
+        return result;
     }
 
     public static void sendAll(Player sender) {
@@ -65,7 +38,7 @@ public class MailService {
         ItemStack item = getAttachedItem(senderId);
         Map<String, Integer> timeData = getTimeData(senderId);
 
-        if (item == null) {
+        if (item == null || item.getType() == Material.AIR) {
             sender.sendMessage(LangUtil.get("mail.invalid-args"));
             return;
         }
@@ -73,19 +46,45 @@ public class MailService {
         Set<UUID> excludeList = MailDataManager.getInstance().getExcluded(senderId);
 
         for (OfflinePlayer target : Bukkit.getOfflinePlayers()) {
-            if (target.getUniqueId().equals(senderId)) continue;
-            if (excludeList.contains(target.getUniqueId())) continue;
+            UUID targetId = target.getUniqueId();
+            if (targetId.equals(senderId)) continue;
+            if (excludeList.contains(targetId)) continue;
             giveMail(sender, target, item, timeData);
         }
 
         clear(senderId);
     }
 
-    public static void clear(UUID uuid) {
-        targetMap.remove(uuid);
-        attachedItemMap.remove(uuid);
-        timeDataMap.remove(uuid);
-        contextMap.remove(uuid);
+    private static boolean giveMail(Player sender, OfflinePlayer target, ItemStack item, Map<String, Integer> timeData) {
+        UUID senderId = sender.getUniqueId();
+        UUID targetId = target.getUniqueId();
+
+        if (MailDataManager.getInstance().getBlacklist(targetId).contains(senderId)) {
+            sender.sendMessage(LangUtil.get("mail.blacklisted"));
+            return false;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expire = computeExpireTime(now, timeData);
+
+        Mail mail = new Mail(senderId, targetId, item.clone(), now, expire);
+        MailDataManager.getInstance().addMail(targetId, mail);
+
+        String targetName = Optional.ofNullable(target.getName()).orElse("Unknown");
+        sender.sendMessage(LangUtil.get("mail.sent", Map.of("player", targetName)));
+        return true;
+    }
+
+    private static LocalDateTime computeExpireTime(LocalDateTime base, Map<String, Integer> timeData) {
+        if (timeData == null || timeData.isEmpty()) return null;
+
+        return base
+                .plusSeconds(timeData.getOrDefault("second", 0))
+                .plusMinutes(timeData.getOrDefault("minute", 0))
+                .plusHours(timeData.getOrDefault("hour", 0))
+                .plusDays(timeData.getOrDefault("day", 0))
+                .plusMonths(timeData.getOrDefault("month", 0))
+                .plusYears(timeData.getOrDefault("year", 0));
     }
 
     public static void setTarget(UUID uuid, OfflinePlayer target) {
@@ -97,7 +96,11 @@ public class MailService {
     }
 
     public static void setAttachedItem(UUID uuid, ItemStack item) {
-        attachedItemMap.put(uuid, item);
+        if (item == null || item.getType() == Material.AIR) {
+            attachedItemMap.remove(uuid);
+        } else {
+            attachedItemMap.put(uuid, item);
+        }
     }
 
     public static ItemStack getAttachedItem(UUID uuid) {
@@ -118,5 +121,12 @@ public class MailService {
 
     public static String getContext(UUID uuid) {
         return contextMap.getOrDefault(uuid, "send");
+    }
+
+    public static void clear(UUID uuid) {
+        targetMap.remove(uuid);
+        attachedItemMap.remove(uuid);
+        timeDataMap.remove(uuid);
+        contextMap.remove(uuid);
     }
 }
