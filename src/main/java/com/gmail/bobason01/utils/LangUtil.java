@@ -12,9 +12,6 @@ public class LangUtil {
 
     private static final Map<String, String> messages = new HashMap<>();
 
-    /**
-     * Load language file based on config (e.g., lang/en_us.yml)
-     */
     public static void load(Plugin plugin) {
         messages.clear();
 
@@ -42,17 +39,10 @@ public class LangUtil {
         }
     }
 
-    /**
-     * Get message by key. If not found, return key in red.
-     */
     public static String get(String key) {
         return messages.getOrDefault(key, "§c" + key);
     }
 
-    /**
-     * Get message and apply placeholders.
-     * Usage: get("mail.sent", Map.of("player", "Steve"))
-     */
     public static String get(String key, Map<String, String> placeholders) {
         String message = get(key);
         for (Map.Entry<String, String> entry : placeholders.entrySet()) {

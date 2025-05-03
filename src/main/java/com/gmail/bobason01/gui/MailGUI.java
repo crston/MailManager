@@ -22,7 +22,7 @@ public class MailGUI implements Listener {
 
     private final Plugin plugin;
     private final Map<UUID, Integer> pageMap = new HashMap<>();
-    private static final int PAGE_SIZE = 27;
+    private static final int PAGE_SIZE = 35; // 10번~44번 슬롯만 사용
 
     public MailGUI(Plugin plugin) {
         this.plugin = plugin;
@@ -47,8 +47,9 @@ public class MailGUI implements Listener {
         int start = page * PAGE_SIZE;
         int end = Math.min(start + PAGE_SIZE, mails.size());
 
-        for (int i = start; i < end; i++) {
-            inv.setItem(i - start, mails.get(i).toItemStack());
+        int mailSlot = 10;
+        for (int i = start; i < end && mailSlot <= 44; i++, mailSlot++) {
+            inv.setItem(mailSlot, mails.get(i).toItemStack());
         }
 
         // 컨트롤 버튼
@@ -74,23 +75,25 @@ public class MailGUI implements Listener {
         int rawSlot = e.getRawSlot();
         int page = pageMap.getOrDefault(uuid, 0);
         List<Mail> mails = MailDataManager.getInstance().getMails(uuid);
-        int index = page * PAGE_SIZE + rawSlot;
 
-        // 메일 클릭 처리
-        if (rawSlot < PAGE_SIZE && index < mails.size()) {
-            Mail mail = mails.get(index);
+        // 메일 클릭 처리 (10~44번 슬롯만 유효)
+        if (rawSlot >= 10 && rawSlot <= 44) {
+            int mailIndex = page * PAGE_SIZE + (rawSlot - 10);
+            if (mailIndex < mails.size()) {
+                Mail mail = mails.get(mailIndex);
 
-            if (e.getClick() == ClickType.SHIFT_RIGHT) {
-                MailDataManager.getInstance().removeMail(uuid, mail);
-                player.sendMessage(LangUtil.get("gui.mail.deleted"));
-            } else {
-                mail.give(player);
-                MailDataManager.getInstance().removeMail(uuid, mail);
-                player.sendMessage(LangUtil.get("gui.mail.received"));
-                player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 1, 1);
+                if (e.getClick() == ClickType.SHIFT_RIGHT) {
+                    MailDataManager.getInstance().removeMail(uuid, mail);
+                    player.sendMessage(LangUtil.get("gui.mail.deleted"));
+                } else {
+                    mail.give(player);
+                    MailDataManager.getInstance().removeMail(uuid, mail);
+                    player.sendMessage(LangUtil.get("gui.mail.received"));
+                    player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 1, 1);
+                }
+
+                open(player, page);
             }
-
-            open(player, page);
             return;
         }
 

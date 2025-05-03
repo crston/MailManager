@@ -6,6 +6,8 @@ import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -17,23 +19,24 @@ public class MailService {
     private static final Map<UUID, Map<String, Integer>> timeDataMap = new HashMap<>();
     private static final Map<UUID, String> contextMap = new HashMap<>();
 
-    public static boolean send(Player sender) {
-        UUID uuid = sender.getUniqueId();
-        OfflinePlayer target = getTarget(uuid);
-        ItemStack item = getAttachedItem(uuid);
-        Map<String, Integer> timeData = getTimeData(uuid);
+    public static void send(Player sender, Plugin plugin) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            UUID uuid = sender.getUniqueId();
+            OfflinePlayer target = getTarget(uuid);
+            ItemStack item = getAttachedItem(uuid);
+            Map<String, Integer> timeData = getTimeData(uuid);
 
-        if (target == null || item == null || item.getType() == Material.AIR) {
-            sender.sendMessage(LangUtil.get("mail.invalid-args"));
-            return false;
-        }
+            if (target == null || item == null || item.getType() == Material.AIR) {
+                sender.sendMessage(LangUtil.get("mail.invalid-args"));
+                return;
+            }
 
-        boolean result = giveMail(sender, target, item, timeData);
-        if (result) clear(uuid);
-        return result;
+            giveMail(sender, target, item, timeData);
+            clear(uuid);
+        });
     }
 
-    public static void sendAll(Player sender) {
+    public static void sendAll(Player sender, Plugin plugin) {
         UUID senderId = sender.getUniqueId();
         ItemStack item = getAttachedItem(senderId);
         Map<String, Integer> timeData = getTimeData(senderId);
@@ -44,15 +47,29 @@ public class MailService {
         }
 
         Set<UUID> excludeList = MailDataManager.getInstance().getExcluded(senderId);
+        List<OfflinePlayer> targets = Arrays.asList(Bukkit.getOfflinePlayers());
 
-        for (OfflinePlayer target : Bukkit.getOfflinePlayers()) {
-            UUID targetId = target.getUniqueId();
-            if (targetId.equals(senderId)) continue;
-            if (excludeList.contains(targetId)) continue;
-            giveMail(sender, target, item, timeData);
-        }
+        new BukkitRunnable() {
+            int index = 0;
+            final int batchSize = 10;
 
-        clear(senderId);
+            @Override
+            public void run() {
+                int count = 0;
+                while (index < targets.size() && count < batchSize) {
+                    OfflinePlayer target = targets.get(index++);
+                    UUID targetId = target.getUniqueId();
+                    if (!targetId.equals(senderId) && !excludeList.contains(targetId)) {
+                        giveMail(sender, target, item, timeData);
+                    }
+                    count++;
+                }
+                if (index >= targets.size()) {
+                    clear(senderId);
+                    cancel();
+                }
+            }
+        }.runTaskTimer(plugin, 0L, 10L);
     }
 
     private static boolean giveMail(Player sender, OfflinePlayer target, ItemStack item, Map<String, Integer> timeData) {

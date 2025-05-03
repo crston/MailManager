@@ -2,7 +2,8 @@ gui:
   mail:
     title: "§f받은 메일"
     blacklisted: "§c해당 플레이어가 당신의 메일을 차단했습니다"
-
+    deleted: "§c메일이 삭제되었습니다"
+    received: "§a메일을 수신했습니다"
   mail-send:
     title: "§f메일 보내기"
     time: "§c유효 기간 설정"
@@ -51,8 +52,7 @@ gui:
     notify-disabled: "§7메일 수신 알림이 비활성화되었습니다"
 
 mail:
-  deleted: "§c메일이 삭제되었습니다"
-  received: "§a메일을 수신했습니다"
+  notify-received: "§a메일이 도착했습니다"
   invalid-args: "§c메일을 보낼 수 없습니다"
   sent: "§a{player} 님에게 메일을 보냈습니다"
   sent-fail: "§c메일 발송에 실패했습니다. 대상, 아이템, 시간을 설정했는지 확인하세요"
@@ -67,3 +67,13 @@ reset-success: "§c해당 플레이어의 메일 정보가 초기화되었습니
 
 notify-on: "§a메일 수신 알림이 활성화되었습니다"
 notify-off: "§7메일 수신 알림이 비활성화되었습니다"
+
+format:
+  unit:
+    second: "{value} 초"
+    minute: "{value} 분"
+    hour: "{value} 시간"
+    day: "{value} 일"
+    month: "{value} 개월"
+    year: "{value} 년"
+  permanent: "무제한"

@@ -4,9 +4,11 @@ import com.gmail.bobason01.mail.MailService;
 import com.gmail.bobason01.utils.ConfigLoader;
 import com.gmail.bobason01.utils.ItemBuilder;
 import com.gmail.bobason01.utils.LangUtil;
+import com.gmail.bobason01.utils.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -36,11 +38,14 @@ public class MailSendGUI implements Listener {
 
         OfflinePlayer target = MailService.getTarget(uuid);
         ItemStack item = MailService.getAttachedItem(uuid);
+        Map<String, Integer> timeData = MailService.getTimeData(uuid);
+        String formattedTime = TimeUtil.format(timeData);
 
-        inv.setItem(10, new ItemBuilder(Material.CLOCK)
-                .name(LangUtil.get("gui.mail-send.time"))
-                .lore(LangUtil.get("gui.mail-send.time-lore"))
-                .build());
+        ItemStack clockItem = new ItemBuilder(Material.CLOCK)
+                .name("§e" + LangUtil.get("gui.mail-send.time"))
+                .lore("§7" + formattedTime)
+                .build();
+        inv.setItem(10, clockItem);
 
         ItemStack targetItem = new ItemBuilder(Material.PLAYER_HEAD)
                 .name(LangUtil.get("gui.mail-send.target"))
@@ -97,9 +102,10 @@ public class MailSendGUI implements Listener {
             case 16 -> {
                 ItemStack currentItem = e.getInventory().getItem(14);
                 MailService.setAttachedItem(uuid, (currentItem != null && !currentItem.getType().isAir()) ? currentItem.clone() : null);
-                boolean success = MailService.send(player);
-                if (success) sentSet.add(uuid);
+                MailService.send(player, plugin);
+                sentSet.add(uuid);
                 player.closeInventory();
+                player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1, 1);
             }
             case 18 -> player.performCommand("mail");
         }

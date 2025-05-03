@@ -3,6 +3,8 @@ package com.gmail.bobason01.gui;
 import com.gmail.bobason01.mail.MailService;
 import com.gmail.bobason01.utils.ConfigLoader;
 import com.gmail.bobason01.utils.LangUtil;
+import com.gmail.bobason01.utils.TimeUtil;
+import com.gmail.bobason01.utils.ItemBuilder;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -17,6 +19,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -36,7 +39,14 @@ public class MailSendAllGUI implements Listener {
 
         Inventory inv = Bukkit.createInventory(player, 27, LangUtil.get("gui.mail-sendall.title"));
 
-        inv.setItem(10, ConfigLoader.getGuiItem("send-gui-time"));
+        Map<String, Integer> timeData = MailService.getTimeData(uuid);
+        String formattedTime = TimeUtil.format(timeData);
+        ItemStack clockItem = new ItemBuilder(Material.CLOCK)
+                .name("§e" + LangUtil.get("gui.mail-send.time"))
+                .lore("§7" + formattedTime)
+                .build();
+
+        inv.setItem(10, clockItem);
         inv.setItem(12, ConfigLoader.getGuiItem("exclude"));
 
         ItemStack item = MailService.getAttachedItem(uuid);
@@ -85,7 +95,7 @@ public class MailSendAllGUI implements Listener {
                     return;
                 }
 
-                MailService.sendAll(player);
+                MailService.sendAll(player, plugin);
                 sentSet.add(uuid);
                 player.closeInventory();
                 player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1, 1);
