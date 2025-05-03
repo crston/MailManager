@@ -2,78 +2,78 @@ gui:
   mail:
     title: "§fInbox"
     blacklisted: "§cThis player has blocked your mail"
-    deleted: "§cThe mail has been deleted"
-    received: "§aYou have received mail"
+    deleted: "§cMail deleted"
+    received: "§aMail received"
+
   mail-send:
     title: "§fSend Mail"
     time: "§cSet Expiration"
-    time-lore: "§7Set how long the mail will be valid"
-    target: "§eSet Recipient"
-    target-lore: "§7Select the player to send the mail to"
+    time-lore: "§7Set how long this mail will be valid"
+    target: "§eSet Target"
+    target-lore: "§7Select who to send the mail to"
     send: "§aSend"
     send-lore: "§7Send the mail"
 
   mail-sendall:
-    title: "§fBroadcast Mail"
+    title: "§fSend to All"
 
   mail-time:
     title: "§fSet Expiration"
     permanent-set: "§aExpiration removed"
     unit:
-      second: "second"
-      minute: "minute"
-      hour: "hour"
-      day: "day"
-      month: "month"
-      year: "year"
+      second: "Seconds"
+      minute: "Minutes"
+      hour: "Hours"
+      day: "Days"
+      month: "Months"
+      year: "Years"
 
   mail-target:
-    title: "§fSelect Recipient"
-    cannot-target-self: "§cYou cannot target yourself"
+    title: "§fSelect Target"
+    cannot-target-self: "§cYou can't target yourself"
 
   sendall-exclude:
-    title: "§fExclude List"
+    title: "§fExclusion List"
     excluded: "§cExcluded"
     included: "§aIncluded"
-    cannot-exclude-self: "§cYou cannot exclude yourself"
+    cannot-exclude-self: "§cYou can't exclude yourself"
 
   blacklist:
-    title: "§fBlacklist"
+    title: "§fBlocked Players"
     blocked: "§cBlocked"
     allowed: "§aAllowed"
-    cannot-block-self: "§cYou cannot block yourself"
+    cannot-block-self: "§cYou can't block yourself"
+    removed: " has been removed from the block list"
+    added: " has been added to the block list"
 
   mail-setting:
     title: "⚙ Mail Settings"
     notify-on: "§aMail Notification: ON"
     notify-off: "§7Mail Notification: OFF"
-    notify-lore: "§7Toggle whether to receive mail notifications"
+    notify-lore: "§7Enable or disable mail notifications"
     notify-enabled: "§aMail notifications enabled"
     notify-disabled: "§7Mail notifications disabled"
 
 mail:
-  notify-received: "§aYou have new mail"
-  invalid-args: "§cCannot send mail"
-  sent: "§aMail sent to {player}"
-  sent-fail: "§cFailed to send mail. Make sure you’ve set recipient, item, and time."
+  notify-received: "§aYou have received a new mail"
+  invalid-args: "§cUnable to send mail"
+  sent-all: "§aSent mail to {count} players."
+  sent-single: "§aMail sent successfully."
   from: "§aFrom: "
   sent-at: "§aSent at: "
-  expires: "§cExpires: "
+  expires: "§cExpires on: "
 
-only-player: "§cOnly players can use this command"
+only-player: "§cThis command can only be used by players"
 player-not-found: "§cPlayer not found"
 reload-success: "§aConfiguration and data reloaded"
-reset-success: "§cThe player's mail data has been reset"
-
-notify-on: "§aMail notifications enabled"
-notify-off: "§7Mail notifications disabled"
+reset-success: "§cMail data has been reset for the player"
 
 format:
   unit:
-    second: "{value} second(s)"
-    minute: "{value} minute(s)"
-    hour: "{value} hour(s)"
-    day: "{value} day(s)"
-    month: "{value} month(s)"
-    year: "{value} year(s)"
-  permanent: "Unlimited"
+    second: "{value} seconds"
+    minute: "{value} minutes"
+    hour: "{value} hours"
+    day: "{value} days"
+    month: "{value} months"
+    year: "{value} years"
+  permanent: "Permanent"

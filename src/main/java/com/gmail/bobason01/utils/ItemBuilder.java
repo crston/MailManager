@@ -4,12 +4,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.inventory.meta.SkullMeta;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.UUID;
+import org.bukkit.inventory.meta.*;
+import java.util.*;
 
 public class ItemBuilder {
 
@@ -37,11 +33,6 @@ public class ItemBuilder {
 
     public ItemBuilder lore(List<String> lore) {
         this.lore = lore;
-        return this;
-    }
-
-    public ItemBuilder lore(String line) {
-        this.lore = List.of(line);
         return this;
     }
 
@@ -82,29 +73,29 @@ public class ItemBuilder {
             if (name != null) meta.setDisplayName(name);
             if (lore != null) meta.setLore(lore);
             if (customModelData != null) meta.setCustomModelData(customModelData);
+
+            // Damage (only if meta supports it)
+            if (damage != null && meta instanceof Damageable damageable && item.getType().getMaxDurability() > 0) {
+                damageable.setDamage(damage);
+            }
+
             item.setItemMeta(meta);
         }
 
-        if (damage != null && item.getType().getMaxDurability() > 0) {
-            item.setDurability((short) damage.intValue());
-        }
-
+        // Handle Skull
         if (item.getType() == Material.PLAYER_HEAD) {
-            SkullMeta skullMeta = (SkullMeta) item.getItemMeta();
-            try {
+            ItemMeta rawMeta = item.getItemMeta();
+            if (rawMeta instanceof SkullMeta skullMeta) {
                 if (skullUUID != null) {
                     OfflinePlayer offline = Bukkit.getOfflinePlayer(skullUUID);
-                    assert skullMeta != null;
                     skullMeta.setOwningPlayer(offline);
                 } else if (owner != null && owner.length() <= 16) {
                     OfflinePlayer offline = Bukkit.getOfflinePlayer(owner);
-                    assert skullMeta != null;
                     skullMeta.setOwningPlayer(offline);
                 }
-                // base64는 구현만 해두고 사용은 선택적으로
-            } catch (Exception ignored) {
+                // TODO: base64 texture 지원 시 구현
+                item.setItemMeta(skullMeta);
             }
-            item.setItemMeta(skullMeta);
         }
 
         return item;

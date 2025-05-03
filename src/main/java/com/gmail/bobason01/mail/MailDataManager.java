@@ -14,8 +14,9 @@ public class MailDataManager {
 
     private final Map<UUID, List<Mail>> inboxMap = new HashMap<>();
     private final Map<UUID, Set<UUID>> blacklistMap = new HashMap<>();
-    private final Set<UUID> notifyDisabled = new HashSet<>(); // OFF로 전환
+    private final Set<UUID> notifyDisabled = new HashSet<>();
     private final Map<UUID, Set<UUID>> excludeMap = new HashMap<>();
+    private final Map<UUID, List<Mail>> mailQueue = new HashMap<>();
 
     private Plugin plugin;
 
@@ -39,13 +40,7 @@ public class MailDataManager {
         }
     }
 
-    public void removeMail(UUID playerId, Mail mail) {
-        List<Mail> mails = inboxMap.getOrDefault(playerId, new ArrayList<>());
-        mails.remove(mail);
-        save();
-    }
-
-    // ===== 메일 처리 =====
+    // ===== 메일 관리 =====
 
     public void addMail(UUID playerId, Mail mail) {
         inboxMap.computeIfAbsent(playerId, k -> new ArrayList<>()).add(mail);
@@ -61,6 +56,14 @@ public class MailDataManager {
 
     public List<Mail> getMails(UUID playerId) {
         return inboxMap.computeIfAbsent(playerId, k -> new ArrayList<>());
+    }
+
+    public void removeMail(UUID playerId, Mail mail) {
+        List<Mail> mails = inboxMap.get(playerId);
+        if (mails != null) {
+            mails.remove(mail);
+        }
+        save();
     }
 
     public void clearMail(UUID playerId) {
@@ -84,25 +87,28 @@ public class MailDataManager {
         save();
     }
 
-    // ===== 알림 여부 (기본값: ON) =====
+    // ===== 알림 설정 =====
 
     public boolean isNotifyEnabled(UUID playerId) {
-        return !notifyDisabled.contains(playerId); // 기본은 ON
+        return !notifyDisabled.contains(playerId);
     }
 
     public void setNotify(UUID playerId, boolean enabled) {
-        if (!enabled) notifyDisabled.add(playerId);     // OFF로 저장
-        else notifyDisabled.remove(playerId);           // ON이면 제거
+        if (enabled) {
+            notifyDisabled.remove(playerId);
+        } else {
+            notifyDisabled.add(playerId);
+        }
         save();
     }
 
-    public boolean toggleNotify(UUID uuid) {
-        boolean current = isNotifyEnabled(uuid);
-        setNotify(uuid, !current);
-        return !current;
+    public boolean toggleNotify(UUID playerId) {
+        boolean enabled = !isNotifyEnabled(playerId);
+        setNotify(playerId, enabled);
+        return enabled;
     }
 
-    // ===== 전체 전송 제외 대상 =====
+    // ===== 전체전송 제외 =====
 
     public Set<UUID> getExcluded(UUID playerId) {
         return excludeMap.computeIfAbsent(playerId, k -> new HashSet<>());
@@ -118,7 +124,21 @@ public class MailDataManager {
         save();
     }
 
-    // ===== 리로드 및 초기화 =====
+    // ===== 큐 처리 (성능 최적화용) =====
+
+    public void queueMail(UUID playerId, Mail mail) {
+        mailQueue.computeIfAbsent(playerId, k -> new ArrayList<>()).add(mail);
+    }
+
+    public void flushQueue() {
+        for (Map.Entry<UUID, List<Mail>> entry : mailQueue.entrySet()) {
+            inboxMap.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).addAll(entry.getValue());
+        }
+        mailQueue.clear();
+        save();
+    }
+
+    // ===== 유틸 =====
 
     public void reload(Plugin plugin) {
         inboxMap.clear();

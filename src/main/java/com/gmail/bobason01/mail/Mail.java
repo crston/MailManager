@@ -9,10 +9,13 @@ import org.bukkit.inventory.meta.ItemMeta;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 public class Mail {
+
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final UUID sender;
     private final UUID receiver;
@@ -56,15 +59,18 @@ public class Mail {
         ItemStack display = item.clone();
         ItemMeta meta = display.getItemMeta();
         if (meta != null) {
+            List<String> lore = new ArrayList<>();
+
             OfflinePlayer senderPlayer = Bukkit.getOfflinePlayer(sender);
             String senderName = senderPlayer.getName() != null ? senderPlayer.getName() : "Unknown";
-            String date = sentAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            lore.add(LangUtil.get("mail.from") + senderName);
+            lore.add(LangUtil.get("mail.sent-at") + sentAt.format(FORMATTER));
 
-            meta.setLore(List.of(
-                    LangUtil.get("mail.from") + senderName,
-                    LangUtil.get("mail.sent-at") + date,
-                    (expireAt != null ? LangUtil.get("mail.expires") + expireAt.toLocalDate().toString() : "")
-            ));
+            if (expireAt != null) {
+                lore.add(LangUtil.get("mail.expires") + expireAt.toLocalDate());
+            }
+
+            meta.setLore(lore);
             display.setItemMeta(meta);
         }
         return display;

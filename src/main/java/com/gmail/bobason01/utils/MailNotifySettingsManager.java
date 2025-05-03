@@ -1,7 +1,6 @@
 package com.gmail.bobason01.utils;
 
 import com.gmail.bobason01.MailManager;
-import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
@@ -9,58 +8,76 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Logger;
 
+/**
+ * 메일 수신 알림 설정을 파일로 관리하는 유틸 클래스
+ */
 public class MailNotifySettingsManager {
 
-    private static final Set<UUID> enabledNotify = new HashSet<>();
+    private static final Set<UUID> notifyEnabledUsers = new HashSet<>();
     private static final File file = new File(MailManager.getInstance().getDataFolder(), "notify.yml");
+    private static final Logger log = MailManager.getInstance().getLogger();
 
     public static void load() {
-        if (!file.exists()) return;
+        notifyEnabledUsers.clear();
+
+        if (!file.exists()) {
+            log.info("[MailManager] notify.yml not found, skipping load.");
+            return;
+        }
 
         YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+        int count = 0;
+
         for (String key : config.getKeys(false)) {
             try {
+                UUID uuid = UUID.fromString(key);
                 if (config.getBoolean(key)) {
-                    enabledNotify.add(UUID.fromString(key));
+                    notifyEnabledUsers.add(uuid);
+                    count++;
                 }
             } catch (IllegalArgumentException ignored) {
+                log.warning("[MailManager] Invalid UUID in notify.yml: " + key);
             }
         }
-        Bukkit.getLogger().info("[MailManager] notify.yml loaded (" + enabledNotify.size() + " enabled)");
+
+        log.info("[MailManager] notify.yml loaded (" + count + " users enabled)");
     }
 
     public static void save() {
         YamlConfiguration config = new YamlConfiguration();
-        for (UUID uuid : enabledNotify) {
+
+        for (UUID uuid : notifyEnabledUsers) {
             config.set(uuid.toString(), true);
         }
 
         try {
             config.save(file);
+            log.info("[MailManager] notify.yml saved.");
         } catch (IOException e) {
-            Bukkit.getLogger().warning("[MailManager] Failed to save notify.yml");
+            log.severe("[MailManager] Failed to save notify.yml: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
     public static boolean isNotifyEnabled(UUID uuid) {
-        return enabledNotify.contains(uuid);
+        return notifyEnabledUsers.contains(uuid);
     }
 
     public static void toggle(UUID uuid) {
-        if (enabledNotify.contains(uuid)) {
-            enabledNotify.remove(uuid);
+        if (notifyEnabledUsers.contains(uuid)) {
+            notifyEnabledUsers.remove(uuid);
         } else {
-            enabledNotify.add(uuid);
+            notifyEnabledUsers.add(uuid);
         }
     }
 
     public static void setNotify(UUID uuid, boolean enabled) {
         if (enabled) {
-            enabledNotify.add(uuid);
+            notifyEnabledUsers.add(uuid);
         } else {
-            enabledNotify.remove(uuid);
+            notifyEnabledUsers.remove(uuid);
         }
     }
 }

@@ -19,8 +19,14 @@ import java.util.*;
 
 public class MailTimeSelectGUI implements Listener {
 
+    private static final List<String> TIME_UNITS = List.of("second", "minute", "hour", "day", "month", "year");
+
+    private static final int UNIT_START_SLOT = 10;
+    private static final int PERMANENT_SLOT = 16;
+    private static final int CONFIRM_SLOT = 31;
+    private static final int BACK_SLOT = 35;
+
     private final Plugin plugin;
-    private final List<String> units = List.of("second", "minute", "hour", "day", "month", "year");
 
     public MailTimeSelectGUI(Plugin plugin) {
         this.plugin = plugin;
@@ -28,21 +34,23 @@ public class MailTimeSelectGUI implements Listener {
     }
 
     public void open(Player player) {
-        Inventory inv = Bukkit.createInventory(player, 36, LangUtil.get("gui.mail-time.title"));
         UUID uuid = player.getUniqueId();
         Map<String, Integer> time = MailService.getTimeData(uuid);
 
-        for (int i = 0; i < units.size(); i++) {
-            String unit = units.get(i);
+        Inventory inv = Bukkit.createInventory(player, 36, LangUtil.get("gui.mail-time.title"));
+
+        for (int i = 0; i < TIME_UNITS.size(); i++) {
+            String unit = TIME_UNITS.get(i);
             int value = time.getOrDefault(unit, 0);
-            inv.setItem(10 + i, new ItemBuilder(Material.PAPER)
+            inv.setItem(UNIT_START_SLOT + i, new ItemBuilder(Material.PAPER)
                     .name("§f" + LangUtil.get("gui.mail-time.unit." + unit) + ": " + value)
                     .build());
         }
 
-        inv.setItem(16, ConfigLoader.getGuiItem("permanent"));
-        inv.setItem(31, ConfigLoader.getGuiItem("select-complete"));
-        inv.setItem(35, ConfigLoader.getGuiItem("back"));
+        inv.setItem(PERMANENT_SLOT, ConfigLoader.getGuiItem("permanent"));
+        inv.setItem(CONFIRM_SLOT, ConfigLoader.getGuiItem("select-complete"));
+        inv.setItem(BACK_SLOT, ConfigLoader.getGuiItem("back"));
+
         player.openInventory(inv);
     }
 
@@ -52,32 +60,37 @@ public class MailTimeSelectGUI implements Listener {
         if (!e.getView().getTitle().equals(LangUtil.get("gui.mail-time.title"))) return;
 
         e.setCancelled(true);
+
         UUID uuid = player.getUniqueId();
         Map<String, Integer> time = MailService.getTimeData(uuid);
-        int raw = e.getRawSlot();
+        int slot = e.getRawSlot();
 
-        if (raw >= 10 && raw <= 15) {
-            int index = raw - 10;
-            String unit = units.get(index);
+        if (slot >= UNIT_START_SLOT && slot < UNIT_START_SLOT + TIME_UNITS.size()) {
+            int index = slot - UNIT_START_SLOT;
+            String unit = TIME_UNITS.get(index);
             int value = time.getOrDefault(unit, 0);
-            if (e.getClick() == ClickType.LEFT) value--;
-            if (e.getClick() == ClickType.RIGHT) value++;
-            value = Math.max(value, 0);
+
+            if (e.getClick() == ClickType.LEFT) value = Math.max(0, value - 1);
+            if (e.getClick() == ClickType.RIGHT) value += 1;
+
             time.put(unit, value);
             MailService.setTimeData(uuid, time);
+            player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1, 1);
             open(player);
+            return;
         }
 
-        if (raw == 16) {
+        if (slot == PERMANENT_SLOT) {
             MailService.setTimeData(uuid, new HashMap<>());
             player.sendMessage(LangUtil.get("gui.mail-time.permanent-set"));
             player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1, 1);
             open(player);
+            return;
         }
 
-        if (raw == 31 || raw == 35) {
+        if (slot == CONFIRM_SLOT || slot == BACK_SLOT) {
             String context = MailService.getContext(uuid);
-            if (context.equals("sendall")) {
+            if ("sendall".equals(context)) {
                 new MailSendAllGUI(plugin).open(player);
             } else {
                 new MailSendGUI(plugin).open(player);

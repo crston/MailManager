@@ -24,6 +24,7 @@ import java.util.*;
 
 public class MailSendGUI implements Listener {
 
+    private static final Set<Integer> ALLOWED_SLOTS = Set.of(10, 12, 14, 16, 18);
     private final Plugin plugin;
     private final Set<UUID> sentSet = new HashSet<>();
 
@@ -41,16 +42,16 @@ public class MailSendGUI implements Listener {
         Map<String, Integer> timeData = MailService.getTimeData(uuid);
         String formattedTime = TimeUtil.format(timeData);
 
-        ItemStack clockItem = new ItemBuilder(Material.CLOCK)
+        inv.setItem(10, new ItemBuilder(Material.CLOCK)
                 .name("§e" + LangUtil.get("gui.mail-send.time"))
                 .lore("§7" + formattedTime)
-                .build();
-        inv.setItem(10, clockItem);
+                .build());
 
         ItemStack targetItem = new ItemBuilder(Material.PLAYER_HEAD)
                 .name(LangUtil.get("gui.mail-send.target"))
                 .lore(LangUtil.get("gui.mail-send.target-lore"))
                 .build();
+
         if (target != null) {
             SkullMeta meta = (SkullMeta) targetItem.getItemMeta();
             if (meta != null) {
@@ -86,8 +87,7 @@ public class MailSendGUI implements Listener {
         int slot = e.getRawSlot();
         UUID uuid = player.getUniqueId();
 
-        Set<Integer> allowedSlots = Set.of(10, 12, 14, 16, 18);
-        if (slot < 27 && !allowedSlots.contains(slot)) {
+        if (slot < 27 && !ALLOWED_SLOTS.contains(slot)) {
             e.setCancelled(true);
             return;
         }
@@ -97,11 +97,16 @@ public class MailSendGUI implements Listener {
             case 12 -> new MailTargetSelectGUI(plugin).open(player);
             case 14 -> Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 ItemStack newItem = e.getInventory().getItem(14);
-                MailService.setAttachedItem(uuid, (newItem != null && !newItem.getType().isAir()) ? newItem.clone() : null);
+                if (newItem != null && !newItem.getType().isAir()) {
+                    MailService.setAttachedItem(uuid, newItem.clone());
+                } else {
+                    MailService.setAttachedItem(uuid, null);
+                }
             }, 1L);
             case 16 -> {
                 ItemStack currentItem = e.getInventory().getItem(14);
                 MailService.setAttachedItem(uuid, (currentItem != null && !currentItem.getType().isAir()) ? currentItem.clone() : null);
+
                 MailService.send(player, plugin);
                 sentSet.add(uuid);
                 player.closeInventory();

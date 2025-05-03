@@ -10,7 +10,7 @@ public class ChatListener implements Listener {
     public void onChat(AsyncPlayerChatEvent e) {
         if (ChatSearchRegistry.has(e.getPlayer().getUniqueId())) {
             ChatSearchRegistry.handle(e.getPlayer().getUniqueId(), e.getMessage());
-            e.setCancelled(true);
+            e.setCancelled(true); // 입력 차단 (다른 유저에게 보이지 않게)
         }
     }
 }

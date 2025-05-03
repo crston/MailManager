@@ -5,9 +5,8 @@ import com.gmail.bobason01.mail.MailDataManager;
 import com.gmail.bobason01.utils.ConfigLoader;
 import com.gmail.bobason01.utils.LangUtil;
 import org.bukkit.Bukkit;
+import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
-
-import java.util.Objects;
 
 public class MailManager extends JavaPlugin {
 
@@ -24,40 +23,53 @@ public class MailManager extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        // 1. 설정 및 다국어 파일 로드
-        saveDefaultConfig();
-        ConfigLoader.load(this);
-        LangUtil.load(this);
-
-        // 2. 메일 데이터 초기화 (plugin 참조 저장 포함)
-        MailDataManager.getInstance().init(this);
-
-        // 3. 명령어 등록
+        initConfig();
+        initLanguage();
+        initMailSystem();
         registerCommands();
-
-        // 4. GUI 이벤트 등록
         registerListeners();
     }
 
     @Override
     public void onDisable() {
-        // 서버 종료 시 메일 저장
         MailDataManager.getInstance().save();
     }
 
+    private void initConfig() {
+        saveDefaultConfig();
+        ConfigLoader.load(this);
+    }
+
+    private void initLanguage() {
+        LangUtil.load(this);
+    }
+
+    private void initMailSystem() {
+        MailDataManager.getInstance().init(this);
+    }
+
     private void registerCommands() {
-        Objects.requireNonNull(getCommand("mail")).setExecutor(new MailCommand());
-        Objects.requireNonNull(getCommand("mail")).setTabCompleter(new MailCommand());
+        var command = getCommand("mail");
+        if (command == null) {
+            getLogger().severe("Command 'mail' is not registered in plugin.yml!");
+            return;
+        }
+        command.setExecutor(new MailCommand());
+        command.setTabCompleter(new MailCommand());
     }
 
     private void registerListeners() {
-        Bukkit.getPluginManager().registerEvents(new MailGUI(this), this);
-        Bukkit.getPluginManager().registerEvents(new MailSendGUI(this), this);
-        Bukkit.getPluginManager().registerEvents(new MailSendAllGUI(this), this);
-        Bukkit.getPluginManager().registerEvents(new SendAllExcludeGUI(this), this);
-        Bukkit.getPluginManager().registerEvents(new MailTargetSelectGUI(this), this);
-        Bukkit.getPluginManager().registerEvents(new MailTimeSelectGUI(this), this);
-        Bukkit.getPluginManager().registerEvents(new MailSettingGUI(this), this);
-        Bukkit.getPluginManager().registerEvents(new BlacklistSelectGUI(this), this);
+        register(new MailGUI(this));
+        register(new MailSendGUI(this));
+        register(new MailSendAllGUI(this));
+        register(new SendAllExcludeGUI(this));
+        register(new MailTargetSelectGUI(this));
+        register(new MailTimeSelectGUI(this));
+        register(new MailSettingGUI(this));
+        register(new BlacklistSelectGUI(this));
+    }
+
+    private void register(Listener listener) {
+        Bukkit.getPluginManager().registerEvents(listener, this);
     }
 }

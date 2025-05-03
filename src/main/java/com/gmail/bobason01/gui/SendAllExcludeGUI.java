@@ -13,6 +13,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.plugin.Plugin;
 
 import java.util.Objects;
@@ -33,17 +34,28 @@ public class SendAllExcludeGUI implements Listener {
         Set<UUID> excluded = MailDataManager.getInstance().getExcluded(player.getUniqueId());
 
         int i = 0;
-        for (OfflinePlayer p : Bukkit.getOfflinePlayers()) {
+        for (OfflinePlayer target : Bukkit.getOfflinePlayers()) {
             if (i >= 45) break;
-            if (p.getUniqueId().equals(player.getUniqueId())) continue;
+            if (target.getUniqueId().equals(player.getUniqueId())) continue;
+
+            String name = target.getName();
+            if (name == null || name.length() > 16 || !target.hasPlayedBefore()) continue;
 
             ItemStack head = new ItemBuilder(Material.PLAYER_HEAD)
-                    .owner(p.getName())
-                    .name("§f" + p.getName())
-                    .lore(excluded.contains(p.getUniqueId())
+                    .name("§f" + name)
+                    .lore(excluded.contains(target.getUniqueId())
                             ? LangUtil.get("gui.sendall-exclude.excluded")
                             : LangUtil.get("gui.sendall-exclude.included"))
                     .build();
+
+            SkullMeta meta = (SkullMeta) head.getItemMeta();
+            if (meta != null) {
+                try {
+                    meta.setOwningPlayer(target);
+                    head.setItemMeta(meta);
+                } catch (IllegalArgumentException ignored) {}
+            }
+
             inv.setItem(i++, head);
         }
 

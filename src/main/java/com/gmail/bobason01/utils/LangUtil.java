@@ -1,5 +1,6 @@
 package com.gmail.bobason01.utils;
 
+import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.Plugin;
 
@@ -25,30 +26,34 @@ public class LangUtil {
 
         if (langFile.exists()) {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(langFile);
-            Set<String> keys = config.getKeys(true);
-            for (String key : keys) {
-                if (config.isString(key)) {
-                    String value = config.getString(key);
-                    if (value != null) {
-                        messages.put(key, value);
-                    }
-                }
-            }
+            loadStringsRecursively(config, "", config.getKeys(true));
         } else {
             plugin.getLogger().warning("Cannot find or create language file: " + resourcePath);
         }
     }
 
+    private static void loadStringsRecursively(YamlConfiguration config, String prefix, Set<String> keys) {
+        for (String key : keys) {
+            if (config.isString(key)) {
+                String raw = config.getString(key);
+                if (raw != null) {
+                    messages.put(key, ChatColor.translateAlternateColorCodes('&', raw));
+                }
+            }
+        }
+    }
+
     public static String get(String key) {
-        return messages.getOrDefault(key, "§c" + key);
+        return messages.getOrDefault(key, "§cMissing: " + key);
     }
 
     public static String get(String key, Map<String, String> placeholders) {
         String message = get(key);
-        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-            message = message.replace("{" + entry.getKey() + "}", entry.getValue());
+        if (placeholders != null) {
+            for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+                message = message.replace("{" + entry.getKey() + "}", entry.getValue());
+            }
         }
         return message;
     }
 }
-

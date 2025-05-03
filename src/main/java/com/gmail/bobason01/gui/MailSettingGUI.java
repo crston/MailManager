@@ -18,13 +18,17 @@ import java.util.UUID;
 
 public class MailSettingGUI implements Listener {
 
-    private final Plugin plugin;
+    private static final int NOTIFY_SLOT = 11;
+    private static final int BLACKLIST_SLOT = 15;
+    private static final int BACK_SLOT = 26;
 
     private static final String GUI_TITLE = LangUtil.get("gui.mail-setting.title");
 
+    private final Plugin plugin;
+
     public MailSettingGUI(Plugin plugin) {
         this.plugin = plugin;
-        ConfigLoader.load(plugin);
+        ConfigLoader.load(plugin); // 한 번만 로드해도 되긴 함
     }
 
     public void open(Player player) {
@@ -33,18 +37,20 @@ public class MailSettingGUI implements Listener {
 
     private Inventory createInventory(Player player) {
         UUID uuid = player.getUniqueId();
-        boolean notify = MailDataManager.getInstance().isNotifyEnabled(uuid);
+        boolean notifyEnabled = MailDataManager.getInstance().isNotifyEnabled(uuid);
 
-        Inventory inv = Bukkit.createInventory(player, 27, GUI_TITLE);
+        String nameKey = notifyEnabled ? "gui.mail-setting.notify-on" : "gui.mail-setting.notify-off";
+        Material dye = notifyEnabled ? Material.LIME_DYE : Material.GRAY_DYE;
 
-        ItemStack notifyItem = new ItemBuilder(notify ? Material.LIME_DYE : Material.GRAY_DYE)
-                .name(LangUtil.get(notify ? "gui.mail-setting.notify-on" : "gui.mail-setting.notify-off"))
+        ItemStack notifyItem = new ItemBuilder(dye)
+                .name(LangUtil.get(nameKey))
                 .lore(LangUtil.get("gui.mail-setting.notify-lore"))
                 .build();
 
-        inv.setItem(11, notifyItem);
-        inv.setItem(15, ConfigLoader.getGuiItem("blacklist"));
-        inv.setItem(26, ConfigLoader.getGuiItem("back"));
+        Inventory inv = Bukkit.createInventory(player, 27, GUI_TITLE);
+        inv.setItem(NOTIFY_SLOT, notifyItem);
+        inv.setItem(BLACKLIST_SLOT, ConfigLoader.getGuiItem("blacklist"));
+        inv.setItem(BACK_SLOT, ConfigLoader.getGuiItem("back"));
 
         return inv;
     }
@@ -57,22 +63,20 @@ public class MailSettingGUI implements Listener {
         e.setCancelled(true);
 
         ItemStack clicked = e.getCurrentItem();
-        if (clicked == null || clicked.getType() == Material.AIR || !clicked.hasItemMeta()) return;
+        if (clicked == null || clicked.getType().isAir() || !clicked.hasItemMeta()) return;
 
         UUID uuid = player.getUniqueId();
 
         switch (e.getRawSlot()) {
-            case 11 -> {
-                boolean current = MailDataManager.getInstance().isNotifyEnabled(uuid);
-                boolean newState = !current;
-                MailDataManager.getInstance().setNotify(uuid, newState);
+            case NOTIFY_SLOT -> {
+                boolean newState = MailDataManager.getInstance().toggleNotify(uuid);
                 player.sendMessage(LangUtil.get(newState
                         ? "gui.mail-setting.notify-enabled"
                         : "gui.mail-setting.notify-disabled"));
-                open(player);
+                open(player); // Refresh GUI
             }
-            case 15 -> new BlacklistSelectGUI(plugin).open(player);
-            case 26 -> new MailGUI(plugin).open(player);
+            case BLACKLIST_SLOT -> new BlacklistSelectGUI(plugin).open(player);
+            case BACK_SLOT -> new MailGUI(plugin).open(player);
         }
     }
 }
