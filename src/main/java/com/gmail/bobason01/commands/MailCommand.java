@@ -1,5 +1,3 @@
-// LangUtil removed and replaced with hardcoded English messages
-
 package com.gmail.bobason01.commands;
 
 import com.gmail.bobason01.gui.MailGUI;
@@ -31,6 +29,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
         UUID senderId = player.getUniqueId();
 
+        // /mail
         if (args.length < 1) {
             new MailGUI(Bukkit.getPluginManager().getPlugin("MailManager")).open(player);
             return true;
@@ -40,6 +39,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
         switch (subCommand) {
             case "send" -> {
+                // /mail send
                 if (args.length == 1) {
                     new MailSendGUI(Bukkit.getPluginManager().getPlugin("MailManager")).open(player);
                     return true;
@@ -47,10 +47,11 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
                 OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
                 if (target == null || !target.hasPlayedBefore()) {
-                    player.sendMessage("§c[Mail] Invalid player: " + args[1]);
+                    player.sendMessage("§c[우편] 존재하지 않는 플레이어입니다: " + args[1]);
                     return true;
                 }
 
+                // /mail send <대상>
                 if (args.length == 2) {
                     MailSendGUI gui = new MailSendGUI(Bukkit.getPluginManager().getPlugin("MailManager"));
                     MailService.setTarget(senderId, target);
@@ -58,9 +59,16 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
 
+                // MMOItems 사용 시 플러그인 존재 여부 확인
+                if (args[2].toLowerCase().startsWith("mmoitems:") &&
+                        !Bukkit.getPluginManager().isPluginEnabled("MMOItems")) {
+                    player.sendMessage("§c[우편] MMOItems 플러그인이 설치되어 있지 않습니다. 해당 아이템을 사용할 수 없습니다.");
+                    return true;
+                }
+
                 ItemStack item = parseItem(args[2]);
                 if (item == null || item.getType() == Material.AIR) {
-                    player.sendMessage("§c[Mail] Invalid item: " + args[2]);
+                    player.sendMessage("§c[우편] 잘못된 아이템입니다: " + args[2]);
                     return true;
                 }
 
@@ -70,27 +78,29 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 if (args.length >= 4) {
                     expire = parseExpireTime(args[3], now);
                     if (expire == null) {
-                        player.sendMessage("§c[Mail] Invalid time format. Use formats like: 7d, 12h, 30m");
+                        player.sendMessage("§c[우편] 시간 형식이 잘못되었습니다. 예: 7d, 12h, 30m");
                         return true;
                     }
                 } else {
-                    expire = now.plusDays(30);
+                    expire = now.plusDays(30); // 기본 만료 30일
                 }
 
                 Mail mail = new Mail(senderId, target.getUniqueId(), item, now, expire);
                 MailDataManager.getInstance().addMail(target.getUniqueId(), mail);
 
-                player.sendMessage("§a[Mail] Sent mail to " + target.getName());
+                player.sendMessage("§a[우편] " + target.getName() + " 님에게 우편을 보냈습니다.");
                 return true;
             }
+
             case "sendall" -> {
                 new MailSendAllGUI(Bukkit.getPluginManager().getPlugin("MailManager")).open(player);
                 return true;
             }
+
             case "reload" -> {
                 MailManager plugin = (MailManager) Bukkit.getPluginManager().getPlugin("MailManager");
                 plugin.reloadConfig();
-                player.sendMessage("§a[Mail] Configuration reloaded.");
+                player.sendMessage("§a[우편] 설정 파일을 다시 불러왔습니다.");
                 return true;
             }
         }
@@ -98,8 +108,11 @@ public class MailCommand implements CommandExecutor, TabCompleter {
         return false;
     }
 
+    // 아이템 파싱 (기본 또는 MMOItems)
     private ItemStack parseItem(String id) {
         if (id.toLowerCase().startsWith("mmoitems:")) {
+            if (!Bukkit.getPluginManager().isPluginEnabled("MMOItems")) return null;
+
             try {
                 String[] parts = id.substring("mmoitems:".length()).split("\\.");
                 if (parts.length != 2) return null;
@@ -126,6 +139,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
         }
     }
 
+    // 만료 시간 파싱
     private LocalDateTime parseExpireTime(String input, LocalDateTime now) {
         try {
             if (input.endsWith("d")) {
@@ -152,6 +166,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                     .toList();
         }
 
+        // /mail send <플레이어>
         if (args.length == 2 && args[0].equalsIgnoreCase("send")) {
             return Bukkit.getOnlinePlayers().stream()
                     .map(Player::getName)
@@ -159,20 +174,25 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                     .toList();
         }
 
+        // /mail send <플레이어> <아이템>
         if (args.length == 3 && args[0].equalsIgnoreCase("send")) {
             String currentInput = args[2].toLowerCase();
             List<String> suggestions = new ArrayList<>();
 
-            for (Type type : MMOItems.plugin.getTypes().getAll()) {
-                Collection<MMOItemTemplate> templates = MMOItems.plugin.getTemplates().getTemplates(type);
-                for (MMOItemTemplate template : templates) {
-                    String suggestion = "mmoitems:" + type.getId() + "." + template.getId();
-                    if (suggestion.toLowerCase().startsWith(currentInput)) {
-                        suggestions.add(suggestion);
+            // MMOItems 플러그인 있을 경우만 제안
+            if (Bukkit.getPluginManager().isPluginEnabled("MMOItems")) {
+                for (Type type : MMOItems.plugin.getTypes().getAll()) {
+                    Collection<MMOItemTemplate> templates = MMOItems.plugin.getTemplates().getTemplates(type);
+                    for (MMOItemTemplate template : templates) {
+                        String suggestion = "mmoitems:" + type.getId() + "." + template.getId();
+                        if (suggestion.toLowerCase().startsWith(currentInput)) {
+                            suggestions.add(suggestion);
+                        }
                     }
                 }
             }
 
+            // 기본 마인크래프트 아이템 제안
             for (Material mat : Material.values()) {
                 if (mat.isItem() && mat.name().toLowerCase().startsWith(currentInput)) {
                     suggestions.add(mat.name().toLowerCase());
@@ -182,12 +202,14 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             return suggestions;
         }
 
+        // /mail send <플레이어> <아이템> <시간>
         if (args.length == 4 && args[0].equalsIgnoreCase("send")) {
             return List.of("7d", "12h", "30m", "1h", "5m").stream()
                     .filter(s -> s.startsWith(args[3].toLowerCase()))
                     .toList();
         }
 
+        // /mail setlang <언어>
         if (args.length == 2 && args[0].equalsIgnoreCase("setlang")) {
             return List.of("en", "ko").stream()
                     .filter(lang -> lang.startsWith(args[1].toLowerCase()))

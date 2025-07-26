@@ -10,11 +10,12 @@ import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 
 /**
- * Mail 객체와 관련된 직렬화/역직렬화 유틸리티.
- * LocalDateTime과 ItemStack을 Gson에 맞게 처리함.
+ * Mail 객체를 JSON 문자열로 저장하거나 불러오기 위한 유틸리티 클래스입니다.
+ * LocalDateTime 및 ItemStack을 Gson에 맞춰 커스텀 직렬화/역직렬화 합니다.
  */
 public class MailSerializer {
 
+    // Gson 인스턴스: ItemStack과 LocalDateTime을 처리하기 위한 어댑터 등록
     private static final Gson gson = new GsonBuilder()
             .registerTypeAdapter(ItemStack.class, new ItemStackAdapter())
             .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeAdapter())
@@ -22,6 +23,9 @@ public class MailSerializer {
 
     /**
      * Mail 객체를 JSON 문자열로 직렬화합니다.
+     *
+     * @param mail 직렬화할 Mail 객체
+     * @return JSON 문자열
      */
     public static String serializeMail(Mail mail) {
         return gson.toJson(mail);
@@ -29,18 +33,21 @@ public class MailSerializer {
 
     /**
      * JSON 문자열을 Mail 객체로 역직렬화합니다.
+     *
+     * @param json Mail JSON 문자열
+     * @return 역직렬화된 Mail 객체 또는 실패 시 null
      */
     public static Mail deserializeMail(String json) {
         try {
             return gson.fromJson(json, Mail.class);
         } catch (JsonParseException e) {
-            System.err.println("[MailSerializer] Failed to deserialize Mail: " + e.getMessage());
+            System.err.println("[MailSerializer] Mail 역직렬화 실패: " + e.getMessage());
             return null;
         }
     }
 
     /**
-     * LocalDateTime <-> String (ISO 형식)
+     * LocalDateTime <-> 문자열(ISO 형식) 변환 어댑터
      */
     public static class LocalDateTimeAdapter implements JsonSerializer<LocalDateTime>, JsonDeserializer<LocalDateTime> {
         private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
@@ -55,13 +62,13 @@ public class MailSerializer {
             try {
                 return LocalDateTime.parse(json.getAsString(), FORMATTER);
             } catch (Exception e) {
-                throw new JsonParseException("Invalid LocalDateTime format: " + json.getAsString(), e);
+                throw new JsonParseException("LocalDateTime 형식이 잘못되었습니다: " + json.getAsString(), e);
             }
         }
     }
 
     /**
-     * ItemStack <-> Base64 문자열
+     * ItemStack <-> Base64 문자열 변환 어댑터
      */
     public static class ItemStackAdapter implements JsonSerializer<ItemStack>, JsonDeserializer<ItemStack> {
         @Override
@@ -74,7 +81,7 @@ public class MailSerializer {
                 oos.flush();
                 return new JsonPrimitive(Base64.getEncoder().encodeToString(baos.toByteArray()));
             } catch (IOException e) {
-                throw new JsonParseException("Failed to serialize ItemStack", e);
+                throw new JsonParseException("ItemStack 직렬화 실패", e);
             }
         }
 
@@ -89,10 +96,10 @@ public class MailSerializer {
                 if (obj instanceof ItemStack stack) {
                     return stack;
                 } else {
-                    throw new JsonParseException("Deserialized object is not an ItemStack");
+                    throw new JsonParseException("복원된 객체가 ItemStack이 아닙니다.");
                 }
             } catch (IOException | ClassNotFoundException e) {
-                throw new JsonParseException("Failed to deserialize ItemStack", e);
+                throw new JsonParseException("ItemStack 역직렬화 실패", e);
             }
         }
     }

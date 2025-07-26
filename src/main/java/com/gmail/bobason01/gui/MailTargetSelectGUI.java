@@ -85,7 +85,7 @@ public class MailTargetSelectGUI implements Listener {
                 }
 
                 Inventory inv = Bukkit.createInventory(player, 54,
-                        "Select Target " + (safePage + 1) + "/" + (maxPage + 1));
+                        "대상 선택 " + (safePage + 1) + "/" + (maxPage + 1));
 
                 for (int i = 0; i < pagePlayers.size(); i++) {
                     OfflinePlayer target = pagePlayers.get(i);
@@ -104,13 +104,13 @@ public class MailTargetSelectGUI implements Listener {
 
                 if (safePage < maxPage) {
                     inv.setItem(SLOT_NEXT, new ItemBuilder(Material.ARROW)
-                            .name("§a▶ Next")
+                            .name("§a▶ 다음 페이지")
                             .build());
                 }
 
                 if (safePage > 0) {
                     inv.setItem(SLOT_PREV, new ItemBuilder(Material.ARROW)
-                            .name("§a◀ Previous")
+                            .name("§a◀ 이전 페이지")
                             .build());
                 }
 
@@ -125,7 +125,7 @@ public class MailTargetSelectGUI implements Listener {
     public void onClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player player)) return;
         String title = e.getView().getTitle();
-        if (!title.startsWith("Select Target")) return;
+        if (!title.startsWith("대상 선택")) return;
 
         e.setCancelled(true);
         ItemStack clicked = e.getCurrentItem();
@@ -150,7 +150,7 @@ public class MailTargetSelectGUI implements Listener {
 
                 OfflinePlayer target = PlayerCache.getByName(name);
                 if (target == null || target.getUniqueId().equals(uuid)) {
-                    player.sendMessage("§c[Mail] Invalid target.");
+                    player.sendMessage("§c[우편] 유효하지 않은 대상입니다.");
                     player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.6f);
                     return;
                 }
@@ -158,7 +158,7 @@ public class MailTargetSelectGUI implements Listener {
                 playerPageMap.remove(uuid);
                 loadingSet.remove(uuid);
                 MailService.setTarget(uuid, target);
-                player.sendMessage("§a[Mail] Target selected: " + name);
+                player.sendMessage("§a[우편] 대상 선택됨: " + name);
                 player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f);
                 new MailSendGUI(plugin).open(player);
             }
@@ -169,7 +169,7 @@ public class MailTargetSelectGUI implements Listener {
     public void onClose(InventoryCloseEvent e) {
         if (!(e.getPlayer() instanceof Player player)) return;
         String title = e.getView().getTitle();
-        if (!title.startsWith("Select Target")) return;
+        if (!title.startsWith("대상 선택")) return;
 
         UUID uuid = player.getUniqueId();
         playerPageMap.remove(uuid);

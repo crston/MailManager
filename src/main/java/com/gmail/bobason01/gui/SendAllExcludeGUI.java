@@ -71,7 +71,7 @@ public class SendAllExcludeGUI implements Listener {
                     if (!player.isOnline()) return;
 
                     Inventory inv = Bukkit.createInventory(player, 54,
-                            "Exclude Recipients " + (safePage + 1) + "/" + (maxPage + 1));
+                            "제외 대상 선택 " + (safePage + 1) + "/" + (maxPage + 1));
 
                     for (int i = 0; i < subList.size(); i++) {
                         OfflinePlayer target = subList.get(i);
@@ -83,20 +83,20 @@ public class SendAllExcludeGUI implements Listener {
                         if (meta != null) {
                             meta.setOwningPlayer(target);
                             meta.setDisplayName((isExcluded ? "§c" : "§a") + target.getName());
-                            meta.setLore(Collections.singletonList(isExcluded ? "Excluded" : "Included"));
+                            meta.setLore(Collections.singletonList(isExcluded ? "제외됨" : "포함됨"));
                             head.setItemMeta(meta);
                             inv.setItem(i, head);
                         }
                     }
 
                     if (safePage > 0)
-                        inv.setItem(SLOT_PREV, new ItemBuilder(Material.ARROW).name("§a◀ Previous").build());
+                        inv.setItem(SLOT_PREV, new ItemBuilder(Material.ARROW).name("§a◀ 이전 페이지").build());
                     if (safePage < maxPage)
-                        inv.setItem(SLOT_NEXT, new ItemBuilder(Material.ARROW).name("§a▶ Next").build());
+                        inv.setItem(SLOT_NEXT, new ItemBuilder(Material.ARROW).name("§a▶ 다음 페이지").build());
 
                     inv.setItem(SLOT_SEARCH, new ItemBuilder(Material.COMPASS)
-                            .name("§bSearch")
-                            .lore("§7Click to search by name")
+                            .name("§b이름 검색")
+                            .lore("§7클릭하여 이름으로 검색")
                             .build());
 
                     inv.setItem(SLOT_BACK, ConfigLoader.getGuiItem("back"));
@@ -126,7 +126,7 @@ public class SendAllExcludeGUI implements Listener {
     public void onClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player player)) return;
         String title = e.getView().getTitle();
-        if (!title.startsWith("Exclude Recipients")) return;
+        if (!title.startsWith("제외 대상 선택")) return;
 
         e.setCancelled(true);
         UUID uuid = player.getUniqueId();
@@ -154,7 +154,7 @@ public class SendAllExcludeGUI implements Listener {
             case SLOT_SEARCH -> {
                 player.closeInventory();
                 waitingForSearch.add(uuid);
-                player.sendMessage("§bEnter the name of the player to toggle exclusion:");
+                player.sendMessage("§b제외/포함할 플레이어 이름을 입력하세요:");
             }
             default -> {
                 if (slot < PAGE_SIZE) {
@@ -168,11 +168,11 @@ public class SendAllExcludeGUI implements Listener {
                     UUID targetId = target.getUniqueId();
                     if (excluded.contains(targetId)) {
                         excluded.remove(targetId);
-                        player.sendMessage("§a" + name + " is now included.");
+                        player.sendMessage("§a" + name + "님이 포함되었습니다.");
                         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
                     } else {
                         excluded.add(targetId);
-                        player.sendMessage("§c" + name + " is now excluded.");
+                        player.sendMessage("§c" + name + "님이 제외되었습니다.");
                         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1.2f);
                     }
                     MailDataManager.getInstance().setExclude(uuid, excluded);
@@ -186,7 +186,7 @@ public class SendAllExcludeGUI implements Listener {
     public void onClose(InventoryCloseEvent e) {
         if (!(e.getPlayer() instanceof Player player)) return;
         String title = e.getView().getTitle();
-        if (!title.startsWith("Exclude Recipients")) return;
+        if (!title.startsWith("제외 대상 선택")) return;
 
         UUID uuid = player.getUniqueId();
         pageMap.remove(uuid);
@@ -207,7 +207,7 @@ public class SendAllExcludeGUI implements Listener {
             int currentPage = pageMap.getOrDefault(uuid, 0);
 
             if (target == null || target.getName() == null) {
-                player.sendMessage("§cPlayer not found: " + input);
+                player.sendMessage("§c플레이어를 찾을 수 없습니다: " + input);
                 open(player, currentPage);
                 return;
             }
@@ -217,10 +217,10 @@ public class SendAllExcludeGUI implements Listener {
 
             if (excluded.contains(targetId)) {
                 excluded.remove(targetId);
-                player.sendMessage("§a" + target.getName() + " is now included.");
+                player.sendMessage("§a" + target.getName() + "님이 포함되었습니다.");
             } else {
                 excluded.add(targetId);
-                player.sendMessage("§c" + target.getName() + " is now excluded.");
+                player.sendMessage("§c" + target.getName() + "님이 제외되었습니다.");
             }
 
             MailDataManager.getInstance().setExclude(uuid, excluded);

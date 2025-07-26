@@ -22,7 +22,7 @@ public class MailSettingGUI implements Listener {
     private static final int BLACKLIST_SLOT = 15;
     private static final int BACK_SLOT = 26;
 
-    private static final String GUI_TITLE = "Mail Settings";
+    private static final String GUI_TITLE = "우편 설정";
 
     private final Plugin plugin;
 
@@ -39,17 +39,17 @@ public class MailSettingGUI implements Listener {
         UUID uuid = player.getUniqueId();
         boolean notifyEnabled = MailDataManager.getInstance().isNotifyEnabled(uuid);
 
-        String displayName = notifyEnabled ? "§aNotifications: ON" : "§7Notifications: OFF";
+        String displayName = notifyEnabled ? "§a알림: 켜짐" : "§7알림: 꺼짐";
         Material dye = notifyEnabled ? Material.LIME_DYE : Material.GRAY_DYE;
 
         ItemStack notifyItem = new ItemBuilder(dye)
                 .name(displayName)
-                .lore("§7Toggle whether you receive mail notifications.")
+                .lore("§7우편 수신 시 알림을 받을지 여부를 설정합니다.")
                 .build();
 
         Inventory inv = Bukkit.createInventory(player, 27, GUI_TITLE);
         inv.setItem(NOTIFY_SLOT, notifyItem);
-        inv.setItem(BLACKLIST_SLOT, ConfigLoader.getGuiItem("blacklist"));
+        inv.setItem(BLACKLIST_SLOT, ConfigLoader.getGuiItem("blacklist")); // 블랙리스트 항목은 ConfigLoader에서 다국어화 가능
         inv.setItem(BACK_SLOT, ConfigLoader.getGuiItem("back"));
 
         return inv;
@@ -71,9 +71,9 @@ public class MailSettingGUI implements Listener {
             case NOTIFY_SLOT -> {
                 boolean newState = MailDataManager.getInstance().toggleNotification(uuid);
                 if (newState) {
-                    player.sendMessage("§a[Mail] Notifications enabled.");
+                    player.sendMessage("§a[우편] 알림이 활성화되었습니다.");
                 } else {
-                    player.sendMessage("§7[Mail] Notifications disabled.");
+                    player.sendMessage("§7[우편] 알림이 비활성화되었습니다.");
                 }
                 player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1.0f, newState ? 1.2f : 0.8f);
                 open(player);

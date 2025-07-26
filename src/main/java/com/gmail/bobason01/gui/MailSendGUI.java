@@ -13,6 +13,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
@@ -38,7 +39,7 @@ public class MailSendGUI implements Listener {
     }
 
     public void open(Player player) {
-        Inventory inv = Bukkit.createInventory(player, 27, "Send Mail");
+        Inventory inv = Bukkit.createInventory(player, 27, "우편 보내기");
         UUID uuid = player.getUniqueId();
 
         Map<String, Integer> timeData = MailService.getTimeData(uuid);
@@ -47,13 +48,13 @@ public class MailSendGUI implements Listener {
         String formattedExpire = TimeUtil.formatDateTime(expireAt);
 
         List<String> timeLore = new ArrayList<>();
-        timeLore.add("§7Duration: " + formattedTime);
+        timeLore.add("§7지속 시간: " + formattedTime);
         timeLore.add(expireAt > 0
-                ? "§8Expires at: §f" + formattedExpire
-                : "§8No expiration set");
+                ? "§8만료 시각: §f" + formattedExpire
+                : "§8만료 시간이 설정되지 않음");
 
         inv.setItem(SLOT_TIME, new ItemBuilder(Material.CLOCK)
-                .name("§eSet Expiration Time")
+                .name("§e만료 시간 설정")
                 .lore(timeLore)
                 .build());
 
@@ -64,8 +65,8 @@ public class MailSendGUI implements Listener {
             targetItem = getCachedHead(target);
         } else {
             targetItem = new ItemBuilder(Material.PLAYER_HEAD)
-                    .name("§fSelect Recipient")
-                    .lore("§7Click to choose a player to send mail to.")
+                    .name("§f받는 사람 선택")
+                    .lore("§7클릭하여 우편을 보낼 대상을 선택하세요.")
                     .build();
         }
 
@@ -77,8 +78,8 @@ public class MailSendGUI implements Listener {
         }
 
         inv.setItem(SLOT_CONFIRM, new ItemBuilder(Material.GREEN_WOOL)
-                .name("§aSend")
-                .lore("§7Click to send the mail.")
+                .name("§a보내기")
+                .lore("§7클릭하면 우편을 전송합니다.")
                 .build());
 
         inv.setItem(SLOT_BACK, ConfigLoader.getGuiItem("back"));
@@ -102,46 +103,60 @@ public class MailSendGUI implements Listener {
     @EventHandler
     public void onClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player player)) return;
-        if (!e.getView().getTitle().equals("Send Mail")) return;
+        if (!e.getView().getTitle().equals("우편 보내기")) return;
 
+        int slot = e.getRawSlot();
         ClickType click = e.getClick();
+        UUID uuid = player.getUniqueId();
+
         if (click.isShiftClick() || click == ClickType.DROP || click == ClickType.CONTROL_DROP || click == ClickType.DOUBLE_CLICK) {
             e.setCancelled(true);
             return;
         }
 
-        int slot = e.getRawSlot();
-        UUID uuid = player.getUniqueId();
-
         if (slot >= e.getInventory().getSize()) return;
-        e.setCancelled(true);
+
+        e.setCancelled(slot != SLOT_ITEM);
 
         switch (slot) {
             case SLOT_TIME -> new MailTimeSelectGUI(plugin).open(player);
             case SLOT_TARGET -> new MailTargetSelectGUI(plugin).open(player);
-            case SLOT_ITEM -> Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                ItemStack newItem = e.getInventory().getItem(SLOT_ITEM);
-                if (newItem != null && !newItem.getType().isAir()) {
-                    MailService.setAttachedItem(uuid, newItem);
-                }
-            }, 1L);
             case SLOT_CONFIRM -> {
                 if (sentSet.contains(uuid)) {
-                    player.sendMessage("§c[Mail] You already sent this mail. Please wait.");
+                    player.sendMessage("§c[우편] 이미 이 우편을 보냈습니다. 잠시 후 다시 시도하세요.");
                     return;
                 }
                 MailService.MailSession session = MailService.getSession(uuid);
                 if (session == null || session.item == null || session.item.getType() == Material.AIR || session.target == null) {
-                    player.sendMessage("§c[Mail] Missing recipient or item. Cannot send.");
+                    player.sendMessage("§c[우편] 수신자 또는 아이템이 없습니다. 전송할 수 없습니다.");
                     return;
                 }
                 MailService.send(player, plugin);
+                MailService.setAttachedItem(uuid, null); // ✅ 아이템 제거
                 sentSet.add(uuid);
                 player.closeInventory();
-                player.sendMessage("§a[Mail] Mail has been sent.");
+                player.sendMessage("§a[우편] 우편이 성공적으로 전송되었습니다.");
                 player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f);
             }
             case SLOT_BACK -> new MailGUI(plugin).open(player);
         }
     }
+
+    @EventHandler
+    public void onClose(InventoryCloseEvent e) {
+        if (!(e.getPlayer() instanceof Player player)) return;
+        if (!e.getView().getTitle().equals("우편 보내기")) return;
+
+        UUID uuid = player.getUniqueId();
+        if (sentSet.contains(uuid)) return; // ✅ 이미 보낸 경우 저장 안함
+
+        ItemStack item = e.getInventory().getItem(SLOT_ITEM);
+
+        if (item != null && !item.getType().isAir()) {
+            MailService.setAttachedItem(uuid, item);
+        } else {
+            MailService.setAttachedItem(uuid, null);
+        }
+    }
 }
+

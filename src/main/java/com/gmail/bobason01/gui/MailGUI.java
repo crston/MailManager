@@ -49,7 +49,7 @@ public class MailGUI implements Listener {
         page = Math.max(0, Math.min(page, totalPages - 1));
         pageMap.put(uuid, page);
 
-        Inventory inv = Bukkit.createInventory(player, 54, "Mailbox");
+        Inventory inv = Bukkit.createInventory(player, 54, "우편함");
 
         int start = page * PAGE_SIZE;
         int end = Math.min(start + PAGE_SIZE, mails.size());
@@ -71,7 +71,7 @@ public class MailGUI implements Listener {
     @EventHandler
     public void onClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player player)) return;
-        if (!e.getView().getTitle().equals("Mailbox")) return;
+        if (!e.getView().getTitle().equals("우편함")) return;
 
         e.setCancelled(true);
 
@@ -111,7 +111,7 @@ public class MailGUI implements Listener {
                     if (mail.getItem() != null && mail.getItem().getType() != Material.AIR) {
                         player.getInventory().addItem(mail.getItem());
                         MailDataManager.getInstance().removeMail(uuid, mail);
-                        player.sendMessage("§a[Mail] You have received the item.");
+                        player.sendMessage("§a[우편] 아이템을 수령했습니다.");
                         player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 1.0f, 1.2f);
                         open(player, currentPage);
                     }

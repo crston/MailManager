@@ -1,48 +1,48 @@
 gui-items:
   back:
     material: BARRIER
-    name: "&cBack"
+    name: "&c뒤로가기"
     lore:
-      - "&7Return to the previous menu"
+      - "&7이전 메뉴로 돌아갑니다"
 
   previous-page:
     material: ARROW
-    name: "&a◀ Previous"
+    name: "&a◀ 이전 페이지"
     lore:
-      - "&7Go to the previous page"
+      - "&7이전 페이지로 이동"
 
   next-page:
     material: ARROW
-    name: "&a▶ Next"
+    name: "&a▶ 다음 페이지"
     lore:
-      - "&7Go to the next page"
+      - "&7다음 페이지로 이동"
 
   mail-send:
     material: PAPER
-    name: "&aSend Mail"
+    name: "&a메일 보내기"
     lore:
-      - "&7Click to send mail"
+      - "&7메일을 전송합니다"
 
   setting:
     material: COMPARATOR
-    name: "&bSettings"
+    name: "&b설정"
     lore:
-      - "&7Open mail settings"
+      - "&7메일 설정 열기"
 
   blacklist:
     material: NETHER_BRICK
-    name: "&cBlacklist"
+    name: "&c차단 목록"
     lore:
-      - "&7Manage your mail blacklist"
+      - "&7메일 차단 대상 관리"
 
   permanent:
     material: CLOCK
-    name: "&6Permanent"
+    name: "&6영구 설정"
     lore:
-      - "&7Send mail without expiration"
+      - "&7만료 없이 메일 보내기"
 
   select-complete:
     material: EMERALD_BLOCK
-    name: "&aSelect Complete"
+    name: "&a선택 완료"
     lore:
-      - "&7Confirm selection and continue"
+      - "&7선택을 완료하고 다음 단계로 이동"
