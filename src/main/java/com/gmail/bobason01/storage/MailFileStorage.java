@@ -1,6 +1,7 @@
 package com.gmail.bobason01.storage;
 
 import com.gmail.bobason01.mail.Mail;
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
@@ -10,121 +11,127 @@ import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 public class MailFileStorage {
 
-    public static void loadAll(Plugin plugin,
-                               Map<UUID, List<Mail>> inboxMap,
-                               Map<UUID, Set<UUID>> blacklistMap,
-                               Set<UUID> notifyDisabled,
-                               Map<UUID, Set<UUID>> excludeMap) {
+    private static final ExecutorService saveExecutor = Executors.newSingleThreadExecutor();
+    private static final String DATA_FOLDER_NAME = "data";
 
-        File folder = new File(plugin.getDataFolder(), "data");
+    public static void loadAllAsync(Plugin plugin,
+                                    Map<UUID, List<Mail>> inboxMap,
+                                    Map<UUID, Set<UUID>> blacklistMap,
+                                    Set<UUID> notifyDisabled,
+                                    Map<UUID, Set<UUID>> excludeMap,
+                                    Runnable onComplete) {
+
+        File folder = new File(plugin.getDataFolder(), DATA_FOLDER_NAME);
         if (!folder.exists()) folder.mkdirs();
 
-        File[] files = folder.listFiles();
-        if (files == null) return;
+        File[] files = folder.listFiles((dir, name) -> name.endsWith(".yml") && name.length() == 40);
+        if (files == null || files.length == 0) {
+            Bukkit.getScheduler().runTask(plugin, onComplete);
+            return;
+        }
+
+        ExecutorService loaderExecutor = Executors.newFixedThreadPool(Math.min(8, files.length));
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
 
         for (File file : files) {
-            if (!file.getName().endsWith(".yml")) continue;
+            futures.add(CompletableFuture.runAsync(() -> {
+                try {
+                    String fileName = file.getName();
+                    UUID uuid = UUID.fromString(fileName.substring(0, fileName.length() - 4));
 
-            try {
-                UUID playerId = UUID.fromString(file.getName().replace(".yml", ""));
-                FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+                    FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+                    List<Mail> inbox = new ArrayList<>();
 
-                inboxMap.put(playerId, loadMails(config, playerId));
-                blacklistMap.put(playerId, loadUUIDSet(config.getStringList("blacklist")));
-                excludeMap.put(playerId, loadUUIDSet(config.getStringList("excluded")));
+                    for (String key : config.getKeys(false)) {
+                        String base = key + ".";
+                        if (!config.contains(base + "sender")) continue;
 
-                if (!config.getBoolean("notify", true)) {
-                    notifyDisabled.add(playerId); // notify=false → 알림 비활성화
+                        try {
+                            UUID sender = UUID.fromString(config.getString(base + "sender"));
+                            UUID receiver = UUID.fromString(config.getString(base + "receiver"));
+                            ItemStack item = config.getItemStack(base + "item");
+                            LocalDateTime sentAt = LocalDateTime.parse(config.getString(base + "sentAt"));
+                            LocalDateTime expireAt = LocalDateTime.parse(config.getString(base + "expireAt"));
+
+                            if (expireAt.isBefore(now)) continue;
+                            if (item != null) {
+                                inbox.add(new Mail(sender, receiver, item, sentAt, expireAt));
+                            }
+                        } catch (Exception e) {
+                            plugin.getLogger().log(Level.WARNING,
+                                    "Malformed mail entry in file: " + file.getName() + ", key: " + key, e);
+                        }
+                    }
+
+                    synchronized (inboxMap) {
+                        inboxMap.put(uuid, inbox);
+                        blacklistMap.put(uuid, config.getStringList("blacklist").stream()
+                                .map(UUID::fromString).collect(Collectors.toSet()));
+                        excludeMap.put(uuid, config.getStringList("exclude").stream()
+                                .map(UUID::fromString).collect(Collectors.toSet()));
+                    }
+
+                    if (config.getBoolean("notifyDisabled")) {
+                        synchronized (notifyDisabled) {
+                            notifyDisabled.add(uuid);
+                        }
+                    }
+
+                } catch (Exception e) {
+                    plugin.getLogger().log(Level.SEVERE,
+                            "Failed to load mail file: " + file.getName(), e);
                 }
-
-            } catch (Exception e) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to load data file: " + file.getName(), e);
-            }
+            }, loaderExecutor));
         }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .whenComplete((ignored, throwable) -> {
+                    loaderExecutor.shutdown();
+                    Bukkit.getScheduler().runTask(plugin, onComplete);
+                });
     }
 
-    public static void saveAll(Plugin plugin,
-                               Map<UUID, List<Mail>> inboxMap,
-                               Map<UUID, Set<UUID>> blacklistMap,
-                               Set<UUID> notifyDisabled,
-                               Map<UUID, Set<UUID>> excludeMap) {
+    public static CompletableFuture<Void> saveAsync(Plugin plugin, UUID uuid, List<Mail> inbox,
+                                                    Collection<UUID> blacklist,
+                                                    Collection<UUID> exclude,
+                                                    boolean notifyDisabled) {
+        return CompletableFuture.runAsync(() -> {
+            File folder = new File(plugin.getDataFolder(), DATA_FOLDER_NAME);
+            if (!folder.exists()) folder.mkdirs();
 
-        File folder = new File(plugin.getDataFolder(), "data");
-        if (!folder.exists()) folder.mkdirs();
-
-        for (UUID playerId : inboxMap.keySet()) {
-            File file = new File(folder, playerId + ".yml");
+            File file = new File(folder, uuid.toString() + ".yml");
             FileConfiguration config = new YamlConfiguration();
+            LocalDateTime now = LocalDateTime.now();
 
-            saveMails(config, inboxMap.get(playerId));
-            config.set("blacklist", toStringList(blacklistMap.get(playerId)));
-            config.set("excluded", toStringList(excludeMap.get(playerId)));
-            config.set("notify", !notifyDisabled.contains(playerId)); // true if 알림 ON
+            int index = 0;
+            for (Mail mail : inbox) {
+                if (mail.getExpireAt().isBefore(now)) continue;
+
+                String path = index++ + ".";
+                config.set(path + "sender", mail.getSender().toString());
+                config.set(path + "receiver", mail.getReceiver().toString());
+                config.set(path + "item", mail.getItem());
+                config.set(path + "sentAt", mail.getSentAt().toString());
+                config.set(path + "expireAt", mail.getExpireAt().toString());
+            }
+
+            config.set("blacklist", blacklist.stream().map(UUID::toString).collect(Collectors.toList()));
+            config.set("exclude", exclude.stream().map(UUID::toString).collect(Collectors.toList()));
+            config.set("notifyDisabled", notifyDisabled);
 
             try {
                 config.save(file);
             } catch (IOException e) {
-                plugin.getLogger().log(Level.SEVERE, "Error saving mail data for " + playerId, e);
+                plugin.getLogger().log(Level.SEVERE,
+                        "Failed to save mail data for player: " + uuid, e);
             }
-        }
-    }
-
-    // ===== 내부 유틸 =====
-
-    private static List<Mail> loadMails(FileConfiguration config, UUID receiver) {
-        List<Mail> list = new ArrayList<>();
-        if (!config.contains("mails")) return list;
-
-        for (String key : Objects.requireNonNull(config.getConfigurationSection("mails")).getKeys(false)) {
-            String path = "mails." + key + ".";
-            try {
-                UUID sender = UUID.fromString(Objects.requireNonNull(config.getString(path + "sender")));
-                ItemStack item = config.getItemStack(path + "item");
-                LocalDateTime sentAt = LocalDateTime.parse(Objects.requireNonNull(config.getString(path + "sentAt")));
-                String expireStr = config.getString(path + "expireAt");
-                LocalDateTime expireAt = (expireStr != null && !expireStr.isEmpty()) ? LocalDateTime.parse(expireStr) : null;
-
-                list.add(new Mail(sender, receiver, item, sentAt, expireAt));
-            } catch (Exception e) {
-                // 개별 메일 로딩 실패 무시 (다음으로 계속)
-            }
-        }
-        return list;
-    }
-
-    private static Set<UUID> loadUUIDSet(List<String> strings) {
-        Set<UUID> set = new HashSet<>();
-        for (String s : strings) {
-            try {
-                set.add(UUID.fromString(s));
-            } catch (IllegalArgumentException ignored) {}
-        }
-        return set;
-    }
-
-    private static List<String> toStringList(Set<UUID> uuids) {
-        List<String> list = new ArrayList<>();
-        if (uuids != null) {
-            for (UUID id : uuids) {
-                list.add(id.toString());
-            }
-        }
-        return list;
-    }
-
-    private static void saveMails(FileConfiguration config, List<Mail> mails) {
-        if (mails == null) return;
-        for (int i = 0; i < mails.size(); i++) {
-            Mail mail = mails.get(i);
-            String path = "mails." + i + ".";
-            config.set(path + "sender", mail.getSender().toString());
-            config.set(path + "item", mail.getItem());
-            config.set(path + "sentAt", mail.getSentAt().toString());
-            config.set(path + "expireAt", mail.getExpireAt() != null ? mail.getExpireAt().toString() : null);
-        }
+        }, saveExecutor);
     }
 }

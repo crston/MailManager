@@ -5,9 +5,9 @@ import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 /**
@@ -15,7 +15,7 @@ import java.util.logging.Logger;
  */
 public class MailNotifySettingsManager {
 
-    private static final Set<UUID> notifyEnabledUsers = new HashSet<>();
+    private static final Set<UUID> notifyEnabledUsers = ConcurrentHashMap.newKeySet(); // thread-safe
     private static final File file = new File(MailManager.getInstance().getDataFolder(), "notify.yml");
     private static final Logger log = MailManager.getInstance().getLogger();
 
@@ -23,7 +23,7 @@ public class MailNotifySettingsManager {
         notifyEnabledUsers.clear();
 
         if (!file.exists()) {
-            log.info("[MailManager] notify.yml not found, skipping load.");
+            log.fine("[MailManager] notify.yml not found. Skipping load.");
             return;
         }
 
@@ -31,13 +31,13 @@ public class MailNotifySettingsManager {
         int count = 0;
 
         for (String key : config.getKeys(false)) {
+            if (!config.getBoolean(key)) continue;
+
             try {
                 UUID uuid = UUID.fromString(key);
-                if (config.getBoolean(key)) {
-                    notifyEnabledUsers.add(uuid);
-                    count++;
-                }
-            } catch (IllegalArgumentException ignored) {
+                notifyEnabledUsers.add(uuid);
+                count++;
+            } catch (IllegalArgumentException ex) {
                 log.warning("[MailManager] Invalid UUID in notify.yml: " + key);
             }
         }
@@ -56,8 +56,7 @@ public class MailNotifySettingsManager {
             config.save(file);
             log.info("[MailManager] notify.yml saved.");
         } catch (IOException e) {
-            log.severe("[MailManager] Failed to save notify.yml: " + e.getMessage());
-            e.printStackTrace();
+            log.log(java.util.logging.Level.SEVERE, "[MailManager] Failed to save notify.yml", e);
         }
     }
 
@@ -66,9 +65,7 @@ public class MailNotifySettingsManager {
     }
 
     public static void toggle(UUID uuid) {
-        if (notifyEnabledUsers.contains(uuid)) {
-            notifyEnabledUsers.remove(uuid);
-        } else {
+        if (!notifyEnabledUsers.remove(uuid)) {
             notifyEnabledUsers.add(uuid);
         }
     }

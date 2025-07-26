@@ -1,6 +1,5 @@
 package com.gmail.bobason01.mail;
 
-import com.gmail.bobason01.utils.LangUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -9,26 +8,39 @@ import org.bukkit.inventory.meta.ItemMeta;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 public class Mail {
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final Map<UUID, String> nameCache = new HashMap<>();
 
+    private final UUID mailId;
     private final UUID sender;
     private final UUID receiver;
     private final ItemStack item;
     private final LocalDateTime sentAt;
     private final LocalDateTime expireAt;
 
+    private transient ItemStack cachedDisplay;
+    private transient int cachedItemHash = -1;
+    private transient String cachedSenderName;
+
     public Mail(UUID sender, UUID receiver, ItemStack item, LocalDateTime sentAt, LocalDateTime expireAt) {
+        this(UUID.randomUUID(), sender, receiver, item, sentAt, expireAt);
+    }
+
+    public Mail(UUID mailId, UUID sender, UUID receiver, ItemStack item, LocalDateTime sentAt, LocalDateTime expireAt) {
+        this.mailId = Objects.requireNonNull(mailId);
         this.sender = sender;
         this.receiver = receiver;
-        this.item = item;
+        this.item = item != null ? item.clone() : null;
         this.sentAt = sentAt;
         this.expireAt = expireAt;
+    }
+
+    public UUID getMailId() {
+        return mailId;
     }
 
     public UUID getSender() {
@@ -40,7 +52,7 @@ public class Mail {
     }
 
     public ItemStack getItem() {
-        return item;
+        return item != null ? item.clone() : null;
     }
 
     public LocalDateTime getSentAt() {
@@ -55,28 +67,108 @@ public class Mail {
         return expireAt != null && LocalDateTime.now().isAfter(expireAt);
     }
 
+    public boolean isRead() {
+        return false;
+    }
+
     public ItemStack toItemStack() {
+        return generateDisplayItem(receiver);
+    }
+
+    public ItemStack toItemStack(Player viewer) {
+        return generateDisplayItem(viewer.getUniqueId());
+    }
+
+    private ItemStack generateDisplayItem(UUID viewer) {
+        if (item == null) return null;
+
+        int currentHash = computeItemHash(item);
+        if (cachedDisplay == null || cachedItemHash != currentHash) {
+            cachedDisplay = buildDisplayItem(viewer);
+            cachedItemHash = currentHash;
+        }
+        return cachedDisplay;
+    }
+
+    private int computeItemHash(ItemStack item) {
+        if (item == null) return 0;
+        ItemMeta meta = item.getItemMeta();
+        return Objects.hash(
+                item.getType(),
+                item.getAmount(),
+                meta != null && meta.hasDisplayName() ? meta.getDisplayName() : "",
+                meta != null && meta.hasLore() ? meta.getLore() : Collections.emptyList()
+        );
+    }
+
+    private ItemStack buildDisplayItem(UUID viewer) {
         ItemStack display = item.clone();
         ItemMeta meta = display.getItemMeta();
         if (meta != null) {
-            List<String> lore = new ArrayList<>();
-
-            OfflinePlayer senderPlayer = Bukkit.getOfflinePlayer(sender);
-            String senderName = senderPlayer.getName() != null ? senderPlayer.getName() : "Unknown";
-            lore.add(LangUtil.get("mail.from") + senderName);
-            lore.add(LangUtil.get("mail.sent-at") + sentAt.format(FORMATTER));
-
-            if (expireAt != null) {
-                lore.add(LangUtil.get("mail.expires") + expireAt.toLocalDate());
+            if (cachedSenderName == null) {
+                cachedSenderName = resolveSenderName();
             }
 
-            meta.setLore(lore);
+            meta.setLore(buildLore());
             display.setItemMeta(meta);
         }
         return display;
     }
 
+    private List<String> buildLore() {
+        List<String> lore = new ArrayList<>();
+        lore.add("§7From: §f" + cachedSenderName);
+        lore.add("§7Sent At: §f" + FORMATTER.format(sentAt));
+
+        if (expireAt != null) {
+            lore.add("§7Expires At: §f" + FORMATTER.format(expireAt));
+            if (isExpired()) {
+                lore.add("§c[Expired]");
+            }
+        }
+
+        return lore;
+    }
+
+    private String resolveSenderName() {
+        if (sender == null) return "Unknown";
+        return nameCache.computeIfAbsent(sender, id -> {
+            OfflinePlayer p = Bukkit.getOfflinePlayer(id);
+            return p.getName() != null ? p.getName() : "Unknown";
+        });
+    }
+
+    public void onClick(Player player) {
+        if (player == null || !player.isOnline()) return;
+        UUID uuid = player.getUniqueId();
+
+        if (!isExpired()) {
+            Map<Integer, ItemStack> failed = player.getInventory().addItem(item);
+            if (!failed.isEmpty()) {
+                player.sendMessage("§cYour inventory is full.");
+                return;
+            }
+            player.sendMessage("§aYou received the item from mail.");
+        } else {
+            player.sendMessage("§cThis mail has expired.");
+        }
+
+        MailDataManager.getInstance().removeMail(receiver, this);
+    }
+
     public void give(Player player) {
-        player.getInventory().addItem(item.clone());
+        if (player != null && player.isOnline() && item != null) {
+            player.getInventory().addItem(item.clone());
+        }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return this == o || (o instanceof Mail m && mailId.equals(m.mailId));
+    }
+
+    @Override
+    public int hashCode() {
+        return mailId.hashCode();
     }
 }

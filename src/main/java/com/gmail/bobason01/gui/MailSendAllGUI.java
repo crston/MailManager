@@ -1,19 +1,15 @@
 package com.gmail.bobason01.gui;
 
+import com.gmail.bobason01.config.ConfigLoader;
 import com.gmail.bobason01.mail.MailService;
-import com.gmail.bobason01.utils.ConfigLoader;
 import com.gmail.bobason01.utils.ItemBuilder;
-import com.gmail.bobason01.utils.LangUtil;
-import com.gmail.bobason01.utils.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
@@ -22,7 +18,11 @@ import java.util.*;
 
 public class MailSendAllGUI implements Listener {
 
-    private static final Set<Integer> ALLOWED_SLOTS = Set.of(10, 12, 14, 16, 18);
+    private static final int SLOT_TIME = 10;
+    private static final int SLOT_EXCLUDE = 12;
+    private static final int SLOT_ITEM = 14;
+    private static final int SLOT_CONFIRM = 16;
+    private static final int SLOT_BACK = 26;
 
     private final Plugin plugin;
     private final Set<UUID> sentSet = new HashSet<>();
@@ -33,26 +33,30 @@ public class MailSendAllGUI implements Listener {
     }
 
     public void open(Player player) {
+        Inventory inv = Bukkit.createInventory(player, 27, "Send Mail to All");
         UUID uuid = player.getUniqueId();
-        MailService.setContext(uuid, "sendall");
 
-        Inventory inv = Bukkit.createInventory(player, 27, LangUtil.get("gui.mail-sendall.title"));
-
-        Map<String, Integer> timeData = MailService.getTimeData(uuid);
-        String formattedTime = TimeUtil.format(timeData);
-
-        inv.setItem(10, new ItemBuilder(Material.CLOCK)
-                .name("§e" + LangUtil.get("gui.mail-send.time"))
-                .lore("§7" + formattedTime)
+        inv.setItem(SLOT_TIME, new ItemBuilder(Material.CLOCK)
+                .name("§eExpiration Time")
+                .lore("§7Click to set mail expiration time.")
                 .build());
 
-        inv.setItem(12, ConfigLoader.getGuiItem("exclude"));
+        inv.setItem(SLOT_EXCLUDE, new ItemBuilder(Material.BARRIER)
+                .name("§cExclude Players")
+                .lore("§7Click to select players to exclude.")
+                .build());
 
-        ItemStack item = MailService.getAttachedItem(uuid);
-        if (item != null) inv.setItem(14, item);
+        ItemStack attached = MailService.getAttachedItem(uuid);
+        if (attached != null) {
+            inv.setItem(SLOT_ITEM, attached);
+        }
 
-        inv.setItem(16, ConfigLoader.getGuiItem("confirm"));
-        inv.setItem(18, ConfigLoader.getGuiItem("back"));
+        inv.setItem(SLOT_CONFIRM, new ItemBuilder(Material.GREEN_WOOL)
+                .name("§aSend to All")
+                .lore("§7Click to send mail to all players.\n§7Make sure an item is attached.")
+                .build());
+
+        inv.setItem(SLOT_BACK, ConfigLoader.getGuiItem("back"));
 
         player.openInventory(inv);
     }
@@ -60,64 +64,39 @@ public class MailSendAllGUI implements Listener {
     @EventHandler
     public void onClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player player)) return;
-        if (!e.getView().getTitle().equals(LangUtil.get("gui.mail-sendall.title"))) return;
+        if (!e.getView().getTitle().equals("Send Mail to All")) return;
 
-        ClickType click = e.getClick();
-        if (click.isShiftClick() || click == ClickType.DROP || click == ClickType.CONTROL_DROP || click == ClickType.DOUBLE_CLICK) {
-            e.setCancelled(true);
-            return;
-        }
+        e.setCancelled(true);
 
-        int slot = e.getRawSlot();
         UUID uuid = player.getUniqueId();
-
-        if (slot < 27 && !ALLOWED_SLOTS.contains(slot)) {
-            e.setCancelled(true);
-            return;
-        }
+        int slot = e.getRawSlot();
 
         switch (slot) {
-            case 10 -> new MailTimeSelectGUI(plugin).open(player);
-            case 12 -> new SendAllExcludeGUI(plugin).open(player);
-            case 14 -> Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                ItemStack newItem = e.getInventory().getItem(14);
+            case SLOT_TIME -> new MailTimeSelectGUI(plugin).open(player);
+            case SLOT_EXCLUDE -> new SendAllExcludeGUI(plugin).open(player);
+            case SLOT_ITEM -> Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                ItemStack newItem = e.getInventory().getItem(SLOT_ITEM);
                 if (newItem != null && !newItem.getType().isAir()) {
-                    MailService.setAttachedItem(uuid, newItem.clone());
-                } else {
-                    MailService.setAttachedItem(uuid, null);
+                    MailService.setAttachedItem(uuid, newItem);
                 }
             }, 1L);
-            case 16 -> {
-                ItemStack currentItem = e.getInventory().getItem(14);
-                if (currentItem == null || currentItem.getType().isAir()) {
-                    player.sendMessage(LangUtil.get("mail.invalid-args"));
+            case SLOT_CONFIRM -> {
+                if (sentSet.contains(uuid)) {
+                    player.sendMessage("§c[Mail] You've already sent mail. Please wait.");
                     return;
                 }
-
-                MailService.setAttachedItem(uuid, currentItem.clone());
+                ItemStack item = MailService.getAttachedItem(uuid);
+                if (item == null || item.getType().isAir()) {
+                    player.sendMessage("§c[Mail] You must attach an item before sending.");
+                    return;
+                }
                 MailService.sendAll(player, plugin);
                 sentSet.add(uuid);
+                player.sendMessage("§a[Mail] Mail successfully sent to all players.");
+                player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f);
                 player.closeInventory();
-                player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1, 1);
             }
-            case 18 -> player.performCommand("mail");
+            case SLOT_BACK -> new MailGUI(plugin).open(player);
         }
-    }
-
-    @EventHandler
-    public void onClose(InventoryCloseEvent e) {
-        if (!(e.getPlayer() instanceof Player player)) return;
-        if (!e.getView().getTitle().equals(LangUtil.get("gui.mail-sendall.title"))) return;
-
-        UUID uuid = player.getUniqueId();
-
-        if (sentSet.remove(uuid)) return;
-
-        ItemStack item = e.getInventory().getItem(14);
-        if (item != null && item.getType() != Material.AIR) {
-            player.getInventory().addItem(item);
-        }
-
-        MailService.setAttachedItem(uuid, null);
     }
 }

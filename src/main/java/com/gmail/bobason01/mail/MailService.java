@@ -1,6 +1,6 @@
 package com.gmail.bobason01.mail;
 
-import com.gmail.bobason01.utils.LangUtil;
+import com.gmail.bobason01.cache.PlayerCache;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
@@ -10,142 +10,186 @@ import org.bukkit.plugin.Plugin;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.*;
 
 public class MailService {
 
-    private static final Map<UUID, OfflinePlayer> targetMap = new HashMap<>();
-    private static final Map<UUID, ItemStack> attachedItemMap = new HashMap<>();
-    private static final Map<UUID, Map<String, Integer>> timeDataMap = new HashMap<>();
-    private static final Map<UUID, String> contextMap = new HashMap<>();
+    private static final long SESSION_TIMEOUT = 5 * 60 * 1000L; // 5 minutes
+    private static final Map<UUID, MailSession> sessions = new ConcurrentHashMap<>();
+    private static final ExecutorService sendExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
-    // ===== 전체 전송 =====
+    public static void init(Plugin plugin) {
+        long interval = SESSION_TIMEOUT / 50L;
+        Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+            long now = System.currentTimeMillis();
+            sessions.entrySet().removeIf(entry -> now - entry.getValue().lastAccess > SESSION_TIMEOUT);
+        }, interval, interval);
+    }
+
     public static void sendAll(Player sender, Plugin plugin) {
         final UUID senderId = sender.getUniqueId();
-        final ItemStack item = getAttachedItem(senderId);
-        final Map<String, Integer> timeData = getTimeData(senderId);
+        final MailSession session = sessions.get(senderId);
 
-        if (item == null || item.getType() == Material.AIR) {
-            sender.sendMessage(LangUtil.get("mail.invalid-args"));
+        if (session == null || isInvalidItem(session.item)) {
+            sender.sendMessage("§cCannot send mail: No item attached.");
             return;
         }
 
-        final Set<UUID> excludeList = MailDataManager.getInstance().getExcluded(senderId);
-        final OfflinePlayer[] targets = Bukkit.getOfflinePlayers();
+        final ItemStack baseItem = session.item.clone();
+        final LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime expireAt = buildExpireTime(now, session.time);
+        final Set<UUID> exclude = MailDataManager.getInstance().getExclude(senderId);
 
-        final LocalDateTime createdAt = LocalDateTime.now();
-        final LocalDateTime expireAt = createdAt
-                .plusYears(timeData.getOrDefault("year", 0))
-                .plusMonths(timeData.getOrDefault("month", 0))
-                .plusDays(timeData.getOrDefault("day", 0))
-                .plusHours(timeData.getOrDefault("hour", 0))
-                .plusMinutes(timeData.getOrDefault("minute", 0));
+        CompletableFuture.runAsync(() -> {
+            List<Mail> mailsToSend = PlayerCache.getCachedPlayers().parallelStream()
+                    .map(OfflinePlayer::getUniqueId)
+                    .filter(targetId -> !targetId.equals(senderId))
+                    .filter(targetId -> !exclude.contains(targetId))
+                    .filter(targetId -> !MailDataManager.getInstance().getBlacklist(targetId).contains(senderId))
+                    .map(targetId -> new Mail(senderId, targetId, baseItem, now, expireAt))
+                    .toList();
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            int successCount = 0;
-
-            for (OfflinePlayer target : targets) {
-                final UUID targetId = target.getUniqueId();
-
-                if (targetId.equals(senderId) || excludeList.contains(targetId)) continue;
-                if (MailDataManager.getInstance().getBlacklist(targetId).contains(senderId)) continue;
-
-                Mail mail = new Mail(
-                        senderId,
-                        targetId,
-                        item.clone(),
-                        createdAt,
-                        expireAt
-                );
-
-                MailDataManager.getInstance().queueMail(targetId, mail);
-                successCount++;
+            for (Mail mail : mailsToSend) {
+                MailDataManager.getInstance().addMail(mail.getReceiver(), mail);
             }
 
-            final int finalSuccessCount = successCount;
+            int count = mailsToSend.size();
+
             Bukkit.getScheduler().runTask(plugin, () -> {
-                MailDataManager.getInstance().flushQueue();
-                clear(senderId);
-                sender.sendMessage(LangUtil.get("mail.sent-all")
-                        .replace("{count}", String.valueOf(finalSuccessCount)));
+                sessions.remove(senderId);
+                sender.sendMessage("§aMail sent to §f" + count + " §arecipients.");
             });
+        }, sendExecutor);
+    }
+
+    public static void send(Player sender, Plugin plugin) {
+        UUID senderId = sender.getUniqueId();
+        MailSession session = sessions.get(senderId);
+
+        if (!isValidSession(session) || session.target == null) {
+            sender.sendMessage("§cCannot send mail: Invalid target or item.");
+            return;
+        }
+
+        ItemStack item = session.item.clone();
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expireAt = buildExpireTime(now, session.time);
+        Mail mail = new Mail(senderId, session.target, item, now, expireAt);
+
+        MailDataManager.getInstance().addMail(session.target, mail);
+        sessions.remove(senderId);
+
+        sender.sendMessage("§aMail successfully sent.");
+    }
+
+    public static boolean claim(Player player, Mail mail) {
+        UUID playerId = player.getUniqueId();
+        if (!playerId.equals(mail.getReceiver())) return false;
+
+        ItemStack item = mail.getItem();
+        if (item == null || item.getType() == Material.AIR) return false;
+
+        Map<Integer, ItemStack> leftover = player.getInventory().addItem(item.clone());
+        if (!leftover.isEmpty()) return false;
+
+        MailDataManager.getInstance().removeMail(playerId, mail);
+        player.sendMessage("§aMail item received successfully.");
+        return true;
+    }
+
+    // ========== Session Management ==========
+
+    public static void setSession(UUID playerId, MailSession session) {
+        sessions.put(playerId, session);
+    }
+
+    public static MailSession getSession(UUID playerId) {
+        MailSession session = sessions.get(playerId);
+        if (session != null) session.lastAccess = System.currentTimeMillis();
+        return session;
+    }
+
+    public static void setTarget(UUID playerId, OfflinePlayer target) {
+        getOrCreateSession(playerId).target = target.getUniqueId();
+    }
+
+    public static UUID getTarget(UUID playerId) {
+        MailSession session = getSession(playerId);
+        return session != null ? session.target : null;
+    }
+
+    public static OfflinePlayer getTargetPlayer(UUID playerId) {
+        UUID targetId = getTarget(playerId);
+        return targetId != null ? PlayerCache.getByUUID(targetId) : null;
+    }
+
+    public static void setAttachedItem(UUID playerId, ItemStack item) {
+        getOrCreateSession(playerId).item = isInvalidItem(item) ? null : item.clone();
+    }
+
+    public static ItemStack getAttachedItem(UUID playerId) {
+        MailSession session = getSession(playerId);
+        return (session != null && session.item != null) ? session.item.clone() : null;
+    }
+
+    public static void setTimeData(UUID playerId, Map<String, Integer> time) {
+        getOrCreateSession(playerId).time = (time != null) ? new HashMap<>(time) : new HashMap<>();
+    }
+
+    public static Map<String, Integer> getTimeData(UUID playerId) {
+        MailSession session = getSession(playerId);
+        return (session != null && session.time != null) ? new HashMap<>(session.time) : new HashMap<>();
+    }
+
+    public static void setContext(UUID playerId, String context) {
+        getOrCreateSession(playerId).context = context;
+    }
+
+    public static String getContext(UUID playerId) {
+        MailSession session = getSession(playerId);
+        return (session != null && session.context != null) ? session.context : "";
+    }
+
+    private static MailSession getOrCreateSession(UUID playerId) {
+        return sessions.compute(playerId, (k, v) -> {
+            if (v == null) v = new MailSession();
+            v.lastAccess = System.currentTimeMillis();
+            return v;
         });
     }
 
-    // ===== 단일 전송 =====
-    public static void send(Player sender, Plugin plugin) {
-        final UUID senderId = sender.getUniqueId();
-        final OfflinePlayer target = getTarget(senderId);
-        final ItemStack item = getAttachedItem(senderId);
-        final Map<String, Integer> timeData = getTimeData(senderId);
+    private static boolean isValidSession(MailSession session) {
+        return session != null && session.item != null && session.item.getType() != Material.AIR;
+    }
 
-        if (target == null || item == null || item.getType() == Material.AIR) {
-            sender.sendMessage(LangUtil.get("mail.invalid-args"));
-            return;
-        }
+    private static boolean isInvalidItem(ItemStack item) {
+        return item == null || item.getType() == Material.AIR;
+    }
 
-        final LocalDateTime createdAt = LocalDateTime.now();
-        final LocalDateTime expireAt = createdAt
+    private static LocalDateTime buildExpireTime(LocalDateTime base, Map<String, Integer> timeData) {
+        if (timeData == null) return base.plusYears(100);
+        return base
                 .plusYears(timeData.getOrDefault("year", 0))
                 .plusMonths(timeData.getOrDefault("month", 0))
                 .plusDays(timeData.getOrDefault("day", 0))
                 .plusHours(timeData.getOrDefault("hour", 0))
-                .plusMinutes(timeData.getOrDefault("minute", 0));
-
-        Mail mail = new Mail(
-                senderId,
-                target.getUniqueId(),
-                item.clone(),
-                createdAt,
-                expireAt
-        );
-
-        MailDataManager.getInstance().addMail(target.getUniqueId(), mail);
-        clear(senderId);
-        sender.sendMessage(LangUtil.get("mail.sent-single"));
+                .plusMinutes(timeData.getOrDefault("minute", 0))
+                .plusSeconds(timeData.getOrDefault("second", 0));
     }
 
-    // ===== Getter / Setter =====
+    // ========== Session Structure ==========
 
-    public static OfflinePlayer getTarget(UUID uuid) {
-        return targetMap.get(uuid);
+    public static class MailSession {
+        public ItemStack item;
+        public Map<String, Integer> time = new HashMap<>();
+        public UUID target;
+        public String context = "";
+        public long lastAccess = System.currentTimeMillis();
     }
 
-    public static void setTarget(UUID uuid, OfflinePlayer target) {
-        targetMap.put(uuid, target);
-    }
-
-    public static ItemStack getAttachedItem(UUID uuid) {
-        return attachedItemMap.get(uuid);
-    }
-
-    public static void setAttachedItem(UUID uuid, ItemStack item) {
-        if (item == null || item.getType().isAir()) {
-            attachedItemMap.remove(uuid);
-        } else {
-            attachedItemMap.put(uuid, item);
-        }
-    }
-
-    public static Map<String, Integer> getTimeData(UUID uuid) {
-        return timeDataMap.getOrDefault(uuid, new HashMap<>());
-    }
-
-    public static void setTimeData(UUID uuid, Map<String, Integer> timeData) {
-        timeDataMap.put(uuid, timeData);
-    }
-
-    public static void setContext(UUID uuid, String context) {
-        contextMap.put(uuid, context);
-    }
-
-    public static String getContext(UUID uuid) {
-        return contextMap.getOrDefault(uuid, "");
-    }
-
-    public static void clear(UUID uuid) {
-        attachedItemMap.remove(uuid);
-        timeDataMap.remove(uuid);
-        contextMap.remove(uuid);
-        targetMap.remove(uuid);
+    public static long getExpireTime(UUID playerId) {
+        Map<String, Integer> time = getTimeData(playerId);
+        LocalDateTime expire = buildExpireTime(LocalDateTime.now(), time);
+        return expire.atZone(TimeZone.getDefault().toZoneId()).toInstant().toEpochMilli();
     }
 }

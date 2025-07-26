@@ -1,100 +1,48 @@
-language: ko_kr
-
-notify:
-  default-enabled: true
-
 gui-items:
-  mail-send:
-    material: PAPER
-    name: "§f메일 보내기"
+  back:
+    material: BARRIER
+    name: "&cBack"
     lore:
-      - "§7새 메일을 작성합니다"
-
-    # 아래는 선택적으로 사용할 수 있는 추가 옵션들입니다:
-
-    # 아이템에 적용할 커스텀 모델 데이터 (Resource Pack 필요)
-    # custom-model-data: 1001
-
-    # 아이템의 데미지 (내구도) 값 설정 (0 이상이면 적용됨)
-    # damage: 5
-
-    # 머리 아이템일 경우 사용할 플레이어 이름 (스킨 적용용)
-    # skull-owner: "Notch"
-
-    # 머리 아이템일 경우 UUID 기반으로 스킨 지정
-    # skull-uuid: "123e4567-e89b-12d3-a456-426614174000"
-
-    # 머리 아이템일 경우 Base64 텍스처 직접 지정
-    # skull-base64: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6..."
+      - "&7Return to the previous menu"
 
   previous-page:
     material: ARROW
-    name: "§f이전 페이지"
+    name: "&a◀ Previous"
     lore:
-      - "§7이전 페이지로 이동합니다"
+      - "&7Go to the previous page"
 
   next-page:
     material: ARROW
-    name: "§f다음 페이지"
+    name: "&a▶ Next"
     lore:
-      - "§7다음 페이지로 이동합니다"
+      - "&7Go to the next page"
+
+  mail-send:
+    material: PAPER
+    name: "&aSend Mail"
+    lore:
+      - "&7Click to send mail"
 
   setting:
     material: COMPARATOR
-    name: "§f설정"
+    name: "&bSettings"
     lore:
-      - "§7메일 수신 관련 설정을 변경합니다"
+      - "&7Open mail settings"
 
   blacklist:
-    material: BOOK
-    name: "§f차단 목록"
+    material: NETHER_BRICK
+    name: "&cBlacklist"
     lore:
-      - "§7수신 차단 대상을 관리합니다"
-
-  send-gui-time:
-    material: CLOCK
-    name: "§f유효기간 설정"
-    lore:
-      - "§7메일 유효시간을 정합니다"
-
-  send-gui-target:
-    material: PLAYER_HEAD
-    name: "§f대상 설정"
-    lore:
-      - "§7보낼 대상을 선택하세요"
-
-  exclude:
-    material: BARRIER
-    name: "§f제외 대상 설정"
-    lore:
-      - "§7메일을 보내지 않을 대상을 선택합니다"
-
-  confirm:
-    material: GREEN_WOOL
-    name: "§f전송"
-    lore:
-      - "§7설정된 메일을 전송합니다"
+      - "&7Manage your mail blacklist"
 
   permanent:
     material: CLOCK
-    name: "§f영구 설정"
+    name: "&6Permanent"
     lore:
-      - "§7만료 시간을 설정하지 않습니다"
+      - "&7Send mail without expiration"
 
   select-complete:
-    material: LIME_DYE
-    name: "§f선택 완료"
+    material: EMERALD_BLOCK
+    name: "&aSelect Complete"
     lore:
-      - "§7선택을 확정하고 돌아갑니다"
-
-  back:
-    material: BARRIER
-    name: "§f돌아가기"
-    lore:
-      - "§7이전 화면으로 돌아갑니다"
-
-  search-bar:
-    material: OAK_SIGN
-    name: "§f검색"
-    lore:
-      - "§7채팅창에 검색할 플레이어 이름을 입력하세요"
+      - "&7Confirm selection and continue"

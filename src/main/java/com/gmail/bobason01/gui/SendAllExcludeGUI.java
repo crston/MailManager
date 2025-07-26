@@ -1,94 +1,230 @@
 package com.gmail.bobason01.gui;
 
+import com.gmail.bobason01.cache.PlayerCache;
+import com.gmail.bobason01.config.ConfigLoader;
 import com.gmail.bobason01.mail.MailDataManager;
-import com.gmail.bobason01.utils.ConfigLoader;
 import com.gmail.bobason01.utils.ItemBuilder;
-import com.gmail.bobason01.utils.LangUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.plugin.Plugin;
 
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 public class SendAllExcludeGUI implements Listener {
 
+    private static final int PAGE_SIZE = 45;
+    private static final int SLOT_PREV = 48;
+    private static final int SLOT_NEXT = 50;
+    private static final int SLOT_SEARCH = 45;
+    private static final int SLOT_BACK = 53;
+    private static final long PAGE_COOLDOWN_MS = 1000L;
+
     private final Plugin plugin;
+    private final Map<UUID, Integer> pageMap = new ConcurrentHashMap<>();
+    private final Map<UUID, AtomicLong> lastClickMap = new ConcurrentHashMap<>();
+    private final Set<UUID> loadingSet = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> waitingForSearch = ConcurrentHashMap.newKeySet();
 
     public SendAllExcludeGUI(Plugin plugin) {
         this.plugin = plugin;
-        ConfigLoader.load(plugin);
     }
 
     public void open(Player player) {
-        Inventory inv = Bukkit.createInventory(player, 54, LangUtil.get("gui.sendall-exclude.title"));
-        Set<UUID> excluded = MailDataManager.getInstance().getExcluded(player.getUniqueId());
+        open(player, 0);
+    }
 
-        int i = 0;
-        for (OfflinePlayer target : Bukkit.getOfflinePlayers()) {
-            if (i >= 45) break;
-            if (target.getUniqueId().equals(player.getUniqueId())) continue;
+    public void open(Player player, int page) {
+        UUID uuid = player.getUniqueId();
+        if (!loadingSet.add(uuid)) return;
 
-            String name = target.getName();
-            if (name == null || name.length() > 16 || !target.hasPlayedBefore()) continue;
+        pageMap.put(uuid, page);
 
-            ItemStack head = new ItemBuilder(Material.PLAYER_HEAD)
-                    .name("§f" + name)
-                    .lore(excluded.contains(target.getUniqueId())
-                            ? LangUtil.get("gui.sendall-exclude.excluded")
-                            : LangUtil.get("gui.sendall-exclude.included"))
-                    .build();
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            List<OfflinePlayer> players = PlayerCache.getCachedPlayers().stream()
+                    .filter(p -> p.getName() != null && !p.getUniqueId().equals(uuid))
+                    .sorted(Comparator.comparing(OfflinePlayer::getName))
+                    .collect(Collectors.toList());
 
-            SkullMeta meta = (SkullMeta) head.getItemMeta();
-            if (meta != null) {
+            int maxPage = Math.max((players.size() - 1) / PAGE_SIZE, 0);
+            int safePage = Math.min(Math.max(page, 0), maxPage);
+            int start = safePage * PAGE_SIZE;
+            int end = Math.min(start + PAGE_SIZE, players.size());
+            List<OfflinePlayer> subList = players.subList(start, end);
+            Set<UUID> excludedSet = MailDataManager.getInstance().getExclude(uuid);
+
+            Bukkit.getScheduler().runTask(plugin, () -> {
                 try {
-                    meta.setOwningPlayer(target);
-                    head.setItemMeta(meta);
-                } catch (IllegalArgumentException ignored) {}
-            }
+                    if (!player.isOnline()) return;
 
-            inv.setItem(i++, head);
+                    Inventory inv = Bukkit.createInventory(player, 54,
+                            "Exclude Recipients " + (safePage + 1) + "/" + (maxPage + 1));
+
+                    for (int i = 0; i < subList.size(); i++) {
+                        OfflinePlayer target = subList.get(i);
+                        UUID targetId = target.getUniqueId();
+                        boolean isExcluded = excludedSet.contains(targetId);
+
+                        ItemStack head = new ItemStack(Material.PLAYER_HEAD);
+                        SkullMeta meta = (SkullMeta) head.getItemMeta();
+                        if (meta != null) {
+                            meta.setOwningPlayer(target);
+                            meta.setDisplayName((isExcluded ? "§c" : "§a") + target.getName());
+                            meta.setLore(Collections.singletonList(isExcluded ? "Excluded" : "Included"));
+                            head.setItemMeta(meta);
+                            inv.setItem(i, head);
+                        }
+                    }
+
+                    if (safePage > 0)
+                        inv.setItem(SLOT_PREV, new ItemBuilder(Material.ARROW).name("§a◀ Previous").build());
+                    if (safePage < maxPage)
+                        inv.setItem(SLOT_NEXT, new ItemBuilder(Material.ARROW).name("§a▶ Next").build());
+
+                    inv.setItem(SLOT_SEARCH, new ItemBuilder(Material.COMPASS)
+                            .name("§bSearch")
+                            .lore("§7Click to search by name")
+                            .build());
+
+                    inv.setItem(SLOT_BACK, ConfigLoader.getGuiItem("back"));
+                    player.openInventory(inv);
+                } finally {
+                    loadingSet.remove(uuid);
+                }
+            });
+        });
+    }
+
+    private boolean hasCooldownPassed(Player player) {
+        UUID uuid = player.getUniqueId();
+        long now = System.currentTimeMillis();
+        AtomicLong lastClick = lastClickMap.computeIfAbsent(uuid, k -> new AtomicLong(0));
+
+        if (now - lastClick.get() < PAGE_COOLDOWN_MS) {
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
+            return false;
         }
 
-        inv.setItem(53, ConfigLoader.getGuiItem("back"));
-        player.openInventory(inv);
+        lastClick.set(now);
+        return true;
     }
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
-        ItemStack clicked = e.getCurrentItem();
-        if (clicked == null || clicked.getType() == Material.AIR || !clicked.hasItemMeta()) return;
         if (!(e.getWhoClicked() instanceof Player player)) return;
-        if (!e.getView().getTitle().equals(LangUtil.get("gui.sendall-exclude.title"))) return;
+        String title = e.getView().getTitle();
+        if (!title.startsWith("Exclude Recipients")) return;
 
         e.setCancelled(true);
+        UUID uuid = player.getUniqueId();
         int slot = e.getRawSlot();
-        Set<UUID> excluded = MailDataManager.getInstance().getExcluded(player.getUniqueId());
 
-        if (slot < 45) {
-            String name = Objects.requireNonNull(clicked.getItemMeta()).getDisplayName().replace("§f", "");
-            OfflinePlayer target = Bukkit.getOfflinePlayer(name);
-            if (target.getUniqueId().equals(player.getUniqueId())) {
-                player.sendMessage(LangUtil.get("gui.sendall-exclude.cannot-exclude-self"));
+        if (slot < 0 || slot >= e.getInventory().getSize()) return;
+
+        int page = pageMap.getOrDefault(uuid, 0);
+        Set<UUID> excluded = MailDataManager.getInstance().getExclude(uuid);
+
+        switch (slot) {
+            case SLOT_PREV -> {
+                if (!hasCooldownPassed(player)) return;
+                open(player, page - 1);
+            }
+            case SLOT_NEXT -> {
+                if (!hasCooldownPassed(player)) return;
+                open(player, page + 1);
+            }
+            case SLOT_BACK -> {
+                pageMap.remove(uuid);
+                loadingSet.remove(uuid);
+                new MailSendAllGUI(plugin).open(player);
+            }
+            case SLOT_SEARCH -> {
+                player.closeInventory();
+                waitingForSearch.add(uuid);
+                player.sendMessage("§bEnter the name of the player to toggle exclusion:");
+            }
+            default -> {
+                if (slot < PAGE_SIZE) {
+                    ItemStack clicked = e.getInventory().getItem(slot);
+                    if (clicked == null || !clicked.hasItemMeta()) return;
+
+                    String name = clicked.getItemMeta().getDisplayName().replace("§a", "").replace("§c", "").trim();
+                    OfflinePlayer target = PlayerCache.getByName(name);
+                    if (target == null) return;
+
+                    UUID targetId = target.getUniqueId();
+                    if (excluded.contains(targetId)) {
+                        excluded.remove(targetId);
+                        player.sendMessage("§a" + name + " is now included.");
+                        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
+                    } else {
+                        excluded.add(targetId);
+                        player.sendMessage("§c" + name + " is now excluded.");
+                        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1.2f);
+                    }
+                    MailDataManager.getInstance().setExclude(uuid, excluded);
+                    open(player, page);
+                }
+            }
+        }
+    }
+
+    @EventHandler
+    public void onClose(InventoryCloseEvent e) {
+        if (!(e.getPlayer() instanceof Player player)) return;
+        String title = e.getView().getTitle();
+        if (!title.startsWith("Exclude Recipients")) return;
+
+        UUID uuid = player.getUniqueId();
+        pageMap.remove(uuid);
+        loadingSet.remove(uuid);
+    }
+
+    @EventHandler
+    public void onChat(AsyncPlayerChatEvent e) {
+        Player player = e.getPlayer();
+        UUID uuid = player.getUniqueId();
+        if (!waitingForSearch.remove(uuid)) return;
+
+        e.setCancelled(true);
+        String input = e.getMessage();
+        OfflinePlayer target = PlayerCache.getByName(input);
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            int currentPage = pageMap.getOrDefault(uuid, 0);
+
+            if (target == null || target.getName() == null) {
+                player.sendMessage("§cPlayer not found: " + input);
+                open(player, currentPage);
                 return;
             }
 
-            UUID uuid = target.getUniqueId();
-            if (excluded.contains(uuid)) excluded.remove(uuid);
-            else excluded.add(uuid);
+            Set<UUID> excluded = MailDataManager.getInstance().getExclude(uuid);
+            UUID targetId = target.getUniqueId();
 
-            open(player);
-        } else if (slot == 53) {
-            new MailSendAllGUI(plugin).open(player);
-        }
+            if (excluded.contains(targetId)) {
+                excluded.remove(targetId);
+                player.sendMessage("§a" + target.getName() + " is now included.");
+            } else {
+                excluded.add(targetId);
+                player.sendMessage("§c" + target.getName() + " is now excluded.");
+            }
+
+            MailDataManager.getInstance().setExclude(uuid, excluded);
+            open(player, currentPage);
+        });
     }
 }

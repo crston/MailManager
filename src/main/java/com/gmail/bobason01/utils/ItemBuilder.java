@@ -1,10 +1,15 @@
 package com.gmail.bobason01.utils;
 
+import net.Indyuce.mmoitems.MMOItems;
+import net.Indyuce.mmoitems.api.Type;
+import net.Indyuce.mmoitems.api.item.mmoitem.MMOItem;
+import net.Indyuce.mmoitems.api.item.template.MMOItemTemplate;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.OfflinePlayer;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.*;
+
 import java.util.*;
 
 public class ItemBuilder {
@@ -14,9 +19,62 @@ public class ItemBuilder {
     private List<String> lore;
     private Integer customModelData;
     private Integer damage;
+    private Boolean unbreakable;
+    private final Set<ItemFlag> itemFlags = EnumSet.noneOf(ItemFlag.class);
     private String owner;
     private UUID skullUUID;
-    private String base64;
+
+    public static ItemBuilder of(Material material) {
+        return new ItemBuilder(material);
+    }
+
+    public static ItemBuilder of(ItemStack item) {
+        return new ItemBuilder(item);
+    }
+
+    public static ItemBuilder of(String id) {
+        if (MMOItems.plugin != null) {
+            try {
+                for (Type type : MMOItems.plugin.getTypes().getAll()) {
+                    MMOItemTemplate template = MMOItems.plugin.getTemplates().getTemplate(type, id);
+                    if (template != null) {
+                        MMOItem item = MMOItems.plugin.getMMOItem(type, id);
+                        if (item != null) {
+                            return new ItemBuilder(Objects.requireNonNull(item.newBuilder().build()));
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        try {
+            Material mat = Material.valueOf(id.toUpperCase());
+            return new ItemBuilder(mat);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    public static List<String> getAvailableItemIds() {
+        Set<String> ids = new HashSet<>();
+
+        try {
+            if (MMOItems.plugin != null) {
+                for (Type type : MMOItems.plugin.getTypes().getAll()) {
+                    Collection<MMOItemTemplate> templates = MMOItems.plugin.getTemplates().getTemplates(type);
+                    for (MMOItemTemplate template : templates) {
+                        ids.add(template.getId());
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        for (Material mat : Material.values()) {
+            ids.add(mat.name());
+        }
+
+        return new ArrayList<>(ids);
+    }
 
     public ItemBuilder(Material material) {
         this.item = new ItemStack(material);
@@ -32,13 +90,12 @@ public class ItemBuilder {
     }
 
     public ItemBuilder lore(List<String> lore) {
-        this.lore = lore;
+        this.lore = (lore != null) ? new ArrayList<>(lore) : null;
         return this;
     }
 
     public ItemBuilder lore(String... lines) {
-        this.lore = Arrays.asList(lines);
-        return this;
+        return lore(Arrays.asList(lines));
     }
 
     public ItemBuilder customModelData(int data) {
@@ -51,8 +108,13 @@ public class ItemBuilder {
         return this;
     }
 
-    public ItemBuilder owner(String owner) {
-        this.owner = owner;
+    public ItemBuilder unbreakable() {
+        this.unbreakable = true;
+        return this;
+    }
+
+    public ItemBuilder owner(String name) {
+        this.owner = name;
         return this;
     }
 
@@ -61,43 +123,68 @@ public class ItemBuilder {
         return this;
     }
 
-    public ItemBuilder skullBase64(String base64) {
-        this.base64 = base64;
+    public ItemBuilder flag(ItemFlag... flags) {
+        Collections.addAll(this.itemFlags, flags);
+        return this;
+    }
+
+    public ItemBuilder flagAll() {
+        this.itemFlags.addAll(EnumSet.allOf(ItemFlag.class));
         return this;
     }
 
     public ItemStack build() {
+        final Material type = item.getType();
         ItemMeta meta = item.getItemMeta();
 
         if (meta != null) {
             if (name != null) meta.setDisplayName(name);
             if (lore != null) meta.setLore(lore);
             if (customModelData != null) meta.setCustomModelData(customModelData);
+            if (unbreakable != null) meta.setUnbreakable(unbreakable);
+            if (!itemFlags.isEmpty()) meta.addItemFlags(itemFlags.toArray(new ItemFlag[0]));
 
-            // Damage (only if meta supports it)
-            if (damage != null && meta instanceof Damageable damageable && item.getType().getMaxDurability() > 0) {
-                damageable.setDamage(damage);
+            if (damage != null && meta instanceof Damageable dmg && type.getMaxDurability() > 0) {
+                dmg.setDamage(damage);
+            }
+
+            if (type == Material.PLAYER_HEAD && meta instanceof SkullMeta skullMeta) {
+                if (skullUUID != null) {
+                    String name = Bukkit.getOfflinePlayer(skullUUID).getName();
+                    if (name != null && name.length() <= 16) {
+                        skullMeta.setOwningPlayer(Bukkit.getOfflinePlayer(skullUUID));
+                        meta = skullMeta;
+                    }
+                } else if (owner != null && owner.length() <= 16) {
+                    skullMeta.setOwningPlayer(Bukkit.getOfflinePlayer(owner));
+                    meta = skullMeta;
+                }
             }
 
             item.setItemMeta(meta);
         }
 
-        // Handle Skull
-        if (item.getType() == Material.PLAYER_HEAD) {
-            ItemMeta rawMeta = item.getItemMeta();
-            if (rawMeta instanceof SkullMeta skullMeta) {
-                if (skullUUID != null) {
-                    OfflinePlayer offline = Bukkit.getOfflinePlayer(skullUUID);
-                    skullMeta.setOwningPlayer(offline);
-                } else if (owner != null && owner.length() <= 16) {
-                    OfflinePlayer offline = Bukkit.getOfflinePlayer(owner);
-                    skullMeta.setOwningPlayer(offline);
+        return item;
+    }
+
+    public static List<String> getAvailableItemIdsForTab() {
+        List<String> results = new ArrayList<>();
+
+        try {
+            if (MMOItems.plugin != null) {
+                for (Type type : MMOItems.plugin.getTypes().getAll()) {
+                    Collection<MMOItemTemplate> templates = MMOItems.plugin.getTemplates().getTemplates(type);
+                    for (MMOItemTemplate template : templates) {
+                        results.add("mmoitems:" + type.getId().toLowerCase() + "." + template.getId());
+                    }
                 }
-                // TODO: base64 texture 지원 시 구현
-                item.setItemMeta(skullMeta);
             }
+        } catch (Exception ignored) {}
+
+        for (Material mat : Material.values()) {
+            results.add(mat.name().toLowerCase());
         }
 
-        return item;
+        return results;
     }
 }

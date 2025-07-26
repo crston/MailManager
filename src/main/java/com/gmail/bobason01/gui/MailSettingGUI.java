@@ -1,11 +1,11 @@
 package com.gmail.bobason01.gui;
 
+import com.gmail.bobason01.config.ConfigLoader;
 import com.gmail.bobason01.mail.MailDataManager;
-import com.gmail.bobason01.utils.ConfigLoader;
 import com.gmail.bobason01.utils.ItemBuilder;
-import com.gmail.bobason01.utils.LangUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -22,13 +22,13 @@ public class MailSettingGUI implements Listener {
     private static final int BLACKLIST_SLOT = 15;
     private static final int BACK_SLOT = 26;
 
-    private static final String GUI_TITLE = LangUtil.get("gui.mail-setting.title");
+    private static final String GUI_TITLE = "Mail Settings";
 
     private final Plugin plugin;
 
     public MailSettingGUI(Plugin plugin) {
         this.plugin = plugin;
-        ConfigLoader.load(plugin); // 한 번만 로드해도 되긴 함
+        ConfigLoader.load(plugin);
     }
 
     public void open(Player player) {
@@ -39,12 +39,12 @@ public class MailSettingGUI implements Listener {
         UUID uuid = player.getUniqueId();
         boolean notifyEnabled = MailDataManager.getInstance().isNotifyEnabled(uuid);
 
-        String nameKey = notifyEnabled ? "gui.mail-setting.notify-on" : "gui.mail-setting.notify-off";
+        String displayName = notifyEnabled ? "§aNotifications: ON" : "§7Notifications: OFF";
         Material dye = notifyEnabled ? Material.LIME_DYE : Material.GRAY_DYE;
 
         ItemStack notifyItem = new ItemBuilder(dye)
-                .name(LangUtil.get(nameKey))
-                .lore(LangUtil.get("gui.mail-setting.notify-lore"))
+                .name(displayName)
+                .lore("§7Toggle whether you receive mail notifications.")
                 .build();
 
         Inventory inv = Bukkit.createInventory(player, 27, GUI_TITLE);
@@ -69,14 +69,23 @@ public class MailSettingGUI implements Listener {
 
         switch (e.getRawSlot()) {
             case NOTIFY_SLOT -> {
-                boolean newState = MailDataManager.getInstance().toggleNotify(uuid);
-                player.sendMessage(LangUtil.get(newState
-                        ? "gui.mail-setting.notify-enabled"
-                        : "gui.mail-setting.notify-disabled"));
-                open(player); // Refresh GUI
+                boolean newState = MailDataManager.getInstance().toggleNotification(uuid);
+                if (newState) {
+                    player.sendMessage("§a[Mail] Notifications enabled.");
+                } else {
+                    player.sendMessage("§7[Mail] Notifications disabled.");
+                }
+                player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1.0f, newState ? 1.2f : 0.8f);
+                open(player);
             }
-            case BLACKLIST_SLOT -> new BlacklistSelectGUI(plugin).open(player);
-            case BACK_SLOT -> new MailGUI(plugin).open(player);
+            case BLACKLIST_SLOT -> {
+                player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1.0f, 1.0f);
+                new BlacklistSelectGUI(plugin).open(player);
+            }
+            case BACK_SLOT -> {
+                player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1.0f, 1.0f);
+                new MailGUI(plugin).open(player);
+            }
         }
     }
 }

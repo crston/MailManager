@@ -1,158 +1,213 @@
 package com.gmail.bobason01.mail;
 
-import com.gmail.bobason01.storage.MailFileStorage;
-import com.gmail.bobason01.utils.LangUtil;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import org.bukkit.Bukkit;
-import org.bukkit.entity.Player;
-import org.bukkit.plugin.Plugin;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.*;
+import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MailDataManager {
 
-    private static MailDataManager instance;
-
-    private final Map<UUID, List<Mail>> inboxMap = new HashMap<>();
-    private final Map<UUID, Set<UUID>> blacklistMap = new HashMap<>();
-    private final Set<UUID> notifyDisabled = new HashSet<>();
-    private final Map<UUID, Set<UUID>> excludeMap = new HashMap<>();
-    private final Map<UUID, List<Mail>> mailQueue = new HashMap<>();
-
-    private Plugin plugin;
-
-    private MailDataManager() {}
-
+    private static final MailDataManager INSTANCE = new MailDataManager();
     public static MailDataManager getInstance() {
-        if (instance == null) {
-            instance = new MailDataManager();
+        return INSTANCE;
+    }
+
+    private static final String DATA_FILE_NAME = "data.json";
+    private static final int SAVE_INITIAL_DELAY_SEC = 5;
+    private static final int SAVE_INTERVAL_SEC = 20;
+
+    private final Map<UUID, ConcurrentLinkedDeque<Mail>> mailMap = new ConcurrentHashMap<>();
+    private final Map<UUID, Set<UUID>> blacklistMap = new ConcurrentHashMap<>();
+    private final Map<UUID, Boolean> notifyMap = new ConcurrentHashMap<>();
+    private final Map<UUID, Set<UUID>> excludeFromAllMap = new ConcurrentHashMap<>();
+
+    private final BlockingQueue<Mail> queuedMails = new LinkedBlockingQueue<>();
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private final AtomicBoolean dirty = new AtomicBoolean(false);
+    private final Object fileLock = new Object();
+
+    private File dataFile;
+    private final Gson gson = new GsonBuilder()
+            .registerTypeAdapter(ItemStack.class, new MailSerializer.ItemStackAdapter())
+            .registerTypeAdapter(LocalDateTime.class, new MailSerializer.LocalDateTimeAdapter())
+            .create();
+
+    public void load(JavaPlugin plugin) {
+        dataFile = new File(plugin.getDataFolder(), DATA_FILE_NAME);
+        loadFromDisk();
+
+        scheduler.scheduleWithFixedDelay(() -> {
+            if (dirty.compareAndSet(true, false)) {
+                saveToDisk();
+            }
+        }, SAVE_INITIAL_DELAY_SEC, SAVE_INTERVAL_SEC, TimeUnit.SECONDS);
+    }
+
+    public void unload() {
+        saveToDisk();
+        scheduler.shutdownNow();
+    }
+
+    // ============ 메일 ============
+
+    public void addMail(UUID receiver, Mail mail) {
+        mailMap.computeIfAbsent(receiver, k -> new ConcurrentLinkedDeque<>()).addLast(mail);
+        dirty.set(true);
+    }
+
+    public Deque<Mail> getMails(UUID uuid) {
+        return mailMap.getOrDefault(uuid, new ConcurrentLinkedDeque<>());
+    }
+
+    public List<Mail> getUnreadMails(UUID uuid) {
+        Deque<Mail> mails = getMails(uuid);
+        List<Mail> unread = new ArrayList<>();
+        for (Mail mail : mails) {
+            if (!mail.isRead() && !mail.isExpired()) {
+                unread.add(mail);
+            }
         }
-        return instance;
+        return unread;
     }
 
-    public void init(Plugin plugin) {
-        this.plugin = plugin;
-        MailFileStorage.loadAll(plugin, inboxMap, blacklistMap, notifyDisabled, excludeMap);
-    }
-
-    public void save() {
-        if (plugin != null) {
-            MailFileStorage.saveAll(plugin, inboxMap, blacklistMap, notifyDisabled, excludeMap);
+    public void removeMail(UUID uuid, Mail mail) {
+        Deque<Mail> mails = mailMap.get(uuid);
+        if (mails != null && mails.remove(mail)) {
+            dirty.set(true);
         }
     }
 
-    // ===== 메일 관리 =====
+    public void queueMail(Mail mail) {
+        queuedMails.add(mail);
+    }
 
-    public void addMail(UUID playerId, Mail mail) {
-        inboxMap.computeIfAbsent(playerId, k -> new ArrayList<>()).add(mail);
-        save();
-
-        if (isNotifyEnabled(playerId)) {
-            Player player = Bukkit.getPlayer(playerId);
-            if (player != null && player.isOnline()) {
-                player.sendMessage(LangUtil.get("mail.notify-received"));
+    public void flushQueuedMails() {
+        if (queuedMails.isEmpty()) return;
+        List<Mail> buffer = new ArrayList<>();
+        queuedMails.drainTo(buffer);
+        for (Mail mail : buffer) {
+            if (mail != null && mail.getReceiver() != null) {
+                addMail(mail.getReceiver(), mail);
             }
         }
     }
 
-    public List<Mail> getMails(UUID playerId) {
-        return inboxMap.computeIfAbsent(playerId, k -> new ArrayList<>());
+    // ============ 블랙리스트 ============
+
+    public Set<UUID> getBlacklist(UUID uuid) {
+        return blacklistMap.computeIfAbsent(uuid, k -> ConcurrentHashMap.newKeySet());
     }
 
-    public void removeMail(UUID playerId, Mail mail) {
-        List<Mail> mails = inboxMap.get(playerId);
-        if (mails != null) {
-            mails.remove(mail);
+    public void setBlacklist(UUID uuid, Set<UUID> list) {
+        if (!Objects.equals(blacklistMap.get(uuid), list)) {
+            blacklistMap.put(uuid, list);
+            dirty.set(true);
         }
-        save();
     }
 
-    public void clearMail(UUID playerId) {
-        inboxMap.remove(playerId);
-        save();
-    }
-
-    // ===== 블랙리스트 =====
-
-    public Set<UUID> getBlacklist(UUID playerId) {
-        return blacklistMap.computeIfAbsent(playerId, k -> new HashSet<>());
-    }
-
-    public void addBlacklist(UUID playerId, UUID blocked) {
-        getBlacklist(playerId).add(blocked);
-        save();
-    }
-
-    public void removeBlacklist(UUID playerId, UUID blocked) {
-        getBlacklist(playerId).remove(blocked);
-        save();
-    }
-
-    // ===== 알림 설정 =====
-
-    public boolean isNotifyEnabled(UUID playerId) {
-        return !notifyDisabled.contains(playerId);
-    }
-
-    public void setNotify(UUID playerId, boolean enabled) {
-        if (enabled) {
-            notifyDisabled.remove(playerId);
+    public void toggleBlacklist(UUID owner, UUID target) {
+        Set<UUID> blacklist = blacklistMap.computeIfAbsent(owner, k -> ConcurrentHashMap.newKeySet());
+        if (blacklist.contains(target)) {
+            blacklist.remove(target);
         } else {
-            notifyDisabled.add(playerId);
+            blacklist.add(target);
         }
-        save();
+        dirty.set(true);
     }
 
-    public boolean toggleNotify(UUID playerId) {
-        boolean enabled = !isNotifyEnabled(playerId);
-        setNotify(playerId, enabled);
-        return enabled;
+    // ============ 알림 설정 ============
+
+    public boolean isNotifyEnabled(UUID uuid) {
+        return notifyMap.getOrDefault(uuid, true);
     }
 
-    // ===== 전체전송 제외 =====
-
-    public Set<UUID> getExcluded(UUID playerId) {
-        return excludeMap.computeIfAbsent(playerId, k -> new HashSet<>());
-    }
-
-    public void addExcluded(UUID playerId, UUID excluded) {
-        getExcluded(playerId).add(excluded);
-        save();
-    }
-
-    public void removeExcluded(UUID playerId, UUID excluded) {
-        getExcluded(playerId).remove(excluded);
-        save();
-    }
-
-    // ===== 큐 처리 (성능 최적화용) =====
-
-    public void queueMail(UUID playerId, Mail mail) {
-        mailQueue.computeIfAbsent(playerId, k -> new ArrayList<>()).add(mail);
-    }
-
-    public void flushQueue() {
-        for (Map.Entry<UUID, List<Mail>> entry : mailQueue.entrySet()) {
-            inboxMap.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).addAll(entry.getValue());
+    public void setNotify(UUID uuid, boolean value) {
+        if (!Objects.equals(notifyMap.get(uuid), value)) {
+            notifyMap.put(uuid, value);
+            dirty.set(true);
         }
-        mailQueue.clear();
-        save();
     }
 
-    // ===== 유틸 =====
-
-    public void reload(Plugin plugin) {
-        inboxMap.clear();
-        blacklistMap.clear();
-        notifyDisabled.clear();
-        excludeMap.clear();
-        MailFileStorage.loadAll(plugin, inboxMap, blacklistMap, notifyDisabled, excludeMap);
+    public boolean toggleNotification(UUID uuid) {
+        boolean current = isNotifyEnabled(uuid);
+        setNotify(uuid, !current);
+        return current;
     }
 
-    public void reset(UUID uuid) {
-        inboxMap.remove(uuid);
-        blacklistMap.remove(uuid);
-        notifyDisabled.remove(uuid);
-        excludeMap.remove(uuid);
-        save();
+    // ============ 전체 메일 제외 대상 ============
+
+    public Set<UUID> getExclude(UUID uuid) {
+        return excludeFromAllMap.computeIfAbsent(uuid, k -> ConcurrentHashMap.newKeySet());
+    }
+
+    public void setExclude(UUID uuid, Set<UUID> excludes) {
+        if (!Objects.equals(excludeFromAllMap.get(uuid), excludes)) {
+            excludeFromAllMap.put(uuid, excludes);
+            dirty.set(true);
+        }
+    }
+
+    // ============ 저장 ============
+
+    public void save() {
+        saveToDisk();
+    }
+
+    private void saveToDisk() {
+        synchronized (fileLock) {
+            try (Writer writer = new FileWriter(dataFile)) {
+                MailDataSnapshot snapshot = new MailDataSnapshot();
+                snapshot.mails = mailMap;
+                snapshot.blacklist = blacklistMap;
+                snapshot.notify = notifyMap;
+                snapshot.exclude = excludeFromAllMap;
+                gson.toJson(snapshot, writer);
+            } catch (Exception e) {
+                Bukkit.getLogger().severe("[MailManager] Failed to save data: " + e.getMessage());
+            }
+        }
+    }
+
+    private void loadFromDisk() {
+        synchronized (fileLock) {
+            if (!dataFile.exists()) return;
+            try (Reader reader = new FileReader(dataFile)) {
+                MailDataSnapshot snapshot = gson.fromJson(reader, MailDataSnapshot.class);
+                if (snapshot != null) {
+                    if (snapshot.mails != null) {
+                        mailMap.clear();
+                        mailMap.putAll(snapshot.mails);
+                    }
+                    if (snapshot.blacklist != null) {
+                        blacklistMap.clear();
+                        blacklistMap.putAll(snapshot.blacklist);
+                    }
+                    if (snapshot.notify != null) {
+                        notifyMap.clear();
+                        notifyMap.putAll(snapshot.notify);
+                    }
+                    if (snapshot.exclude != null) {
+                        excludeFromAllMap.clear();
+                        excludeFromAllMap.putAll(snapshot.exclude);
+                    }
+                }
+            } catch (Exception e) {
+                Bukkit.getLogger().severe("[MailManager] Failed to load data: " + e.getMessage());
+            }
+        }
+    }
+
+    static class MailDataSnapshot {
+        Map<UUID, ConcurrentLinkedDeque<Mail>> mails = new ConcurrentHashMap<>();
+        Map<UUID, Set<UUID>> blacklist = new ConcurrentHashMap<>();
+        Map<UUID, Boolean> notify = new ConcurrentHashMap<>();
+        Map<UUID, Set<UUID>> exclude = new ConcurrentHashMap<>();
     }
 }

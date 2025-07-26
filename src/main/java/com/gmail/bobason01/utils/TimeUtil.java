@@ -1,33 +1,45 @@
 package com.gmail.bobason01.utils;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
-import java.util.StringJoiner;
 
 public class TimeUtil {
 
     private static final String[] UNITS = {"year", "month", "day", "hour", "minute", "second"};
+    private static final String[] UNIT_LABELS = {"year", "month", "day", "hour", "minute", "second"};
 
-    /**
-     * 시간 데이터 맵을 읽어 사용자에게 표시할 수 있는 포맷으로 변환합니다.
-     *
-     * @param timeData 시간 단위를 키로 하고, 정수를 값으로 갖는 Map
-     * @return "1일 3시간" 형식의 문자열. 유효 데이터가 없으면 "무제한" 반환
-     */
     public static String format(Map<String, Integer> timeData) {
         if (timeData == null || timeData.isEmpty()) {
-            return LangUtil.get("format.permanent");
+            return "permanent";
         }
 
-        StringJoiner joiner = new StringJoiner(" ");
-        for (String unit : UNITS) {
+        StringBuilder builder = new StringBuilder();
+        boolean hasValid = false;
+
+        for (int i = 0; i < UNITS.length; i++) {
+            String unit = UNITS[i];
             int value = timeData.getOrDefault(unit, 0);
             if (value > 0) {
-                String formatKey = "format.unit." + unit;
-                String unitText = LangUtil.get(formatKey).replace("{value}", String.valueOf(value));
-                joiner.add(unitText);
+                hasValid = true;
+                builder.append(value).append(" ").append(UNIT_LABELS[i]);
+                if (value > 1) builder.append("s"); // plural
+                builder.append(" ");
             }
         }
 
-        return joiner.length() == 0 ? LangUtil.get("format.permanent") : joiner.toString();
+        return hasValid ? builder.toString().trim() : "permanent";
+    }
+
+    public static String formatDateTime(long epochMillis) {
+        if (epochMillis <= 0) return "permanent";
+
+        LocalDateTime time = Instant.ofEpochMilli(epochMillis)
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime();
+
+        return time.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
     }
 }
