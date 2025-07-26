@@ -108,15 +108,31 @@ public class MailSendGUI implements Listener {
         int slot = e.getRawSlot();
         ClickType click = e.getClick();
         UUID uuid = player.getUniqueId();
+        Inventory inv = e.getInventory();
 
-        if (click.isShiftClick() || click == ClickType.DROP || click == ClickType.CONTROL_DROP || click == ClickType.DOUBLE_CLICK) {
+        // SLOT_ITEM에 드래그 앤 드롭 허용
+        if (slot == SLOT_ITEM) {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                ItemStack newItem = inv.getItem(SLOT_ITEM);
+                if (newItem != null && !newItem.getType().isAir()) {
+                    MailService.setAttachedItem(uuid, newItem.clone());
+                } else {
+                    MailService.setAttachedItem(uuid, null);
+                }
+            }, 1L); // 다음 틱에 아이템 상태 반영
+            return; // 클릭은 허용
+        }
+
+        // 드롭, 더블클릭, 쉬프트 등은 무시
+        if (click == ClickType.DROP || click == ClickType.CONTROL_DROP || click == ClickType.DOUBLE_CLICK || click.isShiftClick()) {
             e.setCancelled(true);
             return;
         }
 
+        // SLOT_ITEM 외의 나머지 슬롯 클릭 방지
         if (slot >= e.getInventory().getSize()) return;
 
-        e.setCancelled(slot != SLOT_ITEM);
+        e.setCancelled(true);
 
         switch (slot) {
             case SLOT_TIME -> new MailTimeSelectGUI(plugin).open(player);
@@ -132,11 +148,10 @@ public class MailSendGUI implements Listener {
                     return;
                 }
                 MailService.send(player, plugin);
-                MailService.setAttachedItem(uuid, null); // ✅ 아이템 제거
+                MailService.setAttachedItem(uuid, null);
                 sentSet.add(uuid);
-                player.closeInventory();
-                player.sendMessage("§a[우편] 우편이 성공적으로 전송되었습니다.");
                 player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f);
+                player.closeInventory();
             }
             case SLOT_BACK -> new MailGUI(plugin).open(player);
         }
@@ -148,15 +163,13 @@ public class MailSendGUI implements Listener {
         if (!e.getView().getTitle().equals("우편 보내기")) return;
 
         UUID uuid = player.getUniqueId();
-        if (sentSet.contains(uuid)) return; // ✅ 이미 보낸 경우 저장 안함
+
+        if (sentSet.contains(uuid)) return;
 
         ItemStack item = e.getInventory().getItem(SLOT_ITEM);
-
         if (item != null && !item.getType().isAir()) {
-            MailService.setAttachedItem(uuid, item);
-        } else {
+            player.getInventory().addItem(item);
             MailService.setAttachedItem(uuid, null);
         }
     }
 }
-

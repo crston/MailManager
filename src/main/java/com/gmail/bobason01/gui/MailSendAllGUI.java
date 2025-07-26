@@ -71,15 +71,32 @@ public class MailSendAllGUI implements Listener {
         int slot = e.getRawSlot();
         ClickType click = e.getClick();
         UUID uuid = player.getUniqueId();
+        Inventory inv = e.getInventory();
 
+        // SLOT_ITEM: 드래그 앤 드롭 허용 → 다음 틱에 상태 저장
+        if (slot == SLOT_ITEM) {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                ItemStack newItem = inv.getItem(SLOT_ITEM);
+                if (newItem != null && !newItem.getType().isAir()) {
+                    MailService.setAttachedItem(uuid, newItem.clone());
+                } else {
+                    MailService.setAttachedItem(uuid, null);
+                }
+            }, 1L);
+            return; // 클릭 허용
+        }
+
+        // 쉬프트, 드롭, 더블클릭 등은 무효화
         if (click.isShiftClick() || click == ClickType.DROP || click == ClickType.CONTROL_DROP || click == ClickType.DOUBLE_CLICK) {
             e.setCancelled(true);
             return;
         }
 
-        if (slot >= e.getInventory().getSize()) return;
+        // 슬롯 범위 외 클릭은 무시
+        if (slot >= inv.getSize()) return;
 
-        e.setCancelled(slot != SLOT_ITEM);
+        // 나머지 슬롯 클릭 방지
+        e.setCancelled(true);
 
         switch (slot) {
             case SLOT_TIME -> new MailTimeSelectGUI(plugin).open(player);
@@ -97,7 +114,7 @@ public class MailSendAllGUI implements Listener {
                 }
 
                 MailService.sendAll(player, plugin);
-                MailService.setAttachedItem(uuid, null); // ✅ 아이템 제거
+                MailService.setAttachedItem(uuid, null);
                 sentSet.add(uuid);
                 player.sendMessage("§a[우편] 모든 플레이어에게 우편을 성공적으로 발송했습니다.");
                 player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f);
@@ -113,13 +130,12 @@ public class MailSendAllGUI implements Listener {
         if (!e.getView().getTitle().equals("전체 우편 발송")) return;
 
         UUID uuid = player.getUniqueId();
-        if (sentSet.contains(uuid)) return; // ✅ 이미 보낸 경우 저장 안함
+
+        if (sentSet.contains(uuid)) return;
 
         ItemStack item = e.getInventory().getItem(SLOT_ITEM);
-
         if (item != null && !item.getType().isAir()) {
-            MailService.setAttachedItem(uuid, item);
-        } else {
+            player.getInventory().addItem(item);
             MailService.setAttachedItem(uuid, null);
         }
     }
