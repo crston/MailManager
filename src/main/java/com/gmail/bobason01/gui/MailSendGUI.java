@@ -1,6 +1,6 @@
 package com.gmail.bobason01.gui;
 
-import com.gmail.bobason01.config.ConfigLoader;
+import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.MailService;
 import com.gmail.bobason01.utils.ItemBuilder;
 import com.gmail.bobason01.utils.TimeUtil;
@@ -35,26 +35,27 @@ public class MailSendGUI implements Listener {
 
     public MailSendGUI(Plugin plugin) {
         this.plugin = plugin;
-        ConfigLoader.load(plugin);
     }
 
     public void open(Player player) {
-        Inventory inv = Bukkit.createInventory(player, 27, "우편 보내기");
         UUID uuid = player.getUniqueId();
+        String lang = LangManager.getLanguage(uuid);
+        String title = LangManager.get(uuid, "gui.send.title");
+        Inventory inv = Bukkit.createInventory(player, 27, title);
 
         Map<String, Integer> timeData = MailService.getTimeData(uuid);
-        String formattedTime = TimeUtil.format(timeData);
+        String formatted = TimeUtil.format(timeData, lang);
         long expireAt = MailService.getExpireTime(uuid);
         String formattedExpire = TimeUtil.formatDateTime(expireAt);
 
         List<String> timeLore = new ArrayList<>();
-        timeLore.add("§7지속 시간: " + formattedTime);
+        timeLore.add(LangManager.get(uuid, "gui.send.time.duration").replace("%time%", formatted));
         timeLore.add(expireAt > 0
-                ? "§8만료 시각: §f" + formattedExpire
-                : "§8만료 시간이 설정되지 않음");
+                ? LangManager.get(uuid, "gui.send.time.expires").replace("%date%", formattedExpire)
+                : LangManager.get(uuid, "gui.send.time.no_expire"));
 
         inv.setItem(SLOT_TIME, new ItemBuilder(Material.CLOCK)
-                .name("§e만료 시간 설정")
+                .name(LangManager.get(uuid, "gui.send.time.name"))
                 .lore(timeLore)
                 .build());
 
@@ -65,8 +66,8 @@ public class MailSendGUI implements Listener {
             targetItem = getCachedHead(target);
         } else {
             targetItem = new ItemBuilder(Material.PLAYER_HEAD)
-                    .name("§f받는 사람 선택")
-                    .lore("§7클릭하여 우편을 보낼 대상을 선택하세요.")
+                    .name(LangManager.get(uuid, "gui.send.target.name"))
+                    .lore(LangManager.get(uuid, "gui.send.target.lore"))
                     .build();
         }
 
@@ -78,11 +79,14 @@ public class MailSendGUI implements Listener {
         }
 
         inv.setItem(SLOT_CONFIRM, new ItemBuilder(Material.GREEN_WOOL)
-                .name("§a보내기")
-                .lore("§7클릭하면 우편을 전송합니다.")
+                .name(LangManager.get(uuid, "gui.send.confirm.name"))
+                .lore(LangManager.get(uuid, "gui.send.confirm.lore"))
                 .build());
 
-        inv.setItem(SLOT_BACK, ConfigLoader.getGuiItem("back"));
+        inv.setItem(SLOT_BACK, new ItemBuilder(Material.ARROW)
+                .name("§c" + LangManager.get(uuid, "gui.back.name"))
+                .lore(LangManager.get(uuid, "gui.back.lore"))
+                .build());
 
         player.openInventory(inv);
     }
@@ -103,14 +107,14 @@ public class MailSendGUI implements Listener {
     @EventHandler
     public void onClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player player)) return;
-        if (!e.getView().getTitle().equals("우편 보내기")) return;
+        String expectedTitle = LangManager.get(player.getUniqueId(), "gui.send.title");
+        if (!e.getView().getTitle().equals(expectedTitle)) return;
 
         int slot = e.getRawSlot();
         ClickType click = e.getClick();
         UUID uuid = player.getUniqueId();
         Inventory inv = e.getInventory();
 
-        // SLOT_ITEM에 드래그 앤 드롭 허용
         if (slot == SLOT_ITEM) {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 ItemStack newItem = inv.getItem(SLOT_ITEM);
@@ -119,17 +123,15 @@ public class MailSendGUI implements Listener {
                 } else {
                     MailService.setAttachedItem(uuid, null);
                 }
-            }, 1L); // 다음 틱에 아이템 상태 반영
-            return; // 클릭은 허용
+            }, 1L);
+            return;
         }
 
-        // 드롭, 더블클릭, 쉬프트 등은 무시
         if (click == ClickType.DROP || click == ClickType.CONTROL_DROP || click == ClickType.DOUBLE_CLICK || click.isShiftClick()) {
             e.setCancelled(true);
             return;
         }
 
-        // SLOT_ITEM 외의 나머지 슬롯 클릭 방지
         if (slot >= e.getInventory().getSize()) return;
 
         e.setCancelled(true);
@@ -139,12 +141,12 @@ public class MailSendGUI implements Listener {
             case SLOT_TARGET -> new MailTargetSelectGUI(plugin).open(player);
             case SLOT_CONFIRM -> {
                 if (sentSet.contains(uuid)) {
-                    player.sendMessage("§c[우편] 이미 이 우편을 보냈습니다. 잠시 후 다시 시도하세요.");
+                    player.sendMessage(LangManager.get(uuid, "mail.send.cooldown"));
                     return;
                 }
                 MailService.MailSession session = MailService.getSession(uuid);
                 if (session == null || session.item == null || session.item.getType() == Material.AIR || session.target == null) {
-                    player.sendMessage("§c[우편] 수신자 또는 아이템이 없습니다. 전송할 수 없습니다.");
+                    player.sendMessage(LangManager.get(uuid, "mail.send.invalid"));
                     return;
                 }
                 MailService.send(player, plugin);
@@ -160,7 +162,8 @@ public class MailSendGUI implements Listener {
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
         if (!(e.getPlayer() instanceof Player player)) return;
-        if (!e.getView().getTitle().equals("우편 보내기")) return;
+        String expectedTitle = LangManager.get(player.getUniqueId(), "gui.send.title");
+        if (!e.getView().getTitle().equals(expectedTitle)) return;
 
         UUID uuid = player.getUniqueId();
 

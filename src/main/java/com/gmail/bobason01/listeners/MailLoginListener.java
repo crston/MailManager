@@ -1,5 +1,6 @@
 package com.gmail.bobason01.listeners;
 
+import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.Mail;
 import com.gmail.bobason01.mail.MailDataManager;
 import org.bukkit.Bukkit;
@@ -12,7 +13,6 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class MailLoginListener implements Listener {
 
@@ -28,6 +28,7 @@ public class MailLoginListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
+        String lang = LangManager.getLanguage(uuid);
 
         new BukkitRunnable() {
             @Override
@@ -44,13 +45,13 @@ public class MailLoginListener implements Listener {
                         })
                         .filter(Objects::nonNull)
                         .filter(title -> !title.isEmpty())
-                        .collect(Collectors.toList());
+                        .toList();
 
                 if (!unreadTitles.isEmpty()) {
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         if (!player.isOnline()) return;
 
-                        sendMailNotification(player);
+                        sendMailNotification(player, lang);
 
                         new BukkitRunnable() {
                             @Override
@@ -62,7 +63,7 @@ public class MailLoginListener implements Listener {
 
                                 List<Mail> unread = MailDataManager.getInstance().getUnreadMails(uuid);
                                 if (!unread.isEmpty()) {
-                                    sendMailNotification(player);
+                                    sendMailNotification(player, lang);
                                 } else {
                                     cancel();
                                 }
@@ -74,14 +75,14 @@ public class MailLoginListener implements Listener {
         }.runTaskAsynchronously(plugin);
     }
 
-    private void sendMailNotification(Player player) {
+    private void sendMailNotification(Player player, String lang) {
         player.sendTitle(
-                "§6You have new mail!",
-                "§eCheck your inbox using /mail",
+                LangManager.get(lang, "login.title.main"),
+                LangManager.get(lang, "login.title.sub"),
                 10, 60, 10
         );
 
-        player.sendMessage("§a[Mail] §fYou have unread mail. Use §e/mail§f to check.");
+        player.sendMessage(LangManager.get(lang, "login.message"));
         player.playSound(player.getLocation(), Sound.UI_TOAST_IN, 1.0f, 1.2f);
     }
 }

@@ -1,7 +1,7 @@
 package com.gmail.bobason01.gui;
 
 import com.gmail.bobason01.cache.PlayerCache;
-import com.gmail.bobason01.config.ConfigLoader;
+import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.MailDataManager;
 import com.gmail.bobason01.utils.ItemBuilder;
 import org.bukkit.Bukkit;
@@ -22,7 +22,6 @@ import org.bukkit.plugin.Plugin;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 public class BlacklistSelectGUI implements Listener {
 
@@ -41,7 +40,6 @@ public class BlacklistSelectGUI implements Listener {
 
     public BlacklistSelectGUI(Plugin plugin) {
         this.plugin = plugin;
-        ConfigLoader.load(plugin);
     }
 
     public void open(Player player) {
@@ -59,7 +57,7 @@ public class BlacklistSelectGUI implements Listener {
                 List<OfflinePlayer> players = PlayerCache.getCachedPlayers().stream()
                         .filter(p -> p.getName() != null && !p.getUniqueId().equals(uuid))
                         .sorted(Comparator.comparing(OfflinePlayer::getName))
-                        .collect(Collectors.toList());
+                        .toList();
 
                 int maxPage = Math.max((players.size() - 1) / PAGE_SIZE, 0);
                 int safePage = Math.min(Math.max(page, 0), maxPage);
@@ -72,8 +70,11 @@ public class BlacklistSelectGUI implements Listener {
                     try {
                         if (!player.isOnline()) return;
 
-                        Inventory inv = Bukkit.createInventory(player, 54,
-                                "차단 목록 " + (safePage + 1) + "/" + (maxPage + 1));
+                        String lang = LangManager.getLanguage(uuid);
+                        String title = LangManager.get(lang, "gui.blacklist.title")
+                                .replace("%page%", String.valueOf(safePage + 1))
+                                .replace("%maxpage%", String.valueOf(maxPage + 1));
+                        Inventory inv = Bukkit.createInventory(player, 54, title);
 
                         for (int i = 0; i < subList.size(); i++) {
                             OfflinePlayer target = subList.get(i);
@@ -83,23 +84,35 @@ public class BlacklistSelectGUI implements Listener {
                             if (meta != null) {
                                 meta.setDisplayName((isBlocked ? "§c" : "§a") + target.getName());
                                 meta.setOwningPlayer(target);
-                                meta.setLore(Collections.singletonList(isBlocked ? "차단됨" : "허용됨"));
+                                meta.setLore(Collections.singletonList(isBlocked
+                                        ? LangManager.get(lang, "gui.blacklist.blocked")
+                                        : LangManager.get(lang, "gui.blacklist.allowed")));
                                 head.setItemMeta(meta);
                                 inv.setItem(i, head);
                             }
                         }
 
+                        // Search button
                         inv.setItem(SLOT_SEARCH, new ItemBuilder(Material.COMPASS)
-                                .name("§b검색")
-                                .lore("§7이름으로 검색하려면 클릭하세요")
+                                .name("§b" + LangManager.get(lang, "gui.search.name"))
+                                .lore(LangManager.get(lang, "gui.blacklist.search_prompt"))
                                 .build());
 
+                        // Prev/Next page
                         if (safePage > 0)
-                            inv.setItem(SLOT_PREV, new ItemBuilder(Material.ARROW).name("§a◀ 이전 페이지").build());
+                            inv.setItem(SLOT_PREV, new ItemBuilder(Material.ARROW)
+                                    .name("§a" + LangManager.get(lang, "gui.previous"))
+                                    .build());
                         if (safePage < maxPage)
-                            inv.setItem(SLOT_NEXT, new ItemBuilder(Material.ARROW).name("§a▶ 다음 페이지").build());
+                            inv.setItem(SLOT_NEXT, new ItemBuilder(Material.ARROW)
+                                    .name("§a" + LangManager.get(lang, "gui.next"))
+                                    .build());
 
-                        inv.setItem(SLOT_BACK, ConfigLoader.getGuiItem("back"));
+                        // Back button
+                        inv.setItem(SLOT_BACK, new ItemBuilder(Material.BARRIER)
+                                .name("§c" + LangManager.get(lang, "gui.back.name"))
+                                .lore("§7" + LangManager.get(lang, "gui.back.lore"))
+                                .build());
 
                         player.openInventory(inv);
                     } finally {
@@ -117,12 +130,10 @@ public class BlacklistSelectGUI implements Listener {
         UUID uuid = player.getUniqueId();
         long now = System.currentTimeMillis();
         AtomicLong lastClick = lastClickMap.computeIfAbsent(uuid, k -> new AtomicLong(0));
-
         if (now - lastClick.get() < PAGE_COOLDOWN_MS) {
             player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
             return false;
         }
-
         lastClick.set(now);
         return true;
     }
@@ -130,13 +141,16 @@ public class BlacklistSelectGUI implements Listener {
     @EventHandler
     public void onClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player player)) return;
-        String title = e.getView().getTitle();
-        if (!title.startsWith("차단 목록")) return;
+        UUID uuid = player.getUniqueId();
+        String lang = LangManager.getLanguage(uuid);
+
+        String expectedTitle = LangManager.get(lang, "gui.blacklist.title")
+                .replace("%page%", String.valueOf(pageMap.getOrDefault(uuid, 0) + 1))
+                .replace("%maxpage%", ""); // optional fallback
+        if (!e.getView().getTitle().startsWith(expectedTitle)) return;
 
         e.setCancelled(true);
-        UUID uuid = player.getUniqueId();
         int slot = e.getRawSlot();
-
         if (slot < 0 || slot >= e.getInventory().getSize()) return;
 
         int page = pageMap.getOrDefault(uuid, 0);
@@ -146,7 +160,7 @@ public class BlacklistSelectGUI implements Listener {
             case SLOT_SEARCH -> {
                 player.closeInventory();
                 waitingForSearch.add(uuid);
-                player.sendMessage("§b차단/해제를 원하는 플레이어 이름을 입력하세요:");
+                player.sendMessage(LangManager.get(uuid, "gui.blacklist.search_prompt"));
             }
             case SLOT_PREV -> {
                 if (!hasCooldownPassed(player)) return;
@@ -165,7 +179,7 @@ public class BlacklistSelectGUI implements Listener {
                 if (slot < PAGE_SIZE) {
                     ItemStack clicked = e.getInventory().getItem(slot);
                     if (clicked == null || !clicked.hasItemMeta()) return;
-                    String name = clicked.getItemMeta().getDisplayName().replace("§a", "").replace("§c", "").trim();
+                    String name = Objects.requireNonNull(clicked.getItemMeta()).getDisplayName().replace("§a", "").replace("§c", "").trim();
                     if (name.isEmpty()) return;
 
                     OfflinePlayer target = PlayerCache.getByName(name);
@@ -174,11 +188,11 @@ public class BlacklistSelectGUI implements Listener {
                     UUID targetId = target.getUniqueId();
                     if (blocked.contains(targetId)) {
                         blocked.remove(targetId);
-                        player.sendMessage("§a" + name + "님이 허용되었습니다.");
+                        player.sendMessage(LangManager.get(uuid, "gui.blacklist.unblocked").replace("%name%", name));
                         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
                     } else {
                         blocked.add(targetId);
-                        player.sendMessage("§c" + name + "님이 차단되었습니다.");
+                        player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked").replace("%name%", name));
                         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1.2f);
                     }
                     MailDataManager.getInstance().setBlacklist(uuid, blocked);
@@ -191,9 +205,6 @@ public class BlacklistSelectGUI implements Listener {
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
         if (!(e.getPlayer() instanceof Player player)) return;
-        String title = e.getView().getTitle();
-        if (!title.startsWith("차단 목록")) return;
-
         UUID uuid = player.getUniqueId();
         pageMap.remove(uuid);
         loadingSet.remove(uuid);
@@ -208,10 +219,11 @@ public class BlacklistSelectGUI implements Listener {
         e.setCancelled(true);
         String input = e.getMessage();
         OfflinePlayer target = PlayerCache.getByName(input);
+
         Bukkit.getScheduler().runTask(plugin, () -> {
             int currentPage = pageMap.getOrDefault(uuid, 0);
             if (target == null || target.getName() == null) {
-                player.sendMessage("§c플레이어를 찾을 수 없습니다: " + input);
+                player.sendMessage(LangManager.get(uuid, "gui.blacklist.not_found").replace("%input%", input));
                 open(player, currentPage);
                 return;
             }
@@ -220,10 +232,10 @@ public class BlacklistSelectGUI implements Listener {
             UUID targetId = target.getUniqueId();
             if (blocked.contains(targetId)) {
                 blocked.remove(targetId);
-                player.sendMessage("§a" + target.getName() + "님이 허용되었습니다.");
+                player.sendMessage(LangManager.get(uuid, "gui.blacklist.unblocked").replace("%name%", target.getName()));
             } else {
                 blocked.add(targetId);
-                player.sendMessage("§c" + target.getName() + "님이 차단되었습니다.");
+                player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked").replace("%name%", target.getName()));
             }
             MailDataManager.getInstance().setBlacklist(uuid, blocked);
             open(player, currentPage);

@@ -3,219 +3,236 @@ package com.gmail.bobason01.commands;
 import com.gmail.bobason01.gui.MailGUI;
 import com.gmail.bobason01.gui.MailSendAllGUI;
 import com.gmail.bobason01.gui.MailSendGUI;
+import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.Mail;
 import com.gmail.bobason01.mail.MailDataManager;
-import com.gmail.bobason01.mail.MailService;
-import com.gmail.bobason01.MailManager;
 import net.Indyuce.mmoitems.MMOItems;
 import net.Indyuce.mmoitems.api.Type;
 import net.Indyuce.mmoitems.api.item.mmoitem.MMOItem;
 import net.Indyuce.mmoitems.api.item.template.MMOItemTemplate;
-import org.bukkit.Bukkit;
-import org.bukkit.Material;
-import org.bukkit.OfflinePlayer;
+import org.bukkit.*;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.NotNull;
 
 import java.time.LocalDateTime;
 import java.util.*;
 
 public class MailCommand implements CommandExecutor, TabCompleter {
 
+    public static final UUID SERVER_UUID = UUID.nameUUIDFromBytes("ServerSender".getBytes());
+    private static final String MMOITEMS_PREFIX = "mmoitems:";
+    private static final List<String> SUB_COMMANDS = Arrays.asList("send", "sendall", "reload", "setlang");
+    private static final List<String> TIME_SUGGESTIONS = Arrays.asList("7d", "12h", "30m", "15s", "1h", "5m");
+
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player player)) return false;
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
+        UUID senderId = (sender instanceof Player p) ? p.getUniqueId() : SERVER_UUID;
+        Plugin plugin = Bukkit.getPluginManager().getPlugin("MailManager");
+        String lang = sender instanceof Player player ? LangManager.getLanguage(player.getUniqueId()) : "ko";
 
-        UUID senderId = player.getUniqueId();
-
-        // /mail
-        if (args.length < 1) {
-            new MailGUI(Bukkit.getPluginManager().getPlugin("MailManager")).open(player);
+        if (args.length == 0) {
+            if (sender instanceof Player player) {
+                new MailGUI(plugin).open(player);
+            } else {
+                sender.sendMessage(LangManager.get(lang, "cmd.gui.unavailable"));
+            }
             return true;
         }
 
-        String subCommand = args[0].toLowerCase(Locale.ROOT);
+        String sub = args[0];
+        boolean isPlayer = sender instanceof Player;
 
-        switch (subCommand) {
-            case "send" -> {
-                // /mail send
-                if (args.length == 1) {
-                    new MailSendGUI(Bukkit.getPluginManager().getPlugin("MailManager")).open(player);
-                    return true;
-                }
+        if (sub.equalsIgnoreCase("send")) {
+            if (args.length == 1) {
+                if (isPlayer) new MailSendGUI(plugin).open((Player) sender);
+                else sender.sendMessage(LangManager.get(lang, "cmd.gui.unavailable"));
+                return true;
+            }
 
-                OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
-                if (target == null || !target.hasPlayedBefore()) {
-                    player.sendMessage("§c[우편] 존재하지 않는 플레이어입니다: " + args[1]);
-                    return true;
-                }
+            OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
+            if (target == null || !target.hasPlayedBefore()) {
+                sender.sendMessage(LangManager.get(lang, "cmd.player.notfound").replace("%name%", args[1]));
+                return true;
+            }
 
-                // /mail send <대상>
-                if (args.length == 2) {
-                    MailSendGUI gui = new MailSendGUI(Bukkit.getPluginManager().getPlugin("MailManager"));
-                    MailService.setTarget(senderId, target);
-                    gui.open(player);
-                    return true;
-                }
+            if (args.length == 2) {
+                if (isPlayer) new MailSendGUI(plugin).open((Player) sender);
+                else sender.sendMessage(LangManager.get(lang, "cmd.gui.unavailable"));
+                return true;
+            }
 
-                // MMOItems 사용 시 플러그인 존재 여부 확인
-                if (args[2].toLowerCase().startsWith("mmoitems:") &&
-                        !Bukkit.getPluginManager().isPluginEnabled("MMOItems")) {
-                    player.sendMessage("§c[우편] MMOItems 플러그인이 설치되어 있지 않습니다. 해당 아이템을 사용할 수 없습니다.");
-                    return true;
-                }
+            String itemId = args[2];
+            if (itemId.regionMatches(true, 0, MMOITEMS_PREFIX, 0, MMOITEMS_PREFIX.length()) &&
+                    !Bukkit.getPluginManager().isPluginEnabled("MMOItems")) {
+                sender.sendMessage(LangManager.get(lang, "cmd.mmoitems.missing"));
+                return true;
+            }
 
-                ItemStack item = parseItem(args[2]);
-                if (item == null || item.getType() == Material.AIR) {
-                    player.sendMessage("§c[우편] 잘못된 아이템입니다: " + args[2]);
-                    return true;
-                }
+            ItemStack item = parseItem(itemId);
+            if (item == null || item.getType() == Material.AIR) {
+                sender.sendMessage(LangManager.get(lang, "cmd.item.invalid").replace("%id%", itemId));
+                return true;
+            }
 
-                LocalDateTime now = LocalDateTime.now();
-                LocalDateTime expire;
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime expire = (args.length >= 4) ? parseExpireTime(args[3], now) : now.plusDays(30);
+            if (expire == null) {
+                sender.sendMessage(LangManager.get(lang, "cmd.expire.invalid"));
+                return true;
+            }
 
-                if (args.length >= 4) {
-                    expire = parseExpireTime(args[3], now);
-                    if (expire == null) {
-                        player.sendMessage("§c[우편] 시간 형식이 잘못되었습니다. 예: 7d, 12h, 30m");
-                        return true;
-                    }
-                } else {
-                    expire = now.plusDays(30); // 기본 만료 30일
-                }
+            Mail mail = new Mail(senderId, target.getUniqueId(), item, now, expire);
+            MailDataManager.getInstance().addMail(target.getUniqueId(), mail);
+            sender.sendMessage(LangManager.get(lang, "cmd.send.success").replace("%name%", target.getName()));
+            return true;
+        }
 
+        if (sub.equalsIgnoreCase("sendall")) {
+            if (args.length == 1) {
+                if (isPlayer) new MailSendAllGUI(plugin).open((Player) sender);
+                else sender.sendMessage(LangManager.get(lang, "cmd.gui.unavailable"));
+                return true;
+            }
+
+            String itemId = args[1];
+            if (itemId.regionMatches(true, 0, MMOITEMS_PREFIX, 0, MMOITEMS_PREFIX.length()) &&
+                    !Bukkit.getPluginManager().isPluginEnabled("MMOItems")) {
+                sender.sendMessage(LangManager.get(lang, "cmd.mmoitems.missing"));
+                return true;
+            }
+
+            ItemStack item = parseItem(itemId);
+            if (item == null || item.getType() == Material.AIR) {
+                sender.sendMessage(LangManager.get(lang, "cmd.item.invalid").replace("%id%", itemId));
+                return true;
+            }
+
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime expire = (args.length >= 3) ? parseExpireTime(args[2], now) : now.plusDays(30);
+            if (expire == null) {
+                sender.sendMessage(LangManager.get(lang, "cmd.expire.invalid"));
+                return true;
+            }
+
+            int count = 0;
+            for (OfflinePlayer target : Bukkit.getOfflinePlayers()) {
+                if (target == null || !target.hasPlayedBefore()) continue;
                 Mail mail = new Mail(senderId, target.getUniqueId(), item, now, expire);
                 MailDataManager.getInstance().addMail(target.getUniqueId(), mail);
-
-                player.sendMessage("§a[우편] " + target.getName() + " 님에게 우편을 보냈습니다.");
-                return true;
+                count++;
             }
 
-            case "sendall" -> {
-                new MailSendAllGUI(Bukkit.getPluginManager().getPlugin("MailManager")).open(player);
-                return true;
-            }
+            sender.sendMessage(LangManager.get(lang, "cmd.sendall.success").replace("%count%", Integer.toString(count)));
+            return true;
+        }
 
-            case "reload" -> {
-                MailManager plugin = (MailManager) Bukkit.getPluginManager().getPlugin("MailManager");
-                plugin.reloadConfig();
-                player.sendMessage("§a[우편] 설정 파일을 다시 불러왔습니다.");
-                return true;
-            }
+        if (sub.equalsIgnoreCase("reload")) {
+            Objects.requireNonNull(plugin).reloadConfig();
+            sender.sendMessage(LangManager.get(lang, "cmd.reload"));
+            return true;
         }
 
         return false;
     }
 
-    // 아이템 파싱 (기본 또는 MMOItems)
     private ItemStack parseItem(String id) {
-        if (id.toLowerCase().startsWith("mmoitems:")) {
+        if (id.regionMatches(true, 0, MMOITEMS_PREFIX, 0, MMOITEMS_PREFIX.length())) {
             if (!Bukkit.getPluginManager().isPluginEnabled("MMOItems")) return null;
-
             try {
-                String[] parts = id.substring("mmoitems:".length()).split("\\.");
+                String[] parts = id.substring(MMOITEMS_PREFIX.length()).split("\\.");
                 if (parts.length != 2) return null;
 
-                String typeId = parts[0].toLowerCase();
-                String itemId = parts[1].toUpperCase();
+                String typeId = parts[0];
+                String itemId = parts[1];
 
-                Type type = MMOItems.plugin.getTypes().getAll()
-                        .stream().filter(t -> t.getId().equalsIgnoreCase(typeId))
-                        .findFirst().orElse(null);
-                if (type == null) return null;
-
-                MMOItem mmoItem = MMOItems.plugin.getMMOItem(type, itemId);
-                return mmoItem != null ? mmoItem.newBuilder().build() : null;
-            } catch (Exception e) {
-                return null;
-            }
-        }
-
-        try {
-            return new ItemStack(Material.matchMaterial(id.toUpperCase()));
-        } catch (Exception e) {
+                for (Type type : MMOItems.plugin.getTypes().getAll()) {
+                    if (type.getId().equalsIgnoreCase(typeId)) {
+                        MMOItem mmoItem = MMOItems.plugin.getMMOItem(type, itemId.toUpperCase());
+                        return (mmoItem != null) ? mmoItem.newBuilder().build() : null;
+                    }
+                }
+            } catch (Exception ignored) {}
             return null;
         }
+
+        Material mat = Material.matchMaterial(id.toUpperCase());
+        return (mat != null) ? new ItemStack(mat) : null;
     }
 
-    // 만료 시간 파싱
     private LocalDateTime parseExpireTime(String input, LocalDateTime now) {
         try {
-            if (input.endsWith("d")) {
-                int days = Integer.parseInt(input.replace("d", ""));
-                return now.plusDays(days);
-            } else if (input.endsWith("h")) {
-                int hours = Integer.parseInt(input.replace("h", ""));
-                return now.plusHours(hours);
-            } else if (input.endsWith("m")) {
-                int minutes = Integer.parseInt(input.replace("m", ""));
-                return now.plusMinutes(minutes);
+            int value = Integer.parseInt(input.substring(0, input.length() - 1));
+            switch (input.charAt(input.length() - 1)) {
+                case 'd' -> { return now.plusDays(value); }
+                case 'h' -> { return now.plusHours(value); }
+                case 'm' -> { return now.plusMinutes(value); }
+                case 's' -> { return now.plusSeconds(value); }
             }
         } catch (Exception ignored) {}
         return null;
     }
 
     @Override
-    public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player)) return Collections.emptyList();
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
+        int len = args.length;
 
-        if (args.length == 1) {
-            return List.of("send", "sendall", "reload", "setlang").stream()
-                    .filter(s -> s.startsWith(args[0].toLowerCase()))
-                    .toList();
+        if (len == 1) {
+            String prefix = args[0].toLowerCase();
+            List<String> result = new ArrayList<>(4);
+            for (String cmd : SUB_COMMANDS) {
+                if (cmd.startsWith(prefix)) result.add(cmd);
+            }
+            return result;
         }
 
-        // /mail send <플레이어>
-        if (args.length == 2 && args[0].equalsIgnoreCase("send")) {
-            return Bukkit.getOnlinePlayers().stream()
-                    .map(Player::getName)
-                    .filter(name -> name.toLowerCase().startsWith(args[1].toLowerCase()))
-                    .toList();
+        boolean isConsole = !(sender instanceof Player);
+
+        if (len == 2 && args[0].equalsIgnoreCase("send")) {
+            String prefix = args[1].toLowerCase();
+            List<String> result = new ArrayList<>();
+            for (OfflinePlayer p : Bukkit.getOfflinePlayers()) {
+                String name = p.getName();
+                if (name != null && name.toLowerCase().startsWith(prefix)) result.add(name);
+            }
+            return result;
         }
 
-        // /mail send <플레이어> <아이템>
-        if (args.length == 3 && args[0].equalsIgnoreCase("send")) {
-            String currentInput = args[2].toLowerCase();
-            List<String> suggestions = new ArrayList<>();
+        if (isConsole) return Collections.emptyList();
 
-            // MMOItems 플러그인 있을 경우만 제안
+        String sub = args[0];
+        if ((len == 2 && sub.equalsIgnoreCase("sendall")) || (len == 3 && sub.equalsIgnoreCase("send"))) {
+            String prefix = args[len - 1].toLowerCase();
+            List<String> result = new ArrayList<>(100);
+
             if (Bukkit.getPluginManager().isPluginEnabled("MMOItems")) {
                 for (Type type : MMOItems.plugin.getTypes().getAll()) {
-                    Collection<MMOItemTemplate> templates = MMOItems.plugin.getTemplates().getTemplates(type);
-                    for (MMOItemTemplate template : templates) {
-                        String suggestion = "mmoitems:" + type.getId() + "." + template.getId();
-                        if (suggestion.toLowerCase().startsWith(currentInput)) {
-                            suggestions.add(suggestion);
-                        }
+                    for (MMOItemTemplate tmpl : MMOItems.plugin.getTemplates().getTemplates(type)) {
+                        String s = "mmoitems:" + type.getId() + "." + tmpl.getId();
+                        if (s.toLowerCase().startsWith(prefix)) result.add(s);
                     }
                 }
             }
 
-            // 기본 마인크래프트 아이템 제안
             for (Material mat : Material.values()) {
-                if (mat.isItem() && mat.name().toLowerCase().startsWith(currentInput)) {
-                    suggestions.add(mat.name().toLowerCase());
-                }
+                if (mat.isItem() && mat.name().toLowerCase().startsWith(prefix)) result.add(mat.name().toLowerCase());
             }
 
-            return suggestions;
+            return result;
         }
 
-        // /mail send <플레이어> <아이템> <시간>
-        if (args.length == 4 && args[0].equalsIgnoreCase("send")) {
-            return List.of("7d", "12h", "30m", "1h", "5m").stream()
-                    .filter(s -> s.startsWith(args[3].toLowerCase()))
-                    .toList();
-        }
-
-        // /mail setlang <언어>
-        if (args.length == 2 && args[0].equalsIgnoreCase("setlang")) {
-            return List.of("en", "ko").stream()
-                    .filter(lang -> lang.startsWith(args[1].toLowerCase()))
-                    .toList();
+        if ((len == 3 && sub.equalsIgnoreCase("sendall")) || (len == 4 && sub.equalsIgnoreCase("send"))) {
+            String prefix = args[len - 1].toLowerCase();
+            List<String> result = new ArrayList<>(6);
+            for (String s : TIME_SUGGESTIONS) {
+                if (s.startsWith(prefix)) result.add(s);
+            }
+            return result;
         }
 
         return Collections.emptyList();
     }
 }
+

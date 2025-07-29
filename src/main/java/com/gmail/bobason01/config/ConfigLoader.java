@@ -8,8 +8,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
 
 import java.io.File;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class ConfigLoader {
@@ -17,12 +17,13 @@ public final class ConfigLoader {
     private static final AtomicReference<FileConfiguration> configRef = new AtomicReference<>();
     private static File configFile;
 
-    /**
-     * 설정 파일을 불러옵니다. 최초 한 번만 호출되어야 합니다.
-     */
+    private static final Map<String, YamlConfiguration> langRefMap = new ConcurrentHashMap<>();
+    private static File langFolder;
+
     public static void load(Plugin plugin) {
         if (configRef.get() != null) return;
 
+        // Load config.yml
         configFile = new File(plugin.getDataFolder(), "config.yml");
         if (!configFile.exists()) {
             plugin.saveResource("config.yml", false);
@@ -30,43 +31,70 @@ public final class ConfigLoader {
 
         FileConfiguration config = YamlConfiguration.loadConfiguration(configFile);
         configRef.set(config);
+
+        // Ensure lang folder exists
+        langFolder = new File(plugin.getDataFolder(), "lang");
+        if (!langFolder.exists()) langFolder.mkdirs();
+
+        // Force-save default lang files if missing
+        saveLangIfMissing(plugin, "en.yml");
+        saveLangIfMissing(plugin, "ko.yml");
     }
 
-    /**
-     * GUI용 아이템을 config.yml에서 로드합니다.
-     * 예시:
-     * gui-items:
-     *   back:
-     *     material: BARRIER
-     *     name: "&cBack"
-     *     lore:
-     *       - "&7Return to previous menu"
-     */
-    public static ItemStack getGuiItem(String key) {
-        FileConfiguration config = configRef.get();
-        if (config == null) throw new IllegalStateException("Config not loaded");
+    private static void saveLangIfMissing(Plugin plugin, String filename) {
+        File file = new File(plugin.getDataFolder(), "lang/" + filename);
+        if (!file.exists()) {
+            plugin.saveResource("lang/" + filename, false);
+        }
+    }
 
-        String path = "gui-items." + key;
-        String materialName = config.getString(path + ".material", "BARRIER");
+    public static ItemStack getGuiItem(String key) {
+        return getGuiItem(key, "en");
+    }
+
+    public static ItemStack getGuiItem(String key, String lang) {
+        FileConfiguration langConfig = getLang(lang);
+
+        String basePath = "gui." + key;
+        String name = langConfig.getString(basePath + ".name", key);
+        List<String> lore = langConfig.getStringList(basePath + ".lore");
+        String materialName = langConfig.getString(basePath + ".material", "PAPER");
+
         Material material = Material.matchMaterial(materialName.toUpperCase());
-        if (material == null) material = Material.BARRIER;
+        if (material == null) material = Material.PAPER;
 
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(color(config.getString(path + ".name", "&fUnnamed")));
-            List<String> lore = config.getStringList(path + ".lore");
-            if (!lore.isEmpty()) {
-                meta.setLore(color(lore));
-            }
+            meta.setDisplayName(color(name));
+            if (!lore.isEmpty()) meta.setLore(color(lore));
             item.setItemMeta(meta);
         }
+
         return item;
     }
 
-    /**
-     * 컬러 코드 변환
-     */
+    private static FileConfiguration getLang(String lang) {
+        if (langFolder == null && configFile != null) {
+            langFolder = new File(configFile.getParentFile(), "lang");
+            if (!langFolder.exists()) langFolder.mkdirs();
+        }
+
+        return langRefMap.computeIfAbsent(lang, l -> {
+            File targetFile = new File(langFolder, l + ".yml");
+
+            if (!targetFile.exists()) {
+                targetFile = new File(langFolder, "en.yml");
+                if (!targetFile.exists()) {
+                    // fallback to empty config
+                    return new YamlConfiguration();
+                }
+            }
+
+            return YamlConfiguration.loadConfiguration(targetFile);
+        });
+    }
+
     private static String color(String s) {
         return s == null ? "" : s.replace("&", "§");
     }

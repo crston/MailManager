@@ -1,48 +1,23 @@
-gui-items:
-  back:
-    material: BARRIER
-    name: "&c뒤로가기"
-    lore:
-      - "&7이전 메뉴로 돌아갑니다"
+# MailManager 기본 설정 파일
 
-  previous-page:
-    material: ARROW
-    name: "&a◀ 이전 페이지"
-    lore:
-      - "&7이전 페이지로 이동"
+# 기본 언어 설정 (ko 또는 en 등)
+default-language: en
 
-  next-page:
-    material: ARROW
-    name: "&a▶ 다음 페이지"
-    lore:
-      - "&7다음 페이지로 이동"
+# 우편 알림 반복 간격 (초 단위)
+mail-reminder-interval: 300
 
-  mail-send:
-    material: PAPER
-    name: "&a메일 보내기"
-    lore:
-      - "&7메일을 전송합니다"
+# 데이터 저장 주기 (초 단위)
+auto-save-interval: 300
 
-  setting:
-    material: COMPARATOR
-    name: "&b설정"
-    lore:
-      - "&7메일 설정 열기"
+# 발송 제한 (일괄 발송 최대 수신자 수)
+send-all-limit: 1000
 
-  blacklist:
-    material: NETHER_BRICK
-    name: "&c차단 목록"
-    lore:
-      - "&7메일 차단 대상 관리"
+# GUI 페이지당 표시할 항목 수
+gui:
+  mails-per-page: 36
+  players-per-page: 45
 
-  permanent:
-    material: CLOCK
-    name: "&6영구 설정"
-    lore:
-      - "&7만료 없이 메일 보내기"
-
-  select-complete:
-    material: EMERALD_BLOCK
-    name: "&a선택 완료"
-    lore:
-      - "&7선택을 완료하고 다음 단계로 이동"
+# 데이터베이스 설정 (현재는 SQLite만 지원)
+database:
+  type: sqlite
+  file-name: mail_data.db

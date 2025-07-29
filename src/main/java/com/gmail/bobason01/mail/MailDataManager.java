@@ -1,75 +1,83 @@
 package com.gmail.bobason01.mail;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.gmail.bobason01.lang.LangManager;
 import org.bukkit.Bukkit;
-import org.bukkit.inventory.ItemStack;
+import org.bukkit.Sound;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.*;
-import java.time.LocalDateTime;
+import java.io.File;
+import java.sql.*;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MailDataManager {
 
-    // 싱글톤 인스턴스
     private static final MailDataManager INSTANCE = new MailDataManager();
     public static MailDataManager getInstance() {
         return INSTANCE;
     }
 
-    // 파일 이름 및 자동 저장 주기 설정
-    private static final String DATA_FILE_NAME = "data.json";
-    private static final int SAVE_INITIAL_DELAY_SEC = 5;
-    private static final int SAVE_INTERVAL_SEC = 20;
-
-    // 주요 데이터 저장 구조
-    private final Map<UUID, ConcurrentLinkedDeque<Mail>> mailMap = new ConcurrentHashMap<>();
-    private final Map<UUID, Set<UUID>> blacklistMap = new ConcurrentHashMap<>();
+    private final Map<UUID, Deque<Mail>> mailMap = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> notifyMap = new ConcurrentHashMap<>();
-    private final Map<UUID, Set<UUID>> excludeFromAllMap = new ConcurrentHashMap<>();
-
-    // 지연 저장용 큐 및 상태 제어
-    private final BlockingQueue<Mail> queuedMails = new LinkedBlockingQueue<>();
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private final Map<UUID, Set<UUID>> blacklistMap = new ConcurrentHashMap<>();
+    private final Map<UUID, Set<UUID>> excludeMap = new ConcurrentHashMap<>();
     private final AtomicBoolean dirty = new AtomicBoolean(false);
-    private final Object fileLock = new Object();
 
-    private File dataFile;
-    private final Gson gson = new GsonBuilder()
-            .registerTypeAdapter(ItemStack.class, new MailSerializer.ItemStackAdapter())
-            .registerTypeAdapter(LocalDateTime.class, new MailSerializer.LocalDateTimeAdapter())
-            .create();
+    private Connection connection;
+    private File dbFile;
 
-    /**
-     * 데이터 파일 로딩 및 자동 저장 스케줄 시작
-     */
     public void load(JavaPlugin plugin) {
-        dataFile = new File(plugin.getDataFolder(), DATA_FILE_NAME);
-        loadFromDisk();
-
-        scheduler.scheduleWithFixedDelay(() -> {
-            if (dirty.compareAndSet(true, false)) {
-                saveToDisk();
-            }
-        }, SAVE_INITIAL_DELAY_SEC, SAVE_INTERVAL_SEC, TimeUnit.SECONDS);
+        try {
+            dbFile = new File(plugin.getDataFolder(), "mail_data.db");
+            plugin.getDataFolder().mkdirs();
+            connection = DriverManager.getConnection("jdbc:sqlite:" + dbFile);
+            setupTable();
+            loadFromDatabase();
+        } catch (Exception e) {
+            Bukkit.getLogger().severe("[MailManager] SQLite initialization failed: " + e.getMessage());
+        }
     }
 
-    /**
-     * 플러그인 종료 시 호출 - 즉시 저장 및 스케줄 종료
-     */
     public void unload() {
-        saveToDisk();
-        scheduler.shutdownNow();
+        saveToDatabase();
+        try {
+            if (connection != null && !connection.isClosed()) {
+                connection.close();
+            }
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("[MailManager] SQLite shutdown failed: " + e.getMessage());
+        }
     }
 
-    // ============ 메일 관리 ============
+    private void setupTable() throws SQLException {
+        try (Statement stmt = connection.createStatement()) {
+            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS mails (id INTEGER PRIMARY KEY AUTOINCREMENT, receiver TEXT NOT NULL, data BLOB NOT NULL)");
+            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS notify (uuid TEXT PRIMARY KEY, enabled INTEGER NOT NULL)");
+            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS blacklist (owner TEXT NOT NULL, target TEXT NOT NULL)");
+            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS exclude (uuid TEXT NOT NULL, excluded TEXT NOT NULL)");
+        }
+    }
 
     public void addMail(UUID receiver, Mail mail) {
         mailMap.computeIfAbsent(receiver, k -> new ConcurrentLinkedDeque<>()).addLast(mail);
         dirty.set(true);
+
+        if (isNotifyEnabled(receiver)) {
+            Player player = Bukkit.getPlayer(receiver);
+            if (player != null && player.isOnline()) {
+                String lang = LangManager.getLanguage(receiver);
+                player.sendMessage(LangManager.get(lang, "mail.notify.message"));
+                player.sendTitle(
+                        LangManager.get(lang, "mail.notify.title.main"),
+                        LangManager.get(lang, "mail.notify.title.sub"),
+                        10, 40, 20
+                );
+                player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f);
+            }
+        }
     }
 
     public Deque<Mail> getMails(UUID uuid) {
@@ -94,132 +102,175 @@ public class MailDataManager {
         }
     }
 
-    public void queueMail(Mail mail) {
-        queuedMails.add(mail);
-    }
-
-    public void flushQueuedMails() {
-        if (queuedMails.isEmpty()) return;
-        List<Mail> buffer = new ArrayList<>();
-        queuedMails.drainTo(buffer);
-        for (Mail mail : buffer) {
-            if (mail != null && mail.getReceiver() != null) {
-                addMail(mail.getReceiver(), mail);
-            }
-        }
-    }
-
-    // ============ 블랙리스트 관리 ============
-
-    public Set<UUID> getBlacklist(UUID uuid) {
-        return blacklistMap.computeIfAbsent(uuid, k -> ConcurrentHashMap.newKeySet());
-    }
-
-    public void setBlacklist(UUID uuid, Set<UUID> list) {
-        if (!Objects.equals(blacklistMap.get(uuid), list)) {
-            blacklistMap.put(uuid, list);
-            dirty.set(true);
-        }
-    }
-
-    public void toggleBlacklist(UUID owner, UUID target) {
-        Set<UUID> blacklist = blacklistMap.computeIfAbsent(owner, k -> ConcurrentHashMap.newKeySet());
-        if (blacklist.contains(target)) {
-            blacklist.remove(target);
-        } else {
-            blacklist.add(target);
-        }
-        dirty.set(true);
-    }
-
-    // ============ 알림 설정 관리 ============
-
     public boolean isNotifyEnabled(UUID uuid) {
         return notifyMap.getOrDefault(uuid, true);
-    }
-
-    public void setNotify(UUID uuid, boolean value) {
-        if (!Objects.equals(notifyMap.get(uuid), value)) {
-            notifyMap.put(uuid, value);
-            dirty.set(true);
-        }
     }
 
     public boolean toggleNotification(UUID uuid) {
         boolean current = isNotifyEnabled(uuid);
         setNotify(uuid, !current);
-        return current;
+        return !current;
     }
 
-    // ============ 전체 발송 제외 대상 관리 ============
+    public void setNotify(UUID uuid, boolean enabled) {
+        notifyMap.put(uuid, enabled);
+        saveNotifySetting(uuid, enabled);
+    }
 
-    public Set<UUID> getExclude(UUID uuid) {
-        return excludeFromAllMap.computeIfAbsent(uuid, k -> ConcurrentHashMap.newKeySet());
+    private void saveNotifySetting(UUID uuid, boolean enabled) {
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "INSERT INTO notify (uuid, enabled) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET enabled = excluded.enabled"
+        )) {
+            stmt.setString(1, uuid.toString());
+            stmt.setInt(2, enabled ? 1 : 0);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("[MailManager] Failed to save notification setting: " + e.getMessage());
+        }
+    }
+
+    public Set<UUID> getBlacklist(UUID owner) {
+        return blacklistMap.getOrDefault(owner, Collections.emptySet());
+    }
+
+    public void setBlacklist(UUID owner, Set<UUID> list) {
+        blacklistMap.put(owner, new HashSet<>(list));
+        try (PreparedStatement deleteStmt = connection.prepareStatement("DELETE FROM blacklist WHERE owner = ?")) {
+            deleteStmt.setString(1, owner.toString());
+            deleteStmt.executeUpdate();
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("[MailManager] Failed to delete blacklist: " + e.getMessage());
+        }
+
+        try (PreparedStatement insertStmt = connection.prepareStatement("INSERT INTO blacklist (owner, target) VALUES (?, ?)")) {
+            for (UUID target : list) {
+                insertStmt.setString(1, owner.toString());
+                insertStmt.setString(2, target.toString());
+                insertStmt.addBatch();
+            }
+            insertStmt.executeBatch();
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("[MailManager] Failed to save blacklist: " + e.getMessage());
+        }
+    }
+
+    public Set<UUID> getExclude(UUID player) {
+        return excludeMap.getOrDefault(player, Collections.emptySet());
     }
 
     public void setExclude(UUID uuid, Set<UUID> excludes) {
-        if (!Objects.equals(excludeFromAllMap.get(uuid), excludes)) {
-            excludeFromAllMap.put(uuid, excludes);
-            dirty.set(true);
+        excludeMap.put(uuid, new HashSet<>(excludes));
+
+        try (PreparedStatement deleteStmt = connection.prepareStatement("DELETE FROM exclude WHERE uuid = ?")) {
+            deleteStmt.setString(1, uuid.toString());
+            deleteStmt.executeUpdate();
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("[MailManager] Failed to delete exclusion list: " + e.getMessage());
+        }
+
+        try (PreparedStatement insertStmt = connection.prepareStatement("INSERT INTO exclude (uuid, excluded) VALUES (?, ?)")) {
+            for (UUID excluded : excludes) {
+                insertStmt.setString(1, uuid.toString());
+                insertStmt.setString(2, excluded.toString());
+                insertStmt.addBatch();
+            }
+            insertStmt.executeBatch();
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("[MailManager] Failed to save exclusion list: " + e.getMessage());
         }
     }
-
-    // ============ 데이터 저장 ============
 
     public void save() {
-        saveToDisk();
+        saveToDatabase();
     }
 
-    private void saveToDisk() {
-        synchronized (fileLock) {
-            try (Writer writer = new FileWriter(dataFile)) {
-                MailDataSnapshot snapshot = new MailDataSnapshot();
-                snapshot.mails = mailMap;
-                snapshot.blacklist = blacklistMap;
-                snapshot.notify = notifyMap;
-                snapshot.exclude = excludeFromAllMap;
-                gson.toJson(snapshot, writer);
-            } catch (Exception e) {
-                Bukkit.getLogger().severe("[MailManager] 데이터 저장 실패: " + e.getMessage());
-            }
-        }
+    private void loadFromDatabase() {
+        loadMails();
+        loadNotifySettings();
+        loadBlacklist();
+        loadExclude();
     }
 
-    private void loadFromDisk() {
-        synchronized (fileLock) {
-            if (!dataFile.exists()) return;
-            try (Reader reader = new FileReader(dataFile)) {
-                MailDataSnapshot snapshot = gson.fromJson(reader, MailDataSnapshot.class);
-                if (snapshot != null) {
-                    if (snapshot.mails != null) {
-                        mailMap.clear();
-                        mailMap.putAll(snapshot.mails);
-                    }
-                    if (snapshot.blacklist != null) {
-                        blacklistMap.clear();
-                        blacklistMap.putAll(snapshot.blacklist);
-                    }
-                    if (snapshot.notify != null) {
-                        notifyMap.clear();
-                        notifyMap.putAll(snapshot.notify);
-                    }
-                    if (snapshot.exclude != null) {
-                        excludeFromAllMap.clear();
-                        excludeFromAllMap.putAll(snapshot.exclude);
-                    }
+    private void loadMails() {
+        try (PreparedStatement stmt = connection.prepareStatement("SELECT receiver, data FROM mails")) {
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                UUID receiver = UUID.fromString(rs.getString("receiver"));
+                byte[] blob = rs.getBytes("data");
+                Mail mail = MailSerializer.deserialize(blob);
+                if (mail != null) {
+                    mailMap.computeIfAbsent(receiver, k -> new ConcurrentLinkedDeque<>()).add(mail);
                 }
-            } catch (Exception e) {
-                Bukkit.getLogger().severe("[MailManager] 데이터 로드 실패: " + e.getMessage());
             }
+        } catch (Exception e) {
+            Bukkit.getLogger().severe("[MailManager] Failed to load mails from SQLite: " + e.getMessage());
         }
     }
 
-    // ============ 저장 스냅샷 클래스 ============
+    private void loadNotifySettings() {
+        try (PreparedStatement stmt = connection.prepareStatement("SELECT uuid, enabled FROM notify")) {
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                UUID uuid = UUID.fromString(rs.getString("uuid"));
+                boolean enabled = rs.getInt("enabled") == 1;
+                notifyMap.put(uuid, enabled);
+            }
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("[MailManager] Failed to load notification settings: " + e.getMessage());
+        }
+    }
 
-    static class MailDataSnapshot {
-        Map<UUID, ConcurrentLinkedDeque<Mail>> mails = new ConcurrentHashMap<>();
-        Map<UUID, Set<UUID>> blacklist = new ConcurrentHashMap<>();
-        Map<UUID, Boolean> notify = new ConcurrentHashMap<>();
-        Map<UUID, Set<UUID>> exclude = new ConcurrentHashMap<>();
+    private void loadBlacklist() {
+        try (PreparedStatement stmt = connection.prepareStatement("SELECT owner, target FROM blacklist")) {
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                UUID owner = UUID.fromString(rs.getString("owner"));
+                UUID target = UUID.fromString(rs.getString("target"));
+                blacklistMap.computeIfAbsent(owner, k -> new HashSet<>()).add(target);
+            }
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("[MailManager] Failed to load blacklist: " + e.getMessage());
+        }
+    }
+
+    private void loadExclude() {
+        try (PreparedStatement stmt = connection.prepareStatement("SELECT uuid, excluded FROM exclude")) {
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                UUID uuid = UUID.fromString(rs.getString("uuid"));
+                UUID excluded = UUID.fromString(rs.getString("excluded"));
+                excludeMap.computeIfAbsent(uuid, k -> new HashSet<>()).add(excluded);
+            }
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("[MailManager] Failed to load exclusion list: " + e.getMessage());
+        }
+    }
+
+    private void saveToDatabase() {
+        if (!dirty.getAndSet(false)) return;
+        try (Statement clearStmt = connection.createStatement()) {
+            clearStmt.executeUpdate("DELETE FROM mails");
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("[MailManager] Failed to clear existing mails: " + e.getMessage());
+        }
+
+        try (PreparedStatement stmt = connection.prepareStatement("INSERT INTO mails (receiver, data) VALUES (?, ?)")) {
+            for (Map.Entry<UUID, Deque<Mail>> entry : mailMap.entrySet()) {
+                UUID uuid = entry.getKey();
+                for (Mail mail : entry.getValue()) {
+                    byte[] data = MailSerializer.serialize(mail);
+                    if (data == null) {
+                        Bukkit.getLogger().warning("[MailManager] Skipped saving mail due to serialization failure: " + mail.getMailId());
+                        continue;
+                    }
+                    stmt.setString(1, uuid.toString());
+                    stmt.setBytes(2, data);
+                    stmt.addBatch();
+                }
+            }
+            stmt.executeBatch();
+        } catch (Exception e) {
+            Bukkit.getLogger().severe("[MailManager] Failed to save mails: " + e.getMessage());
+        }
     }
 }

@@ -1,45 +1,47 @@
 package com.gmail.bobason01.utils;
 
+import com.gmail.bobason01.lang.LangManager;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
-public class TimeUtil {
+public final class TimeUtil {
 
     private static final String[] UNITS = {"year", "month", "day", "hour", "minute", "second"};
-    private static final String[] UNIT_LABELS = {"year", "month", "day", "hour", "minute", "second"};
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    public static String format(Map<String, Integer> timeData) {
+    private TimeUtil() {}
+
+    public static String format(Map<String, Integer> timeData, String lang) {
         if (timeData == null || timeData.isEmpty()) {
-            return "permanent";
+            return LangManager.get(lang, "time.permanent");
         }
 
-        StringBuilder builder = new StringBuilder();
+        StringBuilder builder = new StringBuilder(32);
         boolean hasValid = false;
 
-        for (int i = 0; i < UNITS.length; i++) {
-            String unit = UNITS[i];
+        for (String unit : UNITS) {
             int value = timeData.getOrDefault(unit, 0);
             if (value > 0) {
                 hasValid = true;
-                builder.append(value).append(" ").append(UNIT_LABELS[i]);
-                if (value > 1) builder.append("s"); // plural
-                builder.append(" ");
+                builder.append(value)
+                        .append(' ')
+                        .append(LangManager.get(lang, "time." + unit))
+                        .append(' ');
             }
         }
 
-        return hasValid ? builder.toString().trim() : "permanent";
+        return hasValid ? builder.toString().trim() : LangManager.get(lang, "time.permanent");
     }
 
     public static String formatDateTime(long epochMillis) {
-        if (epochMillis <= 0) return "permanent";
+        if (epochMillis <= 0) return "∞";
 
         LocalDateTime time = Instant.ofEpochMilli(epochMillis)
                 .atZone(ZoneId.systemDefault())
                 .toLocalDateTime();
-
-        return time.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+        return FORMATTER.format(time);
     }
 }
