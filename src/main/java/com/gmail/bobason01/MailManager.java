@@ -25,6 +25,8 @@ public final class MailManager extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
+        saveDefaultConfig();
+
         // 1. 언어 리소스 복사
         copyLangFile("en.yml");
         copyLangFile("ko.yml");
