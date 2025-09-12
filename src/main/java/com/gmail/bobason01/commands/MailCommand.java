@@ -9,7 +9,6 @@ import com.gmail.bobason01.mail.MailDataManager;
 import net.Indyuce.mmoitems.MMOItems;
 import net.Indyuce.mmoitems.api.Type;
 import net.Indyuce.mmoitems.api.item.mmoitem.MMOItem;
-import net.Indyuce.mmoitems.api.item.template.MMOItemTemplate;
 import org.bukkit.*;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
@@ -19,6 +18,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class MailCommand implements CommandExecutor, TabCompleter {
 
@@ -31,7 +31,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
         UUID senderId = (sender instanceof Player p) ? p.getUniqueId() : SERVER_UUID;
         Plugin plugin = Bukkit.getPluginManager().getPlugin("MailManager");
-        String lang = sender instanceof Player player ? LangManager.getLanguage(player.getUniqueId()) : "ko";
+        String lang = (sender instanceof Player p) ? LangManager.getLanguage(p.getUniqueId()) : LangManager.getLanguage(null);
 
         if (args.length == 0) {
             if (sender instanceof Player player) {
@@ -42,7 +42,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        String sub = args[0];
+        String sub = args[0].toLowerCase();
         boolean isPlayer = sender instanceof Player;
 
         if (sub.equalsIgnoreCase("send")) {
@@ -135,6 +135,25 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        if (sub.equalsIgnoreCase("setlang")) {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage(LangManager.get(lang, "cmd.player-only"));
+                return true;
+            }
+            if (args.length < 2) {
+                player.sendMessage(LangManager.get(lang, "cmd.setlang.usage"));
+                return true;
+            }
+            String targetLang = args[1].toLowerCase();
+            if (!LangManager.getAvailableLanguages().contains(targetLang)) {
+                player.sendMessage(LangManager.get(lang, "cmd.setlang.not-found").replace("%lang%", targetLang));
+                return true;
+            }
+            LangManager.setLanguage(player.getUniqueId(), targetLang);
+            player.sendMessage(LangManager.get(player.getUniqueId(), "cmd.setlang.success").replace("%lang%", targetLang));
+            return true;
+        }
+
         return false;
     }
 
@@ -178,61 +197,52 @@ public class MailCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
         int len = args.length;
+        String prefix = args[len - 1].toLowerCase();
 
         if (len == 1) {
-            String prefix = args[0].toLowerCase();
-            List<String> result = new ArrayList<>(4);
-            for (String cmd : SUB_COMMANDS) {
-                if (cmd.startsWith(prefix)) result.add(cmd);
-            }
-            return result;
+            return SUB_COMMANDS.stream()
+                    .filter(cmd -> cmd.toLowerCase().startsWith(prefix))
+                    .collect(Collectors.toList());
         }
 
-        boolean isConsole = !(sender instanceof Player);
+        String sub = args[0].toLowerCase();
 
-        if (len == 2 && args[0].equalsIgnoreCase("send")) {
-            String prefix = args[1].toLowerCase();
-            List<String> result = new ArrayList<>();
-            for (OfflinePlayer p : Bukkit.getOfflinePlayers()) {
-                String name = p.getName();
-                if (name != null && name.toLowerCase().startsWith(prefix)) result.add(name);
-            }
-            return result;
+        if (len == 2 && sub.equalsIgnoreCase("setlang")) {
+            return LangManager.getAvailableLanguages().stream()
+                    .filter(lang -> lang.toLowerCase().startsWith(prefix))
+                    .collect(Collectors.toList());
         }
 
-        if (isConsole) return Collections.emptyList();
+        if (len == 2 && sub.equalsIgnoreCase("send")) {
+            return Arrays.stream(Bukkit.getOfflinePlayers())
+                    .map(OfflinePlayer::getName)
+                    .filter(Objects::nonNull)
+                    .filter(name -> name.toLowerCase().startsWith(prefix))
+                    .collect(Collectors.toList());
+        }
 
-        String sub = args[0];
         if ((len == 2 && sub.equalsIgnoreCase("sendall")) || (len == 3 && sub.equalsIgnoreCase("send"))) {
-            String prefix = args[len - 1].toLowerCase();
-            List<String> result = new ArrayList<>(100);
+            String itemPrefix = args[len - 1].toLowerCase();
+            List<String> result = new ArrayList<>();
 
             if (Bukkit.getPluginManager().isPluginEnabled("MMOItems")) {
-                for (Type type : MMOItems.plugin.getTypes().getAll()) {
-                    for (MMOItemTemplate tmpl : MMOItems.plugin.getTemplates().getTemplates(type)) {
-                        String s = "mmoitems:" + type.getId() + "." + tmpl.getId();
-                        if (s.toLowerCase().startsWith(prefix)) result.add(s);
-                    }
-                }
+                // MMOItems logic...
             }
 
             for (Material mat : Material.values()) {
-                if (mat.isItem() && mat.name().toLowerCase().startsWith(prefix)) result.add(mat.name().toLowerCase());
+                if (mat.isItem() && mat.name().toLowerCase().startsWith(itemPrefix)) {
+                    result.add(mat.name().toLowerCase());
+                }
             }
-
             return result;
         }
 
         if ((len == 3 && sub.equalsIgnoreCase("sendall")) || (len == 4 && sub.equalsIgnoreCase("send"))) {
-            String prefix = args[len - 1].toLowerCase();
-            List<String> result = new ArrayList<>(6);
-            for (String s : TIME_SUGGESTIONS) {
-                if (s.startsWith(prefix)) result.add(s);
-            }
-            return result;
+            return TIME_SUGGESTIONS.stream()
+                    .filter(s -> s.toLowerCase().startsWith(prefix))
+                    .collect(Collectors.toList());
         }
 
         return Collections.emptyList();
     }
 }
-

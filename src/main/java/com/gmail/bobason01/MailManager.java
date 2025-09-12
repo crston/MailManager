@@ -4,10 +4,13 @@ import com.gmail.bobason01.cache.PlayerCache;
 import com.gmail.bobason01.commands.MailCommand;
 import com.gmail.bobason01.gui.*;
 import com.gmail.bobason01.lang.LangManager;
+import com.gmail.bobason01.listeners.MailLoginListener;
 import com.gmail.bobason01.mail.MailDataManager;
 import com.gmail.bobason01.mail.MailService;
 import com.gmail.bobason01.task.MailReminderTask;
+import com.gmail.bobason01.utils.ChatListener;
 import org.bukkit.Bukkit;
+import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -25,16 +28,19 @@ public final class MailManager extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
+        // config.yml에 기본 언어 설정 추가
+        getConfig().addDefault("default-language", "en");
+        getConfig().options().copyDefaults(true);
         saveDefaultConfig();
 
         // 1. 언어 리소스 복사
         copyLangFile("en.yml");
         copyLangFile("ko.yml");
 
-        // 2. 언어 파일 로드
+        // 2. 언어 파일 및 유저 설정 로드
         LangManager.loadAll(getDataFolder());
 
-        // 3. 데이터 관리 초기화
+        // 3. 데이터 관리 초기화 (언어 설정 포함)
         MailDataManager.getInstance().load(this);
         MailService.init(this);
 
@@ -55,7 +61,9 @@ public final class MailManager extends JavaPlugin {
                 new MailSettingGUI(this),
                 new MailTargetSelectGUI(this),
                 new BlacklistSelectGUI(this),
-                new SendAllExcludeGUI(this)
+                new SendAllExcludeGUI(this),
+                new MailLoginListener(this),
+                new ChatListener()
         );
 
         // 7. 자동 저장 (5분 간격)
@@ -69,9 +77,9 @@ public final class MailManager extends JavaPlugin {
         getLogger().info("[MailManager] Enabled successfully.");
     }
 
-    private void registerListeners(Object... listeners) {
-        for (Object listener : listeners) {
-            Bukkit.getPluginManager().registerEvents((org.bukkit.event.Listener) listener, this);
+    private void registerListeners(Listener... listeners) {
+        for (Listener listener : listeners) {
+            Bukkit.getPluginManager().registerEvents(listener, this);
         }
     }
 

@@ -1,5 +1,6 @@
 package com.gmail.bobason01.mail;
 
+import com.gmail.bobason01.MailManager;
 import com.gmail.bobason01.lang.LangManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Sound;
@@ -32,7 +33,9 @@ public class MailDataManager {
     public void load(JavaPlugin plugin) {
         try {
             dbFile = new File(plugin.getDataFolder(), "mail_data.db");
-            plugin.getDataFolder().mkdirs();
+            if (!plugin.getDataFolder().exists()) {
+                plugin.getDataFolder().mkdirs();
+            }
             connection = DriverManager.getConnection("jdbc:sqlite:" + dbFile);
             setupTable();
             loadFromDatabase();
@@ -58,6 +61,43 @@ public class MailDataManager {
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS notify (uuid TEXT PRIMARY KEY, enabled INTEGER NOT NULL)");
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS blacklist (owner TEXT NOT NULL, target TEXT NOT NULL)");
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS exclude (uuid TEXT NOT NULL, excluded TEXT NOT NULL)");
+            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS player_settings (uuid TEXT PRIMARY KEY, lang TEXT)");
+        }
+    }
+
+    public void savePlayerLanguage(UUID uuid, String lang) {
+        Bukkit.getScheduler().runTaskAsynchronously(MailManager.getInstance(), () -> {
+            String sql = "INSERT INTO player_settings (uuid, lang) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET lang = excluded.lang";
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, uuid.toString());
+                stmt.setString(2, lang);
+                stmt.executeUpdate();
+            } catch (SQLException e) {
+                Bukkit.getLogger().severe("[MailManager] Failed to save player language: " + e.getMessage());
+            }
+        });
+    }
+
+    private void loadFromDatabase() {
+        loadMails();
+        loadNotifySettings();
+        loadBlacklist();
+        loadExclude();
+        loadPlayerSettings();
+    }
+
+    private void loadPlayerSettings() {
+        try (PreparedStatement stmt = connection.prepareStatement("SELECT uuid, lang FROM player_settings")) {
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                UUID uuid = UUID.fromString(rs.getString("uuid"));
+                String lang = rs.getString("lang");
+                if (lang != null && !lang.isEmpty()) {
+                    LangManager.loadUserLanguage(uuid, lang);
+                }
+            }
+        } catch (SQLException e) {
+            Bukkit.getLogger().severe("[MailManager] Failed to load player settings: " + e.getMessage());
         }
     }
 
@@ -182,13 +222,6 @@ public class MailDataManager {
 
     public void save() {
         saveToDatabase();
-    }
-
-    private void loadFromDatabase() {
-        loadMails();
-        loadNotifySettings();
-        loadBlacklist();
-        loadExclude();
     }
 
     private void loadMails() {
