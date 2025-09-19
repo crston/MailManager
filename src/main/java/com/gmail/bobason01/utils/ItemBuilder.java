@@ -1,5 +1,6 @@
 package com.gmail.bobason01.utils;
 
+import dev.lone.itemsadder.api.CustomStack;
 import net.Indyuce.mmoitems.MMOItems;
 import net.Indyuce.mmoitems.api.Type;
 import net.Indyuce.mmoitems.api.item.mmoitem.MMOItem;
@@ -8,7 +9,9 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.*;
+import org.bukkit.inventory.meta.Damageable;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
 
 import java.util.*;
 
@@ -33,12 +36,14 @@ public class ItemBuilder {
     }
 
     public static ItemBuilder of(String id) {
-        if (MMOItems.plugin != null) {
+        // MMOItems 아이템 처리
+        if (id.toLowerCase().startsWith("mmoitems:") && MMOItems.plugin != null) {
             try {
-                for (Type type : MMOItems.plugin.getTypes().getAll()) {
-                    MMOItemTemplate template = MMOItems.plugin.getTemplates().getTemplate(type, id);
-                    if (template != null) {
-                        MMOItem item = MMOItems.plugin.getMMOItem(type, id);
+                String[] parts = id.substring("mmoitems:".length()).split("\\.");
+                if (parts.length == 2) {
+                    Type type = MMOItems.plugin.getTypes().get(parts[0].toUpperCase());
+                    if (type != null) {
+                        MMOItem item = MMOItems.plugin.getMMOItem(type, parts[1].toUpperCase());
                         if (item != null) {
                             return new ItemBuilder(Objects.requireNonNull(item.newBuilder().build()));
                         }
@@ -47,6 +52,18 @@ public class ItemBuilder {
             } catch (Exception ignored) {}
         }
 
+        // ItemsAdder 아이템 처리
+        if (id.toLowerCase().startsWith("itemsadder:") && Bukkit.getPluginManager().isPluginEnabled("ItemsAdder")) {
+            try {
+                String iaId = id.substring("itemsadder:".length());
+                CustomStack customStack = CustomStack.getInstance(iaId);
+                if (customStack != null) {
+                    return new ItemBuilder(customStack.getItemStack());
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // 기본 아이템 처리
         try {
             Material mat = Material.valueOf(id.toUpperCase());
             return new ItemBuilder(mat);
@@ -58,6 +75,7 @@ public class ItemBuilder {
     public static List<String> getAvailableItemIds() {
         Set<String> ids = new HashSet<>();
 
+        // MMOItems 아이템 ID 추가
         try {
             if (MMOItems.plugin != null) {
                 for (Type type : MMOItems.plugin.getTypes().getAll()) {
@@ -69,6 +87,14 @@ public class ItemBuilder {
             }
         } catch (Exception ignored) {}
 
+        // ItemsAdder 아이템 ID 추가
+        try {
+            if (Bukkit.getPluginManager().isPluginEnabled("ItemsAdder")) {
+                ids.addAll(CustomStack.getNamespacedIdsInRegistry());
+            }
+        } catch (Exception ignored) {}
+
+        // 기본 아이템 ID 추가
         for (Material mat : Material.values()) {
             ids.add(mat.name());
         }
@@ -170,17 +196,28 @@ public class ItemBuilder {
     public static List<String> getAvailableItemIdsForTab() {
         List<String> results = new ArrayList<>();
 
+        // MMOItems 자동 완성
         try {
             if (MMOItems.plugin != null) {
                 for (Type type : MMOItems.plugin.getTypes().getAll()) {
                     Collection<MMOItemTemplate> templates = MMOItems.plugin.getTemplates().getTemplates(type);
                     for (MMOItemTemplate template : templates) {
-                        results.add("mmoitems:" + type.getId().toLowerCase() + "." + template.getId());
+                        results.add("mmoitems:" + type.getId().toLowerCase() + "." + template.getId().toLowerCase());
                     }
                 }
             }
         } catch (Exception ignored) {}
 
+        // ItemsAdder 자동 완성
+        try {
+            if (Bukkit.getPluginManager().isPluginEnabled("ItemsAdder")) {
+                for (Object namespacedId : CustomStack.getNamespacedIdsInRegistry()) {
+                    results.add("itemsadder:" + namespacedId);
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // 기본 아이템 자동 완성
         for (Material mat : Material.values()) {
             results.add(mat.name().toLowerCase());
         }
