@@ -58,7 +58,7 @@ public class MailService {
             int count = mailsToSend.size();
             Bukkit.getScheduler().runTask(plugin, () -> {
                 sessions.remove(senderId);
-                sender.sendMessage(LangManager.get(lang, "mail.sendall.success").replace("{count}", String.valueOf(count)));
+                sender.sendMessage(LangManager.get(lang, "mail.sendall.success").replace("%count%", String.valueOf(count)));
             });
         }, sendExecutor);
     }
@@ -84,26 +84,12 @@ public class MailService {
         sender.sendMessage(LangManager.get(lang, "mail.send.success"));
     }
 
-    public static boolean claim(Player player, Mail mail) {
-        UUID playerId = player.getUniqueId();
-        String lang = LangManager.getLanguage(playerId);
-        if (!playerId.equals(mail.getReceiver())) return false;
-
-        ItemStack item = mail.getItem();
-        if (item == null || item.getType() == Material.AIR) return false;
-
-        Map<Integer, ItemStack> leftover = player.getInventory().addItem(item.clone());
-        if (!leftover.isEmpty()) return false;
-
-        MailDataManager.getInstance().removeMail(playerId, mail);
-        player.sendMessage(LangManager.get(lang, "mail.claim.success"));
-        return true;
-    }
-
-    // ========== 세션 관리 ==========
-
-    public static void setSession(UUID playerId, MailSession session) {
-        sessions.put(playerId, session);
+    private static MailSession getOrCreateSession(UUID playerId) {
+        return sessions.compute(playerId, (k, v) -> {
+            if (v == null) v = new MailSession();
+            v.lastAccess = System.currentTimeMillis();
+            return v;
+        });
     }
 
     public static MailSession getSession(UUID playerId) {
@@ -116,13 +102,9 @@ public class MailService {
         getOrCreateSession(playerId).target = target.getUniqueId();
     }
 
-    public static UUID getTarget(UUID playerId) {
-        MailSession session = getSession(playerId);
-        return session != null ? session.target : null;
-    }
-
     public static OfflinePlayer getTargetPlayer(UUID playerId) {
-        UUID targetId = getTarget(playerId);
+        MailSession session = getSession(playerId);
+        UUID targetId = (session != null) ? session.target : null;
         return targetId != null ? PlayerCache.getByUUID(targetId) : null;
     }
 
@@ -144,21 +126,10 @@ public class MailService {
         return (session != null && session.time != null) ? new HashMap<>(session.time) : new HashMap<>();
     }
 
-    public static void setContext(UUID playerId, String context) {
-        getOrCreateSession(playerId).context = context;
-    }
-
-    public static String getContext(UUID playerId) {
-        MailSession session = getSession(playerId);
-        return (session != null && session.context != null) ? session.context : "";
-    }
-
-    private static MailSession getOrCreateSession(UUID playerId) {
-        return sessions.compute(playerId, (k, v) -> {
-            if (v == null) v = new MailSession();
-            v.lastAccess = System.currentTimeMillis();
-            return v;
-        });
+    public static long getExpireTime(UUID playerId) {
+        Map<String, Integer> time = getTimeData(playerId);
+        LocalDateTime expire = buildExpireTime(LocalDateTime.now(), time);
+        return expire.atZone(TimeZone.getDefault().toZoneId()).toInstant().toEpochMilli();
     }
 
     private static boolean isValidSession(MailSession session) {
@@ -170,7 +141,9 @@ public class MailService {
     }
 
     private static LocalDateTime buildExpireTime(LocalDateTime base, Map<String, Integer> timeData) {
-        if (timeData == null) return base.plusYears(100);
+        if (timeData == null || timeData.isEmpty()) {
+            return base.plusYears(100);
+        }
         return base
                 .plusYears(timeData.getOrDefault("year", 0))
                 .plusMonths(timeData.getOrDefault("month", 0))
@@ -180,19 +153,10 @@ public class MailService {
                 .plusSeconds(timeData.getOrDefault("second", 0));
     }
 
-    public static long getExpireTime(UUID playerId) {
-        Map<String, Integer> time = getTimeData(playerId);
-        LocalDateTime expire = buildExpireTime(LocalDateTime.now(), time);
-        return expire.atZone(TimeZone.getDefault().toZoneId()).toInstant().toEpochMilli();
-    }
-
-    // ========== 세션 클래스 ==========
-
     public static class MailSession {
         public ItemStack item;
         public Map<String, Integer> time = new HashMap<>();
         public UUID target;
-        public String context = "";
         public long lastAccess = System.currentTimeMillis();
     }
 }

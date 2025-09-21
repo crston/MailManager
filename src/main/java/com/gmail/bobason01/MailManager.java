@@ -2,14 +2,15 @@ package com.gmail.bobason01;
 
 import com.gmail.bobason01.cache.PlayerCache;
 import com.gmail.bobason01.commands.MailCommand;
+import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.gui.*;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.listeners.MailLoginListener;
 import com.gmail.bobason01.mail.MailDataManager;
 import com.gmail.bobason01.mail.MailService;
 import com.gmail.bobason01.task.MailReminderTask;
-import com.gmail.bobason01.utils.ChatListener;
 import org.bukkit.Bukkit;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -18,7 +19,17 @@ import java.util.Objects;
 
 public final class MailManager extends JavaPlugin {
 
-    private static volatile MailManager instance;
+    private static MailManager instance;
+
+    public MailGUI mailGUI;
+    public MailSendGUI mailSendGUI;
+    public MailSendAllGUI mailSendAllGUI;
+    public MailSettingGUI mailSettingGUI;
+    public MailTimeSelectGUI mailTimeSelectGUI;
+    public MailTargetSelectGUI mailTargetSelectGUI;
+    public BlacklistSelectGUI blacklistSelectGUI;
+    public SendAllExcludeGUI sendAllExcludeGUI;
+    public LanguageSelectGUI languageSelectGUI;
 
     public static MailManager getInstance() {
         return instance;
@@ -28,50 +39,42 @@ public final class MailManager extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
-        // config.yml에 기본 언어 설정 추가
-        getConfig().addDefault("default-language", "en");
-        getConfig().options().copyDefaults(true);
-        saveDefaultConfig();
-
-        // 1. 언어 리소스 복사
+        ConfigManager.load(this);
         copyLangFile("en.yml");
         copyLangFile("ko.yml");
-
-        // 2. 언어 파일 및 유저 설정 로드
         LangManager.loadAll(getDataFolder());
-
-        // 3. 데이터 관리 초기화 (언어 설정 포함)
         MailDataManager.getInstance().load(this);
         MailService.init(this);
 
-        // 4. 플레이어 캐시 초기화
-        PlayerCache.refresh(this, 0); // 즉시 초기화
+        this.mailSendGUI = new MailSendGUI(this);
+        this.mailSendAllGUI = new MailSendAllGUI(this);
+        this.mailSettingGUI = new MailSettingGUI(this);
+        this.mailTimeSelectGUI = new MailTimeSelectGUI(this);
+        this.mailTargetSelectGUI = new MailTargetSelectGUI(this);
+        this.blacklistSelectGUI = new BlacklistSelectGUI(this);
+        this.sendAllExcludeGUI = new SendAllExcludeGUI(this);
+        this.languageSelectGUI = new LanguageSelectGUI(this);
+        this.mailGUI = new MailGUI(this);
 
-        // 5. 명령어 등록
+
+        Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> PlayerCache.refresh(this), 0L, 20L * 300);
+
         MailCommand mailCommand = new MailCommand();
-        Objects.requireNonNull(getCommand("mail")).setExecutor(mailCommand);
-        Objects.requireNonNull(getCommand("mail")).setTabCompleter(mailCommand);
+        PluginCommand command = Objects.requireNonNull(getCommand("mail"));
+        command.setExecutor(mailCommand);
+        command.setTabCompleter(mailCommand);
 
-        // 6. 이벤트 리스너 등록
         registerListeners(
-                new MailGUI(this),
-                new MailSendGUI(this),
-                new MailSendAllGUI(this),
-                new MailTimeSelectGUI(this),
-                new MailSettingGUI(this),
-                new MailTargetSelectGUI(this),
-                new BlacklistSelectGUI(this),
-                new SendAllExcludeGUI(this),
-                new MailLoginListener(this),
-                new ChatListener()
+                mailGUI, mailSendGUI, mailSendAllGUI,
+                mailSettingGUI, mailTimeSelectGUI, mailTargetSelectGUI,
+                blacklistSelectGUI, sendAllExcludeGUI, languageSelectGUI,
+                new MailLoginListener(this)
         );
 
-        // 7. 자동 저장 (5분 간격)
-        Bukkit.getScheduler().runTaskTimerAsynchronously(this, () ->
-                MailDataManager.getInstance().save(), 20L * 300, 20L * 300
-        );
+        long autoSaveInterval = 20L * getConfig().getLong("auto-save-interval", 300);
+        Bukkit.getScheduler().runTaskTimerAsynchronously(this,
+                MailDataManager.getInstance()::save, autoSaveInterval, autoSaveInterval);
 
-        // 8. 메일 리마인더 시작
         MailReminderTask.start(this);
 
         getLogger().info("[MailManager] Enabled successfully.");
@@ -85,7 +88,10 @@ public final class MailManager extends JavaPlugin {
 
     private void copyLangFile(String fileName) {
         File langFolder = new File(getDataFolder(), "lang");
-        if (!langFolder.exists()) langFolder.mkdirs();
+        if (!langFolder.exists() && !langFolder.mkdirs()) {
+            getLogger().warning("Could not create lang folder.");
+            return;
+        }
 
         File langFile = new File(langFolder, fileName);
         if (!langFile.exists()) {
@@ -96,5 +102,6 @@ public final class MailManager extends JavaPlugin {
     @Override
     public void onDisable() {
         MailDataManager.getInstance().unload();
+        getLogger().info("[MailManager] Disabled successfully.");
     }
 }

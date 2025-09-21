@@ -7,7 +7,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
-import java.io.Serial;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -15,21 +17,18 @@ import java.util.*;
 
 public class Mail implements Serializable {
 
-    @Serial
-    private static final long serialVersionUID = 1L;
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final Map<UUID, String> nameCache = new HashMap<>();
+    @java.io.Serial
+    private static final long serialVersionUID = 2L;
+    private static final transient DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final transient Map<UUID, String> nameCache = new HashMap<>();
 
     private final UUID mailId;
     private final UUID sender;
     private final UUID receiver;
-    private final ItemStack item;
     private final LocalDateTime sentAt;
     private final LocalDateTime expireAt;
 
-    // 캐시 필드는 직렬화 제외
-    private transient ItemStack cachedDisplay;
-    private transient int cachedItemHash = -1;
+    private transient ItemStack item;
     private transient String cachedSenderName;
 
     public Mail(UUID sender, UUID receiver, ItemStack item, LocalDateTime sentAt, LocalDateTime expireAt) {
@@ -45,86 +44,39 @@ public class Mail implements Serializable {
         this.expireAt = expireAt;
     }
 
-    public UUID getMailId() {
-        return mailId;
-    }
-
-    public UUID getSender() {
-        return sender;
-    }
-
-    public UUID getReceiver() {
-        return receiver;
-    }
-
-    public ItemStack getItem() {
-        return item != null ? item.clone() : null;
-    }
-
-    public LocalDateTime getSentAt() {
-        return sentAt;
-    }
-
-    public LocalDateTime getExpireAt() {
-        return expireAt;
-    }
+    public UUID getMailId() { return mailId; }
+    public UUID getSender() { return sender; }
+    public UUID getReceiver() { return receiver; }
+    public ItemStack getItem() { return item != null ? item.clone() : null; }
+    public LocalDateTime getSentAt() { return sentAt; }
+    public LocalDateTime getExpireAt() { return expireAt; }
 
     public boolean isExpired() {
         return expireAt != null && LocalDateTime.now().isAfter(expireAt);
     }
 
-    public boolean isRead() {
-        return false;
-    }
-
-    public ItemStack toItemStack() {
-        return generateDisplayItem(receiver);
-    }
-
     public ItemStack toItemStack(Player viewer) {
-        return generateDisplayItem(viewer.getUniqueId());
-    }
-
-    private ItemStack generateDisplayItem(UUID viewer) {
         if (item == null) return null;
-
-        int currentHash = computeItemHash(item);
-        if (cachedDisplay == null || cachedItemHash != currentHash) {
-            cachedDisplay = buildDisplayItem(viewer);
-            cachedItemHash = currentHash;
-        }
-        return cachedDisplay;
-    }
-
-    private int computeItemHash(ItemStack item) {
-        if (item == null) return 0;
-        ItemMeta meta = item.getItemMeta();
-        return Objects.hash(
-                item.getType(),
-                item.getAmount(),
-                meta != null && meta.hasDisplayName() ? meta.getDisplayName() : "",
-                meta != null && meta.hasLore() ? meta.getLore() : Collections.emptyList()
-        );
-    }
-
-    private ItemStack buildDisplayItem(UUID viewer) {
         ItemStack display = item.clone();
         ItemMeta meta = display.getItemMeta();
-        if (meta != null) {
-            String lang = LangManager.getLanguage(viewer);
 
+        if (meta != null) {
+            String lang = LangManager.getLanguage(viewer.getUniqueId());
             if (cachedSenderName == null) {
                 cachedSenderName = resolveSenderName(lang);
             }
 
-            meta.setLore(buildLore(lang));
+            List<String> originalLore = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
+            originalLore.addAll(buildMailLore(lang));
+            meta.setLore(originalLore);
             display.setItemMeta(meta);
         }
         return display;
     }
 
-    private List<String> buildLore(String lang) {
+    private List<String> buildMailLore(String lang) {
         List<String> lore = new ArrayList<>();
+        lore.add("§r");
         lore.add("§7" + LangManager.get(lang, "mail.lore.sender").replace("%sender%", cachedSenderName));
         lore.add("§7" + LangManager.get(lang, "mail.lore.sent").replace("%time%", FORMATTER.format(sentAt)));
 
@@ -147,38 +99,36 @@ public class Mail implements Serializable {
         });
     }
 
-    public void onClick(Player player) {
-        if (player == null || !player.isOnline()) return;
-        UUID uuid = player.getUniqueId();
-        String lang = LangManager.getLanguage(uuid);
-
-        if (!isExpired()) {
-            Map<Integer, ItemStack> failed = player.getInventory().addItem(item);
-            if (!failed.isEmpty()) {
-                player.sendMessage(LangManager.get(lang, "mail.receive.failed"));
-                return;
-            }
-            player.sendMessage(LangManager.get(lang, "mail.receive.success"));
-        } else {
-            player.sendMessage(LangManager.get(lang, "mail.expired"));
-        }
-
-        MailDataManager.getInstance().removeMail(receiver, this);
-    }
-
-    public void give(Player player) {
-        if (player != null && player.isOnline() && item != null) {
-            player.getInventory().addItem(item.clone());
-        }
-    }
-
     @Override
     public boolean equals(Object o) {
-        return this == o || (o instanceof Mail m && mailId.equals(m.mailId));
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Mail mail = (Mail) o;
+        return mailId.equals(mail.mailId);
     }
 
     @Override
     public int hashCode() {
         return mailId.hashCode();
+    }
+
+    @java.io.Serial
+    private void writeObject(ObjectOutputStream out) throws IOException {
+        out.defaultWriteObject();
+        if (item != null) {
+            out.writeObject(item.serialize());
+        } else {
+            out.writeObject(null);
+        }
+    }
+
+    @java.io.Serial
+    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> itemMap = (Map<String, Object>) in.readObject();
+        if (itemMap != null) {
+            this.item = ItemStack.deserialize(itemMap);
+        }
     }
 }

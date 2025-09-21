@@ -1,13 +1,14 @@
 package com.gmail.bobason01.gui;
 
+import com.gmail.bobason01.MailManager;
 import com.gmail.bobason01.cache.PlayerCache;
+import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.MailDataManager;
 import com.gmail.bobason01.utils.ItemBuilder;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -15,15 +16,17 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class BlacklistSelectGUI implements Listener {
+public class BlacklistSelectGUI implements Listener, InventoryHolder {
 
     private static final int PAGE_SIZE = 45;
     private static final int SLOT_SEARCH = 45;
@@ -42,6 +45,11 @@ public class BlacklistSelectGUI implements Listener {
         this.plugin = plugin;
     }
 
+    @Override
+    public @NotNull Inventory getInventory() {
+        return null;
+    }
+
     public void open(Player player) {
         open(player, 0);
     }
@@ -56,15 +64,15 @@ public class BlacklistSelectGUI implements Listener {
             try {
                 List<OfflinePlayer> players = PlayerCache.getCachedPlayers().stream()
                         .filter(p -> p.getName() != null && !p.getUniqueId().equals(uuid))
-                        .sorted(Comparator.comparing(OfflinePlayer::getName))
+                        .sorted(Comparator.comparing(OfflinePlayer::getName, String.CASE_INSENSITIVE_ORDER))
                         .toList();
 
-                int maxPage = Math.max((players.size() - 1) / PAGE_SIZE, 0);
+                int maxPage = Math.max(0, (players.size() - 1) / PAGE_SIZE);
                 int safePage = Math.min(Math.max(page, 0), maxPage);
                 int start = safePage * PAGE_SIZE;
                 int end = Math.min(start + PAGE_SIZE, players.size());
                 List<OfflinePlayer> subList = players.subList(start, end);
-                Set<UUID> blocked = new HashSet<>(MailDataManager.getInstance().getBlacklist(uuid));
+                Set<UUID> blocked = MailDataManager.getInstance().getBlacklist(uuid);
 
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     try {
@@ -74,7 +82,7 @@ public class BlacklistSelectGUI implements Listener {
                         String title = LangManager.get(lang, "gui.blacklist.title")
                                 .replace("%page%", String.valueOf(safePage + 1))
                                 .replace("%maxpage%", String.valueOf(maxPage + 1));
-                        Inventory inv = Bukkit.createInventory(player, 54, title);
+                        Inventory inv = Bukkit.createInventory(this, 54, title);
 
                         for (int i = 0; i < subList.size(); i++) {
                             OfflinePlayer target = subList.get(i);
@@ -92,24 +100,21 @@ public class BlacklistSelectGUI implements Listener {
                             }
                         }
 
-                        // Search button
-                        inv.setItem(SLOT_SEARCH, new ItemBuilder(Material.COMPASS)
+                        inv.setItem(SLOT_SEARCH, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BLACKLIST_EXCLUDE_SEARCH))
                                 .name("§b" + LangManager.get(lang, "gui.search.name"))
                                 .lore(LangManager.get(lang, "gui.blacklist.search_prompt"))
                                 .build());
 
-                        // Prev/Next page
                         if (safePage > 0)
-                            inv.setItem(SLOT_PREV, new ItemBuilder(Material.ARROW)
+                            inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON))
                                     .name("§a" + LangManager.get(lang, "gui.previous"))
                                     .build());
                         if (safePage < maxPage)
-                            inv.setItem(SLOT_NEXT, new ItemBuilder(Material.ARROW)
+                            inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON))
                                     .name("§a" + LangManager.get(lang, "gui.next"))
                                     .build());
 
-                        // Back button
-                        inv.setItem(SLOT_BACK, new ItemBuilder(Material.BARRIER)
+                        inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
                                 .name("§c" + LangManager.get(lang, "gui.back.name"))
                                 .lore("§7" + LangManager.get(lang, "gui.back.lore"))
                                 .build());
@@ -127,11 +132,10 @@ public class BlacklistSelectGUI implements Listener {
     }
 
     private boolean hasCooldownPassed(Player player) {
-        UUID uuid = player.getUniqueId();
         long now = System.currentTimeMillis();
-        AtomicLong lastClick = lastClickMap.computeIfAbsent(uuid, k -> new AtomicLong(0));
+        AtomicLong lastClick = lastClickMap.computeIfAbsent(player.getUniqueId(), k -> new AtomicLong(0));
         if (now - lastClick.get() < PAGE_COOLDOWN_MS) {
-            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
+            player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK_FAIL), 1.0f, 0.5f);
             return false;
         }
         lastClick.set(now);
@@ -140,21 +144,18 @@ public class BlacklistSelectGUI implements Listener {
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
-        if (!(e.getWhoClicked() instanceof Player player)) return;
-        UUID uuid = player.getUniqueId();
-        String lang = LangManager.getLanguage(uuid);
-
-        String expectedTitle = LangManager.get(lang, "gui.blacklist.title")
-                .replace("%page%", String.valueOf(pageMap.getOrDefault(uuid, 0) + 1))
-                .replace("%maxpage%", ""); // optional fallback
-        if (!e.getView().getTitle().startsWith(expectedTitle)) return;
+        if (!(e.getInventory().getHolder() instanceof BlacklistSelectGUI) || !(e.getWhoClicked() instanceof Player player)) {
+            return;
+        }
 
         e.setCancelled(true);
         int slot = e.getRawSlot();
-        if (slot < 0 || slot >= e.getInventory().getSize()) return;
+        if (slot < 0) return;
 
+        UUID uuid = player.getUniqueId();
         int page = pageMap.getOrDefault(uuid, 0);
-        Set<UUID> blocked = new HashSet<>(MailDataManager.getInstance().getBlacklist(uuid));
+
+        if (!hasCooldownPassed(player)) return;
 
         switch (slot) {
             case SLOT_SEARCH -> {
@@ -162,39 +163,32 @@ public class BlacklistSelectGUI implements Listener {
                 waitingForSearch.add(uuid);
                 player.sendMessage(LangManager.get(uuid, "gui.blacklist.search_prompt"));
             }
-            case SLOT_PREV -> {
-                if (!hasCooldownPassed(player)) return;
-                open(player, page - 1);
-            }
-            case SLOT_NEXT -> {
-                if (!hasCooldownPassed(player)) return;
-                open(player, page + 1);
-            }
+            case SLOT_PREV -> open(player, page - 1);
+            case SLOT_NEXT -> open(player, page + 1);
             case SLOT_BACK -> {
-                pageMap.remove(uuid);
-                loadingSet.remove(uuid);
-                new MailSettingGUI(plugin).open(player);
+                player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1.0f, 1.0f);
+                MailManager.getInstance().mailSettingGUI.open(player);
             }
             default -> {
                 if (slot < PAGE_SIZE) {
-                    ItemStack clicked = e.getInventory().getItem(slot);
+                    ItemStack clicked = e.getCurrentItem();
                     if (clicked == null || !clicked.hasItemMeta()) return;
-                    String name = Objects.requireNonNull(clicked.getItemMeta()).getDisplayName().replace("§a", "").replace("§c", "").trim();
+                    String name = Objects.requireNonNull(clicked.getItemMeta()).getDisplayName().substring(2).trim();
                     if (name.isEmpty()) return;
 
                     OfflinePlayer target = PlayerCache.getByName(name);
                     if (target == null) return;
 
+                    Set<UUID> blocked = new HashSet<>(MailDataManager.getInstance().getBlacklist(uuid));
                     UUID targetId = target.getUniqueId();
                     if (blocked.contains(targetId)) {
                         blocked.remove(targetId);
                         player.sendMessage(LangManager.get(uuid, "gui.blacklist.unblocked").replace("%name%", name));
-                        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
                     } else {
                         blocked.add(targetId);
                         player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked").replace("%name%", name));
-                        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1.2f);
                     }
+                    player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1f, 1f);
                     MailDataManager.getInstance().setBlacklist(uuid, blocked);
                     open(player, page);
                 }
@@ -204,10 +198,11 @@ public class BlacklistSelectGUI implements Listener {
 
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
-        if (!(e.getPlayer() instanceof Player player)) return;
-        UUID uuid = player.getUniqueId();
-        pageMap.remove(uuid);
-        loadingSet.remove(uuid);
+        if (e.getInventory().getHolder() instanceof BlacklistSelectGUI) {
+            UUID uuid = e.getPlayer().getUniqueId();
+            pageMap.remove(uuid);
+            loadingSet.remove(uuid);
+        }
     }
 
     @EventHandler

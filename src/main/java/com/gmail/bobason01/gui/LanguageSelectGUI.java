@@ -1,29 +1,35 @@
 package com.gmail.bobason01.gui;
 
+import com.gmail.bobason01.MailManager;
+import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.utils.ItemBuilder;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
-import org.bukkit.Sound;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 
-public class LanguageSelectGUI implements Listener {
+public class LanguageSelectGUI implements Listener, InventoryHolder {
 
     private static final int GUI_SIZE = 27;
     private final Plugin plugin;
 
     public LanguageSelectGUI(Plugin plugin) {
         this.plugin = plugin;
-        Bukkit.getPluginManager().registerEvents(this, plugin);
+    }
+
+    @Override
+    public @NotNull Inventory getInventory() {
+        return null;
     }
 
     public void open(Player player) {
@@ -34,23 +40,19 @@ public class LanguageSelectGUI implements Listener {
         sortedLangs.sort(String::compareToIgnoreCase);
 
         String guiTitle = LangManager.get(uuid, "gui.language.title");
-        Inventory inv = Bukkit.createInventory(player, GUI_SIZE, guiTitle);
+        Inventory inv = Bukkit.createInventory(this, GUI_SIZE, guiTitle);
 
         int slot = 0;
         for (String lang : sortedLangs) {
+            if (slot >= GUI_SIZE) break;
             boolean selected = lang.equalsIgnoreCase(currentLang);
             String nameKey = selected ? "gui.language.selected" : "gui.language.unselected";
-            String loreKey = "gui.language.lore";
-
-            // 표시용 언어 이름 + 코드 (예: 한국어 [ko])
             String displayName = LangManager.get(lang, "language.name") + " [" + lang + "]";
 
-            inv.setItem(slot++, new ItemBuilder(Material.PAPER)
+            inv.setItem(slot++, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.LANGUAGE_GUI_ITEM))
                     .name(LangManager.get(uuid, nameKey).replace("%lang%", displayName))
-                    .lore(LangManager.get(uuid, loreKey).replace("%lang%", displayName))
+                    .lore(LangManager.get(uuid, "gui.language.lore"))
                     .build());
-
-            if (slot >= GUI_SIZE) break;
         }
 
         player.openInventory(inv);
@@ -58,11 +60,9 @@ public class LanguageSelectGUI implements Listener {
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
-        if (!(e.getWhoClicked() instanceof Player player)) return;
-
-        UUID uuid = player.getUniqueId();
-        String expectedTitle = LangManager.get(uuid, "gui.language.title");
-        if (!e.getView().getTitle().equals(expectedTitle)) return;
+        if (!(e.getInventory().getHolder() instanceof LanguageSelectGUI) || !(e.getWhoClicked() instanceof Player player)) {
+            return;
+        }
 
         e.setCancelled(true);
         ItemStack clicked = e.getCurrentItem();
@@ -71,28 +71,18 @@ public class LanguageSelectGUI implements Listener {
         String displayName = Objects.requireNonNull(clicked.getItemMeta()).getDisplayName();
         if (displayName == null || displayName.isEmpty()) return;
 
-        // 색 코드 제거
-        String strippedName = ChatColor.stripColor(displayName).trim();
+        String strippedName = ChatColor.stripColor(displayName);
+        int startIndex = strippedName.lastIndexOf('[');
+        int endIndex = strippedName.lastIndexOf(']');
 
-        // 선택한 언어 코드 찾기 (예: "한국어 [ko]"에서 ko 추출)
-        String selectedLang = LangManager.getAvailableLanguages().stream()
-                .filter(langCode -> {
-                    String expectedName = LangManager.get(langCode, "language.name") + " [" + langCode + "]";
-                    return strippedName.equalsIgnoreCase(expectedName);
-                })
-                .findFirst()
-                .orElse(null);
+        if (startIndex == -1 || endIndex == -1 || startIndex >= endIndex) return;
 
-        if (selectedLang == null) return;
+        String selectedLang = strippedName.substring(startIndex + 1, endIndex);
 
-        // 언어 설정
-        LangManager.setLanguage(uuid, selectedLang);
+        if (!LangManager.getAvailableLanguages().contains(selectedLang)) return;
 
-        // 확인 메시지
-        LangManager.get(selectedLang, "language.name");
-        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1.0f, 1.2f);
-
-        // 설정 GUI 다시 열기
-        new MailSettingGUI(plugin).open(player);
+        LangManager.setLanguage(player.getUniqueId(), selectedLang);
+        player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.ACTION_SETTING_CHANGE), 1.0f, 1.2f);
+        MailManager.getInstance().mailSettingGUI.open(player);
     }
 }

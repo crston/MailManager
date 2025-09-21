@@ -1,13 +1,15 @@
 package com.gmail.bobason01.gui;
 
+import com.gmail.bobason01.MailManager;
 import com.gmail.bobason01.cache.PlayerCache;
+import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.MailDataManager;
 import com.gmail.bobason01.utils.ItemBuilder;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -15,15 +17,17 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class SendAllExcludeGUI implements Listener {
+public class SendAllExcludeGUI implements Listener, InventoryHolder {
 
     private static final int PAGE_SIZE = 45;
     private static final int SLOT_PREV = 48;
@@ -42,13 +46,17 @@ public class SendAllExcludeGUI implements Listener {
         this.plugin = plugin;
     }
 
+    @Override
+    public @NotNull Inventory getInventory() {
+        return null;
+    }
+
     public void open(Player player) {
         open(player, 0);
     }
 
     public void open(Player player, int page) {
         UUID uuid = player.getUniqueId();
-        String lang = LangManager.getLanguage(uuid);
         if (!loadingSet.add(uuid)) return;
 
         pageMap.put(uuid, page);
@@ -56,10 +64,10 @@ public class SendAllExcludeGUI implements Listener {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             List<OfflinePlayer> players = PlayerCache.getCachedPlayers().stream()
                     .filter(p -> p.getName() != null && !p.getUniqueId().equals(uuid))
-                    .sorted(Comparator.comparing(OfflinePlayer::getName))
+                    .sorted(Comparator.comparing(OfflinePlayer::getName, String.CASE_INSENSITIVE_ORDER))
                     .toList();
 
-            int maxPage = Math.max((players.size() - 1) / PAGE_SIZE, 0);
+            int maxPage = Math.max(0, (players.size() - 1) / PAGE_SIZE);
             int safePage = Math.min(Math.max(page, 0), maxPage);
             int start = safePage * PAGE_SIZE;
             int end = Math.min(start + PAGE_SIZE, players.size());
@@ -70,15 +78,15 @@ public class SendAllExcludeGUI implements Listener {
                 try {
                     if (!player.isOnline()) return;
 
-                    Inventory inv = Bukkit.createInventory(player, 54,
+                    String lang = LangManager.getLanguage(uuid);
+                    Inventory inv = Bukkit.createInventory(this, 54,
                             LangManager.get(lang, "gui.exclude.title")
                                     .replace("%page%", Integer.toString(safePage + 1))
-                                    .replace("%total%", Integer.toString(maxPage + 1)));
+                                    .replace("%maxpage%", Integer.toString(maxPage + 1)));
 
                     for (int i = 0; i < subList.size(); i++) {
                         OfflinePlayer target = subList.get(i);
-                        UUID targetId = target.getUniqueId();
-                        boolean isExcluded = excludedSet.contains(targetId);
+                        boolean isExcluded = excludedSet.contains(target.getUniqueId());
 
                         ItemStack head = new ItemStack(Material.PLAYER_HEAD);
                         SkullMeta meta = (SkullMeta) head.getItemMeta();
@@ -92,23 +100,12 @@ public class SendAllExcludeGUI implements Listener {
                     }
 
                     if (safePage > 0)
-                        inv.setItem(SLOT_PREV, new ItemBuilder(Material.ARROW)
-                                .name(LangManager.get(lang, "gui.previous"))
-                                .build());
+                        inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON)).name(LangManager.get(lang, "gui.previous")).build());
                     if (safePage < maxPage)
-                        inv.setItem(SLOT_NEXT, new ItemBuilder(Material.ARROW)
-                                .name(LangManager.get(lang, "gui.next"))
-                                .build());
+                        inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON)).name(LangManager.get(lang, "gui.next")).build());
 
-                    inv.setItem(SLOT_SEARCH, new ItemBuilder(Material.COMPASS)
-                            .name(LangManager.get(lang, "gui.exclude.search"))
-                            .lore(LangManager.get(lang, "gui.exclude.search.lore"))
-                            .build());
-
-                    inv.setItem(SLOT_BACK, new ItemBuilder(Material.BARRIER)
-                            .name(LangManager.get(lang, "gui.back.name"))
-                            .lore(LangManager.get(lang, "gui.back.lore"))
-                            .build());
+                    inv.setItem(SLOT_SEARCH, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BLACKLIST_EXCLUDE_SEARCH)).name(LangManager.get(lang, "gui.exclude.search")).lore(LangManager.get(lang, "gui.exclude.search.lore")).build());
+                    inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON)).name(LangManager.get(lang, "gui.back.name")).lore(LangManager.get(lang, "gui.back.lore")).build());
 
                     player.openInventory(inv);
                 } finally {
@@ -119,12 +116,11 @@ public class SendAllExcludeGUI implements Listener {
     }
 
     private boolean hasCooldownPassed(Player player) {
-        UUID uuid = player.getUniqueId();
         long now = System.currentTimeMillis();
-        AtomicLong lastClick = lastClickMap.computeIfAbsent(uuid, k -> new AtomicLong(0));
+        AtomicLong lastClick = lastClickMap.computeIfAbsent(player.getUniqueId(), k -> new AtomicLong(0));
 
         if (now - lastClick.get() < PAGE_COOLDOWN_MS) {
-            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
+            player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK_FAIL), 1.0f, 0.5f);
             return false;
         }
 
@@ -134,60 +130,47 @@ public class SendAllExcludeGUI implements Listener {
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
-        if (!(e.getWhoClicked() instanceof Player player)) return;
-        UUID uuid = player.getUniqueId();
-        String lang = LangManager.getLanguage(uuid);
-        String title = LangManager.get(lang, "gui.exclude.title")
-                .replace("%page%", "")
-                .replace("/%total%", "");
-        if (!e.getView().getTitle().startsWith(title)) return;
+        if (!(e.getInventory().getHolder() instanceof SendAllExcludeGUI) || !(e.getWhoClicked() instanceof Player player)) {
+            return;
+        }
 
         e.setCancelled(true);
         int slot = e.getRawSlot();
-
         if (slot < 0 || slot >= e.getInventory().getSize()) return;
 
+        UUID uuid = player.getUniqueId();
         int page = pageMap.getOrDefault(uuid, 0);
-        Set<UUID> excluded = MailDataManager.getInstance().getExclude(uuid);
+
+        if (!hasCooldownPassed(player)) return;
 
         switch (slot) {
-            case SLOT_PREV -> {
-                if (!hasCooldownPassed(player)) return;
-                open(player, page - 1);
-            }
-            case SLOT_NEXT -> {
-                if (!hasCooldownPassed(player)) return;
-                open(player, page + 1);
-            }
-            case SLOT_BACK -> {
-                pageMap.remove(uuid);
-                loadingSet.remove(uuid);
-                new MailSendAllGUI(plugin).open(player);
-            }
+            case SLOT_PREV -> open(player, page - 1);
+            case SLOT_NEXT -> open(player, page + 1);
+            case SLOT_BACK -> MailManager.getInstance().mailSendAllGUI.open(player);
             case SLOT_SEARCH -> {
                 player.closeInventory();
                 waitingForSearch.add(uuid);
-                player.sendMessage(LangManager.get(lang, "gui.exclude.search.prompt"));
+                player.sendMessage(LangManager.get(uuid, "gui.exclude.search.prompt"));
             }
             default -> {
                 if (slot < PAGE_SIZE) {
                     ItemStack clicked = e.getInventory().getItem(slot);
                     if (clicked == null || !clicked.hasItemMeta()) return;
 
-                    String name = Objects.requireNonNull(clicked.getItemMeta()).getDisplayName().replace("§a", "").replace("§c", "").trim();
+                    String name = ChatColor.stripColor(Objects.requireNonNull(clicked.getItemMeta()).getDisplayName());
                     OfflinePlayer target = PlayerCache.getByName(name);
                     if (target == null) return;
 
+                    Set<UUID> excluded = new HashSet<>(MailDataManager.getInstance().getExclude(uuid));
                     UUID targetId = target.getUniqueId();
                     if (excluded.contains(targetId)) {
                         excluded.remove(targetId);
-                        player.sendMessage(LangManager.get(lang, "gui.exclude.included").replace("%name%", name));
-                        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
+                        player.sendMessage(LangManager.get(uuid, "gui.exclude.included").replace("%name%", name));
                     } else {
                         excluded.add(targetId);
-                        player.sendMessage(LangManager.get(lang, "gui.exclude.excluded").replace("%name%", name));
-                        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1.2f);
+                        player.sendMessage(LangManager.get(uuid, "gui.exclude.excluded").replace("%name%", name));
                     }
+                    player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1f, 1f);
                     MailDataManager.getInstance().setExclude(uuid, excluded);
                     open(player, page);
                 }
@@ -197,23 +180,17 @@ public class SendAllExcludeGUI implements Listener {
 
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
-        if (!(e.getPlayer() instanceof Player player)) return;
-        String title = e.getView().getTitle();
-        UUID uuid = player.getUniqueId();
-        String lang = LangManager.getLanguage(uuid);
-        String baseTitle = LangManager.get(lang, "gui.exclude.title")
-                .replace("%page%", "").replace("/%total%", "");
-        if (!title.startsWith(baseTitle)) return;
-
-        pageMap.remove(uuid);
-        loadingSet.remove(uuid);
+        if (e.getInventory().getHolder() instanceof SendAllExcludeGUI) {
+            UUID uuid = e.getPlayer().getUniqueId();
+            pageMap.remove(uuid);
+            loadingSet.remove(uuid);
+        }
     }
 
     @EventHandler
     public void onChat(AsyncPlayerChatEvent e) {
         Player player = e.getPlayer();
         UUID uuid = player.getUniqueId();
-        String lang = LangManager.getLanguage(uuid);
         if (!waitingForSearch.remove(uuid)) return;
 
         e.setCancelled(true);
@@ -224,20 +201,20 @@ public class SendAllExcludeGUI implements Listener {
             int currentPage = pageMap.getOrDefault(uuid, 0);
 
             if (target == null || target.getName() == null) {
-                player.sendMessage(LangManager.get(lang, "gui.exclude.notfound").replace("%input%", input));
+                player.sendMessage(LangManager.get(uuid, "gui.exclude.notfound").replace("%input%", input));
                 open(player, currentPage);
                 return;
             }
 
-            Set<UUID> excluded = MailDataManager.getInstance().getExclude(uuid);
+            Set<UUID> excluded = new HashSet<>(MailDataManager.getInstance().getExclude(uuid));
             UUID targetId = target.getUniqueId();
 
             if (excluded.contains(targetId)) {
                 excluded.remove(targetId);
-                player.sendMessage(LangManager.get(lang, "gui.exclude.included").replace("%name%", target.getName()));
+                player.sendMessage(LangManager.get(uuid, "gui.exclude.included").replace("%name%", target.getName()));
             } else {
                 excluded.add(targetId);
-                player.sendMessage(LangManager.get(lang, "gui.exclude.excluded").replace("%name%", target.getName()));
+                player.sendMessage(LangManager.get(uuid, "gui.exclude.excluded").replace("%name%", target.getName()));
             }
 
             MailDataManager.getInstance().setExclude(uuid, excluded);

@@ -9,18 +9,13 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
 
-/**
- * 플레이어의 채팅 입력을 일시적으로 가로채 특정 GUI나 기능에 연결할 수 있게 해주는 유틸.
- */
 public class ChatSearchRegistry implements Listener {
 
     private static final long TTL_MILLIS = 2 * 60 * 1000;
     private static final Map<UUID, CallbackEntry> registry = new ConcurrentHashMap<>();
-
-    private static final ScheduledExecutorService cleaner = Executors.newScheduledThreadPool(1, r -> {
-        Thread t = new Thread(r);
+    private static final ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "ChatSearchRegistry-Cleanup");
         t.setDaemon(true);
-        t.setName("ChatSearchRegistry-Cleanup");
         return t;
     });
 
@@ -29,26 +24,11 @@ public class ChatSearchRegistry implements Listener {
     }
 
     public static void register(Player player, ChatCallback callback) {
-        registry.compute(player.getUniqueId(), (uuid, existing) -> new CallbackEntry(callback, System.currentTimeMillis()));
-    }
-
-    public static void unregister(UUID uuid) {
-        registry.remove(uuid);
-    }
-
-    public static void handle(UUID uuid, String input) {
-        CallbackEntry entry = registry.remove(uuid);
-        if (entry != null && !entry.isExpired(System.currentTimeMillis())) {
-            entry.callback.onChat(input);
-        }
+        registry.put(player.getUniqueId(), new CallbackEntry(callback, System.currentTimeMillis()));
     }
 
     public static ChatCallback consume(Player player) {
-        return consume(player.getUniqueId());
-    }
-
-    public static ChatCallback consume(UUID uuid) {
-        CallbackEntry entry = registry.remove(uuid);
+        CallbackEntry entry = registry.remove(player.getUniqueId());
         return (entry != null && !entry.isExpired(System.currentTimeMillis())) ? entry.callback : null;
     }
 

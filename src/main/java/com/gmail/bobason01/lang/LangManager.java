@@ -1,12 +1,19 @@
 package com.gmail.bobason01.lang;
 
 import com.gmail.bobason01.mail.MailDataManager;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 
 public class LangManager {
 
@@ -24,13 +31,21 @@ public class LangManager {
         }
 
         File langFolder = new File(dataFolder, "lang");
-        if (!langFolder.exists()) langFolder.mkdirs();
+        if (!langFolder.exists()) {
+            langFolder.mkdirs();
+        }
 
         File[] files = langFolder.listFiles((dir, name) -> name.endsWith(".yml"));
         if (files != null) {
             for (File file : files) {
                 String lang = file.getName().replace(".yml", "");
-                langConfigs.put(lang, YamlConfiguration.loadConfiguration(file));
+                YamlConfiguration config = new YamlConfiguration();
+                try (InputStreamReader reader = new InputStreamReader(Files.newInputStream(file.toPath()), StandardCharsets.UTF_8)) {
+                    config.load(reader);
+                    langConfigs.put(lang, config);
+                } catch (IOException | InvalidConfigurationException e) {
+                    Bukkit.getLogger().log(Level.WARNING, "[MailManager] Failed to load language file: " + file.getName(), e);
+                }
             }
         }
 
@@ -51,14 +66,19 @@ public class LangManager {
     }
 
     public static String get(String lang, String key) {
-        YamlConfiguration config = langConfigs.getOrDefault(lang, langConfigs.get(defaultLang));
+        YamlConfiguration config = langConfigs.get(lang);
+        if (config == null) {
+            config = langConfigs.get(defaultLang);
+        }
         if (config == null) {
             config = langConfigs.get("en");
         }
         if (config == null) {
             return "§c[ERROR] Language files not found!";
         }
-        return ChatColor.translateAlternateColorCodes('&', config.getString(key, "§cMissing: " + lang + "/" + key));
+
+        String message = config.getString(key, "§cMissing: " + lang + "/" + key);
+        return ChatColor.translateAlternateColorCodes('&', message);
     }
 
     public static void setLanguage(UUID uuid, String lang) {

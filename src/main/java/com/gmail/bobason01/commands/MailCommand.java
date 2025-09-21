@@ -1,8 +1,6 @@
 package com.gmail.bobason01.commands;
 
-import com.gmail.bobason01.gui.MailGUI;
-import com.gmail.bobason01.gui.MailSendAllGUI;
-import com.gmail.bobason01.gui.MailSendGUI;
+import com.gmail.bobason01.MailManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.Mail;
 import com.gmail.bobason01.mail.MailDataManager;
@@ -11,15 +9,25 @@ import net.Indyuce.mmoitems.MMOItems;
 import net.Indyuce.mmoitems.api.Type;
 import net.Indyuce.mmoitems.api.item.mmoitem.MMOItem;
 import net.Indyuce.mmoitems.api.item.template.MMOItemTemplate;
-import org.bukkit.*;
-import org.bukkit.command.*;
+import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class MailCommand implements CommandExecutor, TabCompleter {
@@ -33,12 +41,12 @@ public class MailCommand implements CommandExecutor, TabCompleter {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
         UUID senderId = (sender instanceof Player p) ? p.getUniqueId() : SERVER_UUID;
-        Plugin plugin = Bukkit.getPluginManager().getPlugin("MailManager");
+        Plugin plugin = MailManager.getInstance();
         String lang = (sender instanceof Player p) ? LangManager.getLanguage(p.getUniqueId()) : "en";
 
         if (args.length == 0) {
             if (sender instanceof Player player) {
-                new MailGUI(plugin).open(player);
+                MailManager.getInstance().mailGUI.open(player);
             } else {
                 sender.sendMessage(LangManager.get(lang, "cmd.gui.unavailable"));
             }
@@ -50,7 +58,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
         if (sub.equalsIgnoreCase("send")) {
             if (args.length < 3) {
-                if (isPlayer) new MailSendGUI(plugin).open((Player) sender);
+                if (isPlayer) MailManager.getInstance().mailSendGUI.open((Player) sender);
                 else sender.sendMessage(LangManager.get(lang, "cmd.send.usage"));
                 return true;
             }
@@ -73,7 +81,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
 
-
             ItemStack item = parseItem(itemId);
             if (item == null || item.getType() == Material.AIR) {
                 sender.sendMessage(LangManager.get(lang, "cmd.item.invalid").replace("%id%", itemId));
@@ -95,7 +102,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
         if (sub.equalsIgnoreCase("sendall")) {
             if (args.length < 2) {
-                if (isPlayer) new MailSendAllGUI(plugin).open((Player) sender);
+                if (isPlayer) MailManager.getInstance().mailSendAllGUI.open((Player) sender);
                 else sender.sendMessage(LangManager.get(lang, "cmd.sendall.usage"));
                 return true;
             }
@@ -167,7 +174,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
     }
 
     private ItemStack parseItem(String id) {
-        // MMOItems 처리
         if (id.regionMatches(true, 0, MMOITEMS_PREFIX, 0, MMOITEMS_PREFIX.length())) {
             if (!Bukkit.getPluginManager().isPluginEnabled("MMOItems")) return null;
             try {
@@ -183,7 +189,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             return null;
         }
 
-        // ItemsAdder 처리
         if (id.regionMatches(true, 0, ITEMSADDER_PREFIX, 0, ITEMSADDER_PREFIX.length())) {
             if (!Bukkit.getPluginManager().isPluginEnabled("ItemsAdder")) return null;
             try {
@@ -194,7 +199,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             return null;
         }
 
-        // 기본 아이템 처리
         Material mat = Material.matchMaterial(id.toUpperCase());
         return (mat != null) ? new ItemStack(mat) : null;
     }
@@ -244,7 +248,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
         if ((len == 2 && sub.equalsIgnoreCase("sendall")) || (len == 3 && sub.equalsIgnoreCase("send"))) {
             List<String> result = new ArrayList<>();
 
-            // MMOItems 자동 완성
             if (Bukkit.getPluginManager().isPluginEnabled("MMOItems")) {
                 try {
                     for (Type type : MMOItems.plugin.getTypes().getAll()) {
@@ -258,7 +261,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 } catch (Exception ignored) {}
             }
 
-            // ItemsAdder 자동 완성
             if (Bukkit.getPluginManager().isPluginEnabled("ItemsAdder")) {
                 try {
                     for (Object namespacedId : CustomStack.getNamespacedIdsInRegistry()) {
@@ -270,7 +272,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 } catch (Exception ignored) {}
             }
 
-            // 기본 아이템 자동 완성
             for (Material mat : Material.values()) {
                 if (mat.isItem() && mat.name().toLowerCase().startsWith(prefix)) {
                     result.add(mat.name().toLowerCase());

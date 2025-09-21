@@ -1,24 +1,31 @@
 package com.gmail.bobason01.gui;
 
+import com.gmail.bobason01.MailManager;
+import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.MailService;
 import com.gmail.bobason01.utils.ItemBuilder;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
-import org.bukkit.Sound;
 import org.bukkit.conversations.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.NotNull;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class MailTimeSelectGUI implements Listener {
+public class MailTimeSelectGUI implements Listener, InventoryHolder {
 
     private static final List<String> TIME_UNITS = List.of("second", "minute", "hour", "day", "month", "year");
     private static final int UNIT_START_SLOT = 10;
@@ -26,46 +33,54 @@ public class MailTimeSelectGUI implements Listener {
     private static final int CHAT_INPUT_SLOT = 27;
     private static final int CONFIRM_SLOT = 31;
     private static final int BACK_SLOT = 35;
+    private static final Pattern TIME_PATTERN = Pattern.compile("(\\d+)([smhdMy])");
 
     private final Plugin plugin;
+    private final Map<UUID, Class<? extends InventoryHolder>> parentGuiMap = new ConcurrentHashMap<>();
 
     public MailTimeSelectGUI(Plugin plugin) {
         this.plugin = plugin;
     }
 
-    public void open(Player player) {
+    @Override
+    public @NotNull Inventory getInventory() {
+        return null;
+    }
+
+    public void open(Player player, Class<? extends InventoryHolder> parent) {
         UUID uuid = player.getUniqueId();
+        parentGuiMap.put(uuid, parent);
+
         String lang = LangManager.getLanguage(uuid);
         Map<String, Integer> time = MailService.getTimeData(uuid);
-        Inventory inv = Bukkit.createInventory(player, 36, LangManager.get(lang, "gui.time.title"));
+        Inventory inv = Bukkit.createInventory(this, 36, LangManager.get(lang, "gui.time.title"));
 
         for (int i = 0; i < TIME_UNITS.size(); i++) {
             String unit = TIME_UNITS.get(i);
             int value = time.getOrDefault(unit, 0);
 
-            inv.setItem(UNIT_START_SLOT + i, new ItemBuilder(Material.CLOCK)
-                    .name(LangManager.get(lang, "gui.time-unit." + unit + ".name")
-                            .replace("%value%", String.valueOf(value)))
+            inv.setItem(UNIT_START_SLOT + i, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_UNIT))
+                    .name(LangManager.get(lang, "gui.time-unit." + unit + ".name").replace("%value%", String.valueOf(value)))
                     .lore(LangManager.get(lang, "gui.time-unit.lore"))
                     .build());
         }
 
-        inv.setItem(PERMANENT_SLOT, new ItemBuilder(Material.BARRIER)
+        inv.setItem(PERMANENT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_PERMANENT))
                 .name(LangManager.get(lang, "gui.permanent.name"))
                 .lore(LangManager.get(lang, "gui.permanent.lore"))
                 .build());
 
-        inv.setItem(CHAT_INPUT_SLOT, new ItemBuilder(Material.WRITABLE_BOOK)
+        inv.setItem(CHAT_INPUT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_CHAT_INPUT))
                 .name(LangManager.get(lang, "gui.time-chat-input.name"))
                 .lore(LangManager.get(lang, "gui.time-chat-input.lore"))
                 .build());
 
-        inv.setItem(CONFIRM_SLOT, new ItemBuilder(Material.LIME_CONCRETE)
+        inv.setItem(CONFIRM_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_CONFIRM))
                 .name(LangManager.get(lang, "gui.select-complete.name"))
                 .lore(LangManager.get(lang, "gui.select-complete.lore"))
                 .build());
 
-        inv.setItem(BACK_SLOT, new ItemBuilder(Material.ARROW)
+        inv.setItem(BACK_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
                 .name(LangManager.get(lang, "gui.back.name"))
                 .lore(LangManager.get(lang, "gui.back.lore"))
                 .build());
@@ -75,14 +90,12 @@ public class MailTimeSelectGUI implements Listener {
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
-        if (!(e.getWhoClicked() instanceof Player player)) return;
-
-        UUID uuid = player.getUniqueId();
-        String lang = LangManager.getLanguage(uuid);
-
-        if (!e.getView().getTitle().equals(LangManager.get(lang, "gui.time.title"))) return;
+        if (!(e.getInventory().getHolder() instanceof MailTimeSelectGUI) || !(e.getWhoClicked() instanceof Player player)) {
+            return;
+        }
 
         e.setCancelled(true);
+        UUID uuid = player.getUniqueId();
         int slot = e.getRawSlot();
         Map<String, Integer> time = MailService.getTimeData(uuid);
 
@@ -91,82 +104,86 @@ public class MailTimeSelectGUI implements Listener {
             String unit = TIME_UNITS.get(index);
             int value = time.getOrDefault(unit, 0);
 
-            switch (e.getClick()) {
-                case SHIFT_LEFT -> value = Math.max(0, value - 10);
-                case SHIFT_RIGHT -> value += 10;
-                case LEFT -> value = Math.max(0, value - 1);
-                case RIGHT -> value += 1;
-            }
+            ClickType click = e.getClick();
+            if (click.isShiftClick()) value += (click.isLeftClick() ? 10 : -10);
+            else value += (click.isLeftClick() ? 1 : -1);
+            value = Math.max(0, value);
 
             time.put(unit, value);
             MailService.setTimeData(uuid, time);
-            player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1, 1);
-            open(player);
+            player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1, 1);
+            open(player, parentGuiMap.get(uuid));
             return;
         }
 
-        if (slot == PERMANENT_SLOT) {
-            MailService.setTimeData(uuid, new HashMap<>());
-            player.sendMessage(LangManager.get(uuid, "time.permanent"));
-            player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1, 1);
-            open(player);
-            return;
+        switch (slot) {
+            case PERMANENT_SLOT -> {
+                MailService.setTimeData(uuid, new HashMap<>());
+                player.sendMessage(LangManager.get(uuid, "time.permanent"));
+                player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1, 1);
+                open(player, parentGuiMap.get(uuid));
+            }
+            case CHAT_INPUT_SLOT -> {
+                player.closeInventory();
+                player.sendMessage(LangManager.get(uuid, "time.chat.prompt"));
+                buildConversation(player).begin();
+            }
+            case CONFIRM_SLOT, BACK_SLOT -> goBack(player);
         }
+    }
 
-        if (slot == CHAT_INPUT_SLOT) {
-            player.closeInventory();
-            player.sendMessage(LangManager.get(uuid, "time.chat.prompt"));
+    private void goBack(Player player) {
+        player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.ACTION_SELECTION_COMPLETE), 1, 1.2f);
+        Class<?> parentClass = parentGuiMap.remove(player.getUniqueId());
+        MailManager manager = MailManager.getInstance();
 
-            new ConversationFactory(plugin)
-                    .withFirstPrompt(new Prompt() {
-                        @Override
-                        public boolean blocksForInput(ConversationContext context) {
-                            return true;
-                        }
+        if (parentClass == MailSendGUI.class) {
+            manager.mailSendGUI.open(player);
+        } else if (parentClass == MailSendAllGUI.class) {
+            manager.mailSendAllGUI.open(player);
+        } else {
+            manager.mailGUI.open(player);
+        }
+    }
 
-                        @Override
-                        public String getPromptText(ConversationContext context) {
-                            return LangManager.get(uuid, "time.chat.instruction");
-                        }
+    private Conversation buildConversation(Player player) {
+        UUID uuid = player.getUniqueId();
+        return new ConversationFactory(plugin)
+                .withFirstPrompt(new StringPrompt() {
+                    @NotNull
+                    @Override
+                    public String getPromptText(@NotNull ConversationContext context) {
+                        return LangManager.get(uuid, "time.chat.instruction");
+                    }
 
-                        @Override
-                        public Prompt acceptInput(ConversationContext context, String input) {
-                            if (input.trim().equals("-1")) {
-                                MailService.setTimeData(uuid, new HashMap<>());
-                                player.sendMessage(LangManager.get(uuid, "time.permanent"));
-                                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1, 1);
+                    @Override
+                    public Prompt acceptInput(@NotNull ConversationContext context, String input) {
+                        if (input == null || input.isBlank()) {
+                            player.sendMessage(LangManager.get(uuid, "time.chat.invalid"));
+                        } else if (input.trim().equals("-1")) {
+                            MailService.setTimeData(uuid, new HashMap<>());
+                            player.sendMessage(LangManager.get(uuid, "time.permanent"));
+                        } else {
+                            Map<String, Integer> result = parseTimeInput(input);
+                            if (result.isEmpty()) {
+                                player.sendMessage(LangManager.get(uuid, "time.chat.invalid"));
                             } else {
-                                Map<String, Integer> result = parseTimeInput(input);
-                                if (result.isEmpty()) {
-                                    player.sendMessage(LangManager.get(uuid, "time.chat.invalid"));
-                                } else {
-                                    MailService.setTimeData(uuid, result);
-                                    player.sendMessage(LangManager.get(uuid, "time.chat.success"));
-                                    player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1, 1);
-                                }
+                                MailService.setTimeData(uuid, result);
+                                player.sendMessage(LangManager.get(uuid, "time.chat.success"));
                             }
-                            open(player);
-                            return Prompt.END_OF_CONVERSATION;
                         }
-                    }).withLocalEcho(false).buildConversation(player).begin();
-            return;
-        }
-
-        if (slot == CONFIRM_SLOT) {
-            player.sendMessage(LangManager.get(uuid, "time.confirmed"));
-            player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1, 1.2f);
-            new MailSendGUI(plugin).open(player);
-            return;
-        }
-
-        if (slot == BACK_SLOT) {
-            new MailSendGUI(plugin).open(player);
-        }
+                        Bukkit.getScheduler().runTask(plugin, () -> open(player, parentGuiMap.get(uuid)));
+                        return Prompt.END_OF_CONVERSATION;
+                    }
+                })
+                .withLocalEcho(false)
+                .withTimeout(30)
+                .buildConversation(player);
     }
 
     private Map<String, Integer> parseTimeInput(String input) {
         Map<String, Integer> result = new HashMap<>();
-        Matcher matcher = Pattern.compile("(\\d+)([smhdMy])").matcher(input);
+        Matcher matcher = TIME_PATTERN.matcher(input);
         while (matcher.find()) {
             int value = Integer.parseInt(matcher.group(1));
             String unit = switch (matcher.group(2)) {

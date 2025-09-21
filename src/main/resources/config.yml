@@ -1,23 +1,59 @@
-# MailManager 기본 설정 파일
+# MailManager Config File
 
-# 기본 언어 설정 (ko 또는 en 등)
+# Set default language (ko or en, etc.)
 default-language: en
 
-# 우편 알림 반복 간격 (초 단위)
-mail-reminder-interval: 300
-
-# 데이터 저장 주기 (초 단위)
+# Data auto-save cycle (in seconds)
 auto-save-interval: 300
 
-# 발송 제한 (일괄 발송 최대 수신자 수)
-send-all-limit: 1000
+# --- GUI Item Setting ---
+# Use the Bukkit Item Name. (예: https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Material.html)
+items:
+  mail_gui:
+    send_button: WRITABLE_BOOK
+    setting_button: COMPARATOR
+  page:
+    next_button: ARROW
+    previous_button: ARROW
+  back_button: BARRIER
+  setting_gui:
+    notify_on: LIME_DYE
+    notify_off: GRAY_DYE
+    blacklist_button: BARRIER
+    language_button: BOOK
+  language_gui:
+    language_item: PAPER
+  send_gui:
+    time_button: CLOCK
+    target_button: PLAYER_HEAD
+    confirm_button: GREEN_WOOL
+  send_all_gui:
+    exclude_button: BARRIER
+    confirm_button: GREEN_WOOL
+  time_gui:
+    time_unit_item: CLOCK
+    permanent_button: BARRIER
+    chat_input_button: WRITABLE_BOOK
+    confirm_button: LIME_CONCRETE
+  blacklist_exclude_gui:
+    search_button: COMPASS
+  delete_gui:
+    confirm_button: RED_WOOL
+    cancel_button: GREEN_WOOL
 
-# GUI 페이지당 표시할 항목 수
-gui:
-  mails-per-page: 36
-  players-per-page: 45
-
-# 데이터베이스 설정 (현재는 SQLite만 지원)
-database:
-  type: sqlite
-  file-name: mail_data.db
+# --- Sound Effect Settings ---
+## Use the Bukkit Sound name. (Example: https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Sound.html)
+sounds:
+  gui:
+    click: UI_BUTTON_CLICK
+    click_fail: BLOCK_NOTE_BLOCK_BASS
+    page_turn: ITEM_BOOK_PAGE_TURN
+  mail:
+    claim_success: ENTITY_ITEM_PICKUP
+    claim_fail: ENTITY_VILLAGER_NO
+    delete_success: BLOCK_ANVIL_LAND
+    send_success: ENTITY_PLAYER_LEVELUP
+    receive_notification: UI_TOAST_IN
+  action:
+    setting_change: ENTITY_EXPERIENCE_ORB_PICKUP
+    selection_complete: BLOCK_NOTE_BLOCK_PLING

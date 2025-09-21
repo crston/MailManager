@@ -1,6 +1,7 @@
 package com.gmail.bobason01.utils;
 
 import com.gmail.bobason01.lang.LangManager;
+
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -27,8 +28,7 @@ public final class TimeUtil {
             if (value > 0) {
                 hasValid = true;
                 builder.append(value)
-                        .append(' ')
-                        .append(LangManager.get(lang, "time." + unit))
+                        .append(LangManager.get(lang, "time.unit." + unit))
                         .append(' ');
             }
         }
@@ -37,7 +37,9 @@ public final class TimeUtil {
     }
 
     public static String formatDateTime(long epochMillis) {
-        if (epochMillis <= 0) return "∞";
+        if (epochMillis <= 0 || epochMillis >= LocalDateTime.now().plusYears(99).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()) {
+            return LangManager.get("en", "gui.send.time.no_expire");
+        }
 
         LocalDateTime time = Instant.ofEpochMilli(epochMillis)
                 .atZone(ZoneId.systemDefault())
