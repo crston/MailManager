@@ -5,6 +5,7 @@ import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.MailService;
 import com.gmail.bobason01.utils.ItemBuilder;
+import com.gmail.bobason01.utils.TimeUtil; // TimeUtil import 추가
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -17,10 +18,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*; // List, Map import 추가
 
 public class MailSendAllGUI implements Listener, InventoryHolder {
 
@@ -44,12 +42,28 @@ public class MailSendAllGUI implements Listener, InventoryHolder {
 
     public void open(Player player) {
         UUID uuid = player.getUniqueId();
+        String lang = LangManager.getLanguage(uuid); // lang 변수 추가
         String title = LangManager.get(uuid, "gui.sendall.title");
         Inventory inv = Bukkit.createInventory(this, 27, title);
 
+        // --- 시간 표시 로직 시작 ---
+        Map<String, Integer> timeData = MailService.getTimeData(uuid);
+        String formatted = TimeUtil.format(timeData, lang);
+        long expireAt = MailService.getExpireTime(uuid);
+        String formattedExpire = TimeUtil.formatDateTime(expireAt, lang);
+
+        List<String> timeLore = new ArrayList<>();
+        timeLore.add(LangManager.get(uuid, "gui.sendall.time.duration").replace("%time%", formatted));
+        if (expireAt > 0 && expireAt < Long.MAX_VALUE) {
+            timeLore.add(LangManager.get(uuid, "gui.sendall.time.expires").replace("%date%", formattedExpire));
+        } else {
+            timeLore.add(LangManager.get(uuid, "gui.sendall.time.no_expire"));
+        }
+        // --- 시간 표시 로직 끝 ---
+
         inv.setItem(SLOT_TIME, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_GUI_TIME))
                 .name(LangManager.get(uuid, "gui.sendall.expire.name"))
-                .lore(LangManager.get(uuid, "gui.sendall.expire.lore"))
+                .lore(timeLore) // 수정된 lore 적용
                 .build());
 
         inv.setItem(SLOT_EXCLUDE, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_ALL_GUI_EXCLUDE))

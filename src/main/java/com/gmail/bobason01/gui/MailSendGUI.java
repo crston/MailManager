@@ -53,7 +53,7 @@ public class MailSendGUI implements Listener, InventoryHolder {
         Map<String, Integer> timeData = MailService.getTimeData(uuid);
         String formatted = TimeUtil.format(timeData, lang);
         long expireAt = MailService.getExpireTime(uuid);
-        String formattedExpire = TimeUtil.formatDateTime(expireAt);
+        String formattedExpire = TimeUtil.formatDateTime(expireAt, lang);
 
         List<String> timeLore = new ArrayList<>();
         timeLore.add(LangManager.get(uuid, "gui.send.time.duration").replace("%time%", formatted));

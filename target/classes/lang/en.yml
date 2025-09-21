@@ -82,7 +82,7 @@ gui:
       name: "&bSet Expiration Time"
       duration: "&fExpires in: &e%time%"
       expires: "&fExpires on: &e%date%"
-      no_expire: "&fExpires in: &aPermanent"
+      no_expire: "&aPermanent"
     target:
       name: "&dSelect Recipient"
       lore: "&7Choose who to send the mail to."
@@ -108,7 +108,7 @@ gui:
     enabled: "&aMail notifications have been enabled."
     disabled: "&cMail notifications have been disabled."
   blacklist:
-    title: "Blacklist (%page%/%maxpage%)"
+    title: "Blacklist"
     search_prompt: "&7Block incoming mail from specific players."
     allowed: "&aNot Blocked"
     blocked: "&cBlocked"
@@ -116,7 +116,7 @@ gui:
     blocked_msg: "&cBlocked %name%."
     not_found: "&cPlayer '%input%' not found."
   exclude:
-    title: "Exclusion List (%page%/%maxpage%)"
+    title: "Exclusion List"
     search: "&bSearch Player"
     search.lore: "&7Search for a player by name to toggle."
     search.prompt: "&eEnter the player name to search in chat."

@@ -36,9 +36,9 @@ public final class TimeUtil {
         return hasValid ? builder.toString().trim() : LangManager.get(lang, "time.permanent");
     }
 
-    public static String formatDateTime(long epochMillis) {
+    public static String formatDateTime(long epochMillis, String lang) {
         if (epochMillis <= 0 || epochMillis >= LocalDateTime.now().plusYears(99).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()) {
-            return LangManager.get("en", "gui.send.time.no_expire");
+            return LangManager.get(lang, "gui.send.time.no_expire");
         }
 
         LocalDateTime time = Instant.ofEpochMilli(epochMillis)

@@ -4,6 +4,7 @@ import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.utils.ItemBuilder;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -24,12 +25,12 @@ public class MailDeleteConfirmGUI implements InventoryHolder {
 
     private void setupItems(Player player) {
         inventory.setItem(YES_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.DELETE_GUI_CONFIRM_BUTTON))
-                .name(LangManager.get(player.getUniqueId(), "gui.delete.yes"))
+                .name(ChatColor.translateAlternateColorCodes('&', "&cYES")) // 이렇게 수정해주세요.
                 .lore(LangManager.get(player.getUniqueId(), "gui.delete.yes_lore"))
                 .build());
 
         inventory.setItem(NO_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.DELETE_GUI_CANCEL_BUTTON))
-                .name(LangManager.get(player.getUniqueId(), "gui.delete.no"))
+                .name(ChatColor.translateAlternateColorCodes('&', "&aNO")) // 여기도 수정해주세요.
                 .lore(LangManager.get(player.getUniqueId(), "gui.delete.no_lore"))
                 .build());
     }
