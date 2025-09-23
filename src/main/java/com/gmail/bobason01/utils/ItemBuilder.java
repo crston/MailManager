@@ -51,6 +51,15 @@ public class ItemBuilder {
         return this;
     }
 
+    public ItemBuilder customModelData(int data) {
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setCustomModelData(data);
+            item.setItemMeta(meta);
+        }
+        return this;
+    }
+
     public ItemStack build() {
         return item;
     }

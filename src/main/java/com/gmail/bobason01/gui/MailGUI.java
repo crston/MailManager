@@ -82,11 +82,11 @@ public class MailGUI implements Listener, InventoryHolder {
             inv.setItem(i - start, item);
         }
 
-        if (page > 0) inv.setItem(PREV_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON), LangManager.get(uuid, "gui.previous")));
-        if (end < mails.size()) inv.setItem(NEXT_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON), LangManager.get(uuid, "gui.next")));
+        if (page > 0) inv.setItem(PREV_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON).getType(), LangManager.get(uuid, "gui.previous")));
+        if (end < mails.size()) inv.setItem(NEXT_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON).getType(), LangManager.get(uuid, "gui.next")));
 
-        inv.setItem(SEND_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SEND_BUTTON), LangManager.get(uuid, "gui.send.title")));
-        inv.setItem(SETTING_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SETTING_BUTTON), LangManager.get(uuid, "gui.setting.title")));
+        inv.setItem(SEND_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SEND_BUTTON).getType(), LangManager.get(uuid, "gui.send.title")));
+        inv.setItem(SETTING_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SETTING_BUTTON).getType(), LangManager.get(uuid, "gui.setting.title")));
 
         player.openInventory(inv);
     }

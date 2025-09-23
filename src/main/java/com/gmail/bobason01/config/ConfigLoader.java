@@ -3,12 +3,15 @@ package com.gmail.bobason01.config;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
 
 import java.io.File;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -23,7 +26,6 @@ public final class ConfigLoader {
     public static void load(Plugin plugin) {
         if (configRef.get() != null) return;
 
-        // Load config.yml
         configFile = new File(plugin.getDataFolder(), "config.yml");
         if (!configFile.exists()) {
             plugin.saveResource("config.yml", false);
@@ -32,11 +34,9 @@ public final class ConfigLoader {
         FileConfiguration config = YamlConfiguration.loadConfiguration(configFile);
         configRef.set(config);
 
-        // Ensure lang folder exists
         langFolder = new File(plugin.getDataFolder(), "lang");
         if (!langFolder.exists()) langFolder.mkdirs();
 
-        // Force-save default lang files if missing
         saveLangIfMissing(plugin, "en.yml");
         saveLangIfMissing(plugin, "ko.yml");
     }
@@ -59,6 +59,8 @@ public final class ConfigLoader {
         String name = langConfig.getString(basePath + ".name", key);
         List<String> lore = langConfig.getStringList(basePath + ".lore");
         String materialName = langConfig.getString(basePath + ".material", "PAPER");
+        int customModelData = langConfig.getInt(basePath + ".custom-model-data", 0);
+        boolean hideFlags = langConfig.getBoolean(basePath + ".hide-flags", false);
 
         Material material = Material.matchMaterial(materialName.toUpperCase());
         if (material == null) material = Material.PAPER;
@@ -68,6 +70,12 @@ public final class ConfigLoader {
         if (meta != null) {
             meta.setDisplayName(color(name));
             if (!lore.isEmpty()) meta.setLore(color(lore));
+            if (customModelData != 0) {
+                meta.setCustomModelData(customModelData);
+            }
+            if (hideFlags) {
+                meta.addItemFlags(ItemFlag.values());
+            }
             item.setItemMeta(meta);
         }
 
@@ -86,7 +94,6 @@ public final class ConfigLoader {
             if (!targetFile.exists()) {
                 targetFile = new File(langFolder, "en.yml");
                 if (!targetFile.exists()) {
-                    // fallback to empty config
                     return new YamlConfiguration();
                 }
             }

@@ -4,6 +4,7 @@ import com.gmail.bobason01.MailManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.Mail;
 import com.gmail.bobason01.mail.MailDataManager;
+import com.gmail.bobason01.utils.ItemBuilder;
 import dev.lone.itemsadder.api.CustomStack;
 import net.Indyuce.mmoitems.MMOItems;
 import net.Indyuce.mmoitems.api.Type;
@@ -35,6 +36,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
     public static final UUID SERVER_UUID = UUID.nameUUIDFromBytes("ServerSender".getBytes());
     private static final String MMOITEMS_PREFIX = "mmoitems:";
     private static final String ITEMSADDER_PREFIX = "itemsadder:";
+    private static final String ITEMMODEL_PREFIX = "itemmodel:";
     private static final List<String> SUB_COMMANDS = Arrays.asList("send", "sendall", "reload", "setlang");
     private static final List<String> TIME_SUGGESTIONS = Arrays.asList("7d", "12h", "30m", "15s", "1h", "5m");
 
@@ -96,7 +98,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
             Mail mail = new Mail(senderId, target.getUniqueId(), item, now, expire);
             MailDataManager.getInstance().addMail(target.getUniqueId(), mail);
-            sender.sendMessage(LangManager.get(lang, "cmd.send.success").replace("%name%", target.getName()));
+            sender.sendMessage(LangManager.get(lang, "cmd.send.success").replace("%name%", Objects.requireNonNull(target.getName())));
             return true;
         }
 
@@ -195,6 +197,21 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 String iaId = id.substring(ITEMSADDER_PREFIX.length());
                 CustomStack stack = CustomStack.getInstance(iaId);
                 return (stack != null) ? stack.getItemStack() : null;
+            } catch (Exception ignored) {}
+            return null;
+        }
+
+        if (id.regionMatches(true, 0, ITEMMODEL_PREFIX, 0, ITEMMODEL_PREFIX.length())) {
+            try {
+                String[] parts = id.substring(ITEMMODEL_PREFIX.length()).split(":");
+                if (parts.length != 2) return null;
+
+                Material material = Material.matchMaterial(parts[0].toUpperCase());
+                if (material == null) return null;
+
+                int customModelData = Integer.parseInt(parts[1]);
+                return new ItemBuilder(material).customModelData(customModelData).build();
+
             } catch (Exception ignored) {}
             return null;
         }

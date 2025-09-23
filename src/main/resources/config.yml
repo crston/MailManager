@@ -10,7 +10,11 @@ auto-save-interval: 300
 # Use the Bukkit Item Name. (예: https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Material.html)
 items:
   mail_gui:
-    send_button: WRITABLE_BOOK
+    send_button:
+      material: WRITABLE_BOOK
+      damage: 0
+      custom-model-data: 0
+      hide-flags: false
     setting_button: COMPARATOR
   page:
     next_button: ARROW

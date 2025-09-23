@@ -3,6 +3,9 @@ package com.gmail.bobason01.config;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.inventory.ItemFlag;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.EnumMap;
@@ -13,7 +16,7 @@ public class ConfigManager {
     private static JavaPlugin plugin;
     private static FileConfiguration config;
 
-    private static final Map<ItemType, Material> itemCache = new EnumMap<>(ItemType.class);
+    private static final Map<ItemType, ItemStack> itemCache = new EnumMap<>(ItemType.class);
     private static final Map<SoundType, Sound> soundCache = new EnumMap<>(SoundType.class);
 
     public enum ItemType {
@@ -80,12 +83,26 @@ public class ConfigManager {
     private static void preload() {
         for (ItemType type : ItemType.values()) {
             String path = "items." + type.name().toLowerCase().replace('_', '.');
-            String materialName = config.getString(path, type.getDefaultMaterial().name());
+            String materialName = config.getString(path + ".material", type.getDefaultMaterial().name());
+            int customModelData = config.getInt(path + ".custom-model-data", 0);
+            boolean hideFlags = config.getBoolean(path + ".hide-flags", false);
             try {
-                itemCache.put(type, Material.valueOf(materialName.toUpperCase()));
+                Material material = Material.valueOf(materialName.toUpperCase());
+                ItemStack itemStack = new ItemStack(material);
+                ItemMeta itemMeta = itemStack.getItemMeta();
+                if (itemMeta != null) {
+                    if (customModelData != 0) {
+                        itemMeta.setCustomModelData(customModelData);
+                    }
+                    if (hideFlags) {
+                        itemMeta.addItemFlags(ItemFlag.values());
+                    }
+                    itemStack.setItemMeta(itemMeta);
+                }
+                itemCache.put(type, itemStack);
             } catch (IllegalArgumentException e) {
                 plugin.getLogger().warning("Invalid material name in config.yml at '" + path + "': " + materialName);
-                itemCache.put(type, type.getDefaultMaterial());
+                itemCache.put(type, new ItemStack(type.getDefaultMaterial()));
             }
         }
 
@@ -101,8 +118,8 @@ public class ConfigManager {
         }
     }
 
-    public static Material getItem(ItemType type) {
-        return itemCache.getOrDefault(type, type.getDefaultMaterial());
+    public static ItemStack getItem(ItemType type) {
+        return itemCache.getOrDefault(type, new ItemStack(type.getDefaultMaterial())).clone();
     }
 
     public static Sound getSound(SoundType type) {

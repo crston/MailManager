@@ -43,7 +43,7 @@ public class MailSettingGUI implements Listener, InventoryHolder {
         String lang = LangManager.getLanguage(uuid);
         boolean notifyEnabled = MailDataManager.getInstance().isNotifyEnabled(uuid);
 
-        Material notifyMaterial = notifyEnabled ? ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_ON) : ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_OFF);
+        Material notifyMaterial = (notifyEnabled ? ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_ON) : ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_OFF)).getType();
         String title = LangManager.get(lang, "gui.setting.title");
         Inventory inv = Bukkit.createInventory(this, 27, title);
 
