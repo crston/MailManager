@@ -48,8 +48,7 @@ public class LanguageSelectGUI implements Listener, InventoryHolder {
             boolean selected = lang.equalsIgnoreCase(currentLang);
             String nameKey = selected ? "gui.language.selected" : "gui.language.unselected";
             String displayName = LangManager.get(lang, "language.name") + " [" + lang + "]";
-
-            inv.setItem(slot++, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.LANGUAGE_GUI_ITEM))
+            inv.setItem(slot++, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.LANGUAGE_GUI_ITEM).clone())
                     .name(LangManager.get(uuid, nameKey).replace("%lang%", displayName))
                     .lore(LangManager.get(uuid, "gui.language.lore"))
                     .build());

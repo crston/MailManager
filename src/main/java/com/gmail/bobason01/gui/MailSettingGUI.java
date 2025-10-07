@@ -6,7 +6,6 @@ import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.MailDataManager;
 import com.gmail.bobason01.utils.ItemBuilder;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -43,26 +42,34 @@ public class MailSettingGUI implements Listener, InventoryHolder {
         String lang = LangManager.getLanguage(uuid);
         boolean notifyEnabled = MailDataManager.getInstance().isNotifyEnabled(uuid);
 
-        Material notifyMaterial = (notifyEnabled ? ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_ON) : ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_OFF)).getType();
+        // 알림 상태에 따라 다른 아이템 불러오기
+        ItemStack notifyItem = (notifyEnabled
+                ? ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_ON)
+                : ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_OFF)).clone();
+
         String title = LangManager.get(lang, "gui.setting.title");
         Inventory inv = Bukkit.createInventory(this, 27, title);
 
-        inv.setItem(NOTIFY_SLOT, new ItemBuilder(notifyMaterial)
+        // 알림 버튼
+        inv.setItem(NOTIFY_SLOT, new ItemBuilder(notifyItem)
                 .name(LangManager.get(uuid, "gui.notify.name"))
                 .lore(LangManager.get(uuid, "gui.notify.lore"))
                 .build());
 
-        inv.setItem(BLACKLIST_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_BLACKLIST))
+        // 블랙리스트 버튼
+        inv.setItem(BLACKLIST_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_BLACKLIST).clone())
                 .name(LangManager.get(lang, "gui.blacklist.title"))
                 .lore(LangManager.get(lang, "gui.blacklist.search_prompt"))
                 .build());
 
-        inv.setItem(LANGUAGE_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_LANGUAGE))
+        // 언어 선택 버튼
+        inv.setItem(LANGUAGE_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_LANGUAGE).clone())
                 .name(LangManager.get(lang, "gui.language.name"))
                 .lore(LangManager.get(lang, "gui.language.lore"))
                 .build());
 
-        inv.setItem(BACK_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
+        // 뒤로가기 버튼
+        inv.setItem(BACK_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
                 .name(LangManager.get(lang, "gui.back.name"))
                 .lore(LangManager.get(lang, "gui.back.lore"))
                 .build());
@@ -89,7 +96,10 @@ public class MailSettingGUI implements Listener, InventoryHolder {
                 boolean newState = MailDataManager.getInstance().toggleNotification(player.getUniqueId());
                 String messageKey = newState ? "gui.notify.enabled" : "gui.notify.disabled";
                 player.sendMessage(LangManager.get(player.getUniqueId(), messageKey));
-                player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.ACTION_SETTING_CHANGE), 1.0f, newState ? 1.2f : 0.8f);
+                player.playSound(player.getLocation(),
+                        ConfigManager.getSound(ConfigManager.SoundType.ACTION_SETTING_CHANGE),
+                        1.0f,
+                        newState ? 1.2f : 0.8f);
                 open(player);
             }
             case BLACKLIST_SLOT -> manager.blacklistSelectGUI.open(player);

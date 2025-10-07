@@ -5,10 +5,12 @@ import org.bukkit.Sound;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
 public class ConfigManager {
@@ -20,50 +22,75 @@ public class ConfigManager {
     private static final Map<SoundType, Sound> soundCache = new EnumMap<>(SoundType.class);
 
     public enum ItemType {
-        MAIL_GUI_SEND_BUTTON(Material.WRITABLE_BOOK),
-        MAIL_GUI_SETTING_BUTTON(Material.COMPARATOR),
-        PAGE_NEXT_BUTTON(Material.ARROW),
-        PAGE_PREVIOUS_BUTTON(Material.ARROW),
-        BACK_BUTTON(Material.BARRIER),
-        SETTING_GUI_NOTIFY_ON(Material.LIME_DYE),
-        SETTING_GUI_NOTIFY_OFF(Material.GRAY_DYE),
-        SETTING_GUI_BLACKLIST(Material.BARRIER),
-        SETTING_GUI_LANGUAGE(Material.BOOK),
-        LANGUAGE_GUI_ITEM(Material.PAPER),
-        SEND_GUI_TIME(Material.CLOCK),
-        SEND_GUI_TARGET(Material.PLAYER_HEAD),
-        SEND_GUI_CONFIRM(Material.GREEN_WOOL),
-        SEND_ALL_GUI_EXCLUDE(Material.BARRIER),
-        SEND_ALL_GUI_CONFIRM(Material.GREEN_WOOL),
-        TIME_GUI_UNIT(Material.CLOCK),
-        TIME_GUI_PERMANENT(Material.BARRIER),
-        TIME_GUI_CHAT_INPUT(Material.WRITABLE_BOOK),
-        TIME_GUI_CONFIRM(Material.LIME_CONCRETE),
-        BLACKLIST_EXCLUDE_SEARCH(Material.COMPASS),
-        DELETE_GUI_CONFIRM_BUTTON(Material.RED_WOOL),
-        DELETE_GUI_CANCEL_BUTTON(Material.GREEN_WOOL);
+        MAIL_GUI_SEND_BUTTON("mail.gui.send-button", Material.WRITABLE_BOOK),
+        MAIL_GUI_SETTING_BUTTON("mail.gui.setting-button", Material.COMPARATOR),
+        PAGE_NEXT_BUTTON("page.next-button", Material.ARROW),
+        PAGE_PREVIOUS_BUTTON("page.previous-button", Material.ARROW),
+        BACK_BUTTON("back-button", Material.BARRIER),
+        SETTING_GUI_NOTIFY_ON("setting.notify-on", Material.LIME_DYE),
+        SETTING_GUI_NOTIFY_OFF("setting.notify-off", Material.GRAY_DYE),
+        SETTING_GUI_BLACKLIST("setting.blacklist", Material.BARRIER),
+        SETTING_GUI_LANGUAGE("setting.language", Material.BOOK),
+        LANGUAGE_GUI_ITEM("language.gui-item", Material.PAPER),
+        SEND_GUI_TIME("send.gui.time", Material.CLOCK),
+        SEND_GUI_TARGET("send.gui.target", Material.PLAYER_HEAD),
+        SEND_GUI_CONFIRM("send.gui.confirm", Material.GREEN_WOOL),
+        SEND_ALL_GUI_TIME("sendall.gui.time", Material.CLOCK),
+        SEND_ALL_GUI_EXCLUDE("sendall.gui.exclude", Material.BARRIER),
+        SEND_ALL_GUI_CONFIRM("sendall.gui.confirm", Material.GREEN_WOOL),
+        TIME_GUI_UNIT("time.gui.unit", Material.CLOCK),
+        TIME_GUI_PERMANENT("time.gui.permanent", Material.BARRIER),
+        TIME_GUI_CHAT_INPUT("time.gui.chat-input", Material.WRITABLE_BOOK),
+        TIME_GUI_CONFIRM("time.gui.confirm", Material.LIME_CONCRETE),
+        BLACKLIST_EXCLUDE_SEARCH("blacklist.exclude-search", Material.COMPASS),
+        DELETE_GUI_CONFIRM_BUTTON("delete.gui.confirm-button", Material.RED_WOOL),
+        DELETE_GUI_CANCEL_BUTTON("delete.gui.cancel-button", Material.GREEN_WOOL);
 
+        private final String path;
         private final Material defaultMaterial;
-        ItemType(Material defaultMaterial) { this.defaultMaterial = defaultMaterial; }
-        public Material getDefaultMaterial() { return defaultMaterial; }
+
+        ItemType(String path, Material defaultMaterial) {
+            this.path = path;
+            this.defaultMaterial = defaultMaterial;
+        }
+
+        public String getPath() {
+            return path;
+        }
+
+        public Material getDefaultMaterial() {
+            return defaultMaterial;
+        }
     }
 
     public enum SoundType {
-        GUI_CLICK(Sound.UI_BUTTON_CLICK),
-        GUI_CLICK_FAIL(Sound.BLOCK_NOTE_BLOCK_BASS),
-        GUI_PAGE_TURN(Sound.ITEM_BOOK_PAGE_TURN),
-        MAIL_CLAIM_SUCCESS(Sound.ENTITY_ITEM_PICKUP),
-        MAIL_CLAIM_FAIL(Sound.ENTITY_VILLAGER_NO),
-        MAIL_DELETE_SUCCESS(Sound.BLOCK_ANVIL_LAND),
-        MAIL_SEND_SUCCESS(Sound.ENTITY_PLAYER_LEVELUP),
-        MAIL_RECEIVE_NOTIFICATION(Sound.UI_TOAST_IN),
-        MAIL_REMINDER(Sound.ENTITY_EXPERIENCE_ORB_PICKUP),
-        ACTION_SETTING_CHANGE(Sound.ENTITY_EXPERIENCE_ORB_PICKUP),
-        ACTION_SELECTION_COMPLETE(Sound.BLOCK_NOTE_BLOCK_PLING);
+        GUI_CLICK("gui.click", Sound.UI_BUTTON_CLICK),
+        GUI_CLICK_FAIL("gui.click-fail", Sound.BLOCK_NOTE_BLOCK_BASS),
+        GUI_PAGE_TURN("gui.page-turn", Sound.ITEM_BOOK_PAGE_TURN),
+        MAIL_CLAIM_SUCCESS("mail.claim-success", Sound.ENTITY_ITEM_PICKUP),
+        MAIL_CLAIM_FAIL("mail.claim-fail", Sound.ENTITY_VILLAGER_NO),
+        MAIL_DELETE_SUCCESS("mail.delete-success", Sound.BLOCK_ANVIL_LAND),
+        MAIL_SEND_SUCCESS("mail.send-success", Sound.ENTITY_PLAYER_LEVELUP),
+        MAIL_RECEIVE_NOTIFICATION("mail.receive-notification", Sound.UI_TOAST_IN),
+        MAIL_REMINDER("mail.reminder", Sound.ENTITY_EXPERIENCE_ORB_PICKUP),
+        ACTION_SETTING_CHANGE("action.setting-change", Sound.ENTITY_EXPERIENCE_ORB_PICKUP),
+        ACTION_SELECTION_COMPLETE("action.selection-complete", Sound.BLOCK_NOTE_BLOCK_PLING);
 
+        private final String path;
         private final Sound defaultSound;
-        SoundType(Sound defaultSound) { this.defaultSound = defaultSound; }
-        public Sound getDefaultSound() { return defaultSound; }
+
+        SoundType(String path, Sound defaultSound) {
+            this.path = path;
+            this.defaultSound = defaultSound;
+        }
+
+        public String getPath() {
+            return path;
+        }
+
+        public Sound getDefaultSound() {
+            return defaultSound;
+        }
     }
 
     public static void load(JavaPlugin pluginInstance) {
@@ -82,21 +109,38 @@ public class ConfigManager {
 
     private static void preload() {
         for (ItemType type : ItemType.values()) {
-            String path = "items." + type.name().toLowerCase().replace('_', '.');
+            String path = "items." + type.getPath();
             String materialName = config.getString(path + ".material", type.getDefaultMaterial().name());
             int customModelData = config.getInt(path + ".custom-model-data", 0);
+            int damage = config.getInt(path + ".damage", 0);
             boolean hideFlags = config.getBoolean(path + ".hide-flags", false);
+            List<String> flagList = config.getStringList(path + ".flags");
             try {
                 Material material = Material.valueOf(materialName.toUpperCase());
                 ItemStack itemStack = new ItemStack(material);
                 ItemMeta itemMeta = itemStack.getItemMeta();
                 if (itemMeta != null) {
-                    if (customModelData != 0) {
-                        itemMeta.setCustomModelData(customModelData);
+                    itemMeta.setCustomModelData(customModelData);
+
+                    if (itemMeta instanceof Damageable damageable) {
+                        damageable.setDamage(damage);
                     }
+
                     if (hideFlags) {
                         itemMeta.addItemFlags(ItemFlag.values());
                     }
+
+                    if (!flagList.isEmpty()) {
+                        for (String flagName : flagList) {
+                            try {
+                                ItemFlag flag = ItemFlag.valueOf(flagName.toUpperCase());
+                                itemMeta.addItemFlags(flag);
+                            } catch (IllegalArgumentException e) {
+                                plugin.getLogger().warning("Invalid item flag in config.yml at '" + path + ".flags': " + flagName);
+                            }
+                        }
+                    }
+
                     itemStack.setItemMeta(itemMeta);
                 }
                 itemCache.put(type, itemStack);
@@ -107,7 +151,7 @@ public class ConfigManager {
         }
 
         for (SoundType type : SoundType.values()) {
-            String path = "sounds." + type.name().toLowerCase().replace('_', '.');
+            String path = "sounds." + type.getPath();
             String soundName = config.getString(path, type.getDefaultSound().name());
             try {
                 soundCache.put(type, Sound.valueOf(soundName.toUpperCase()));

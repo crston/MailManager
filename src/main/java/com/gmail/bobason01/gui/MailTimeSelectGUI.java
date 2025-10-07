@@ -17,10 +17,7 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -59,28 +56,28 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
             String unit = TIME_UNITS.get(i);
             int value = time.getOrDefault(unit, 0);
 
-            inv.setItem(UNIT_START_SLOT + i, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_UNIT))
+            inv.setItem(UNIT_START_SLOT + i, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_UNIT).clone())
                     .name(LangManager.get(lang, "gui.time-unit." + unit + ".name").replace("%value%", String.valueOf(value)))
                     .lore(LangManager.get(lang, "gui.time-unit.lore"))
                     .build());
         }
 
-        inv.setItem(PERMANENT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_PERMANENT))
+        inv.setItem(PERMANENT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_PERMANENT).clone())
                 .name(LangManager.get(lang, "gui.permanent.name"))
                 .lore(LangManager.get(lang, "gui.permanent.lore"))
                 .build());
 
-        inv.setItem(CHAT_INPUT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_CHAT_INPUT))
-                .name(LangManager.get(lang, "gui.time-chat-input.name"))
-                .lore(LangManager.get(lang, "gui.time-chat-input.lore"))
+        inv.setItem(CHAT_INPUT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_CHAT_INPUT).clone())
+                .name(LangManager.get(lang, "gui.time.chat-input.name"))
+                .lore(LangManager.get(lang, "gui.time.chat-input.lore"))
                 .build());
 
-        inv.setItem(CONFIRM_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_CONFIRM))
+        inv.setItem(CONFIRM_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_CONFIRM).clone())
                 .name(LangManager.get(lang, "gui.select-complete.name"))
                 .lore(LangManager.get(lang, "gui.select-complete.lore"))
                 .build());
 
-        inv.setItem(BACK_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
+        inv.setItem(BACK_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
                 .name(LangManager.get(lang, "gui.back.name"))
                 .lore(LangManager.get(lang, "gui.back.lore"))
                 .build());

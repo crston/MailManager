@@ -2,6 +2,7 @@ package com.gmail.bobason01.commands;
 
 import com.gmail.bobason01.MailManager;
 import com.gmail.bobason01.cache.PlayerCache;
+import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.Mail;
 import com.gmail.bobason01.mail.MailDataManager;
@@ -150,6 +151,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
         if (sub.equalsIgnoreCase("reload")) {
             Objects.requireNonNull(plugin).reloadConfig();
+            ConfigManager.reload();
             sender.sendMessage(LangManager.get(lang, "cmd.reload"));
             return true;
         }

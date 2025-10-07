@@ -83,6 +83,7 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
 
                     Inventory inv = Bukkit.createInventory(this, 54, title);
 
+                    // 플레이어 목록 채우기
                     for (int i = 0; i < pagePlayers.size(); i++) {
                         OfflinePlayer target = pagePlayers.get(i);
                         ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
@@ -95,13 +96,21 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
                         }
                     }
 
+                    // 다음/이전/뒤로가기 버튼 (clone 필수!)
                     if (safePage < maxPage) {
-                        inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON)).name("§a" + LangManager.get(lang, "gui.next")).build());
+                        inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON).clone())
+                                .name("§a" + LangManager.get(lang, "gui.next"))
+                                .build());
                     }
                     if (safePage > 0) {
-                        inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON)).name("§a" + LangManager.get(lang, "gui.previous")).build());
+                        inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON).clone())
+                                .name("§a" + LangManager.get(lang, "gui.previous"))
+                                .build());
                     }
-                    inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON)).name("§c" + LangManager.get(lang, "gui.back.name")).lore(LangManager.get(lang, "gui.back.lore")).build());
+                    inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
+                            .name("§c" + LangManager.get(lang, "gui.back.name"))
+                            .lore(LangManager.get(lang, "gui.back.lore"))
+                            .build());
 
                     player.openInventory(inv);
                 } finally {

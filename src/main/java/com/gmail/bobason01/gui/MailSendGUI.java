@@ -50,6 +50,7 @@ public class MailSendGUI implements Listener, InventoryHolder {
         String title = LangManager.get(uuid, "gui.send.title");
         Inventory inv = Bukkit.createInventory(this, 27, title);
 
+        // 시간 설정 아이템
         Map<String, Integer> timeData = MailService.getTimeData(uuid);
         String formatted = TimeUtil.format(timeData, lang);
         long expireAt = MailService.getExpireTime(uuid);
@@ -63,36 +64,38 @@ public class MailSendGUI implements Listener, InventoryHolder {
             timeLore.add(LangManager.get(uuid, "gui.send.time.no_expire"));
         }
 
-        inv.setItem(SLOT_TIME, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_GUI_TIME))
+        inv.setItem(SLOT_TIME, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_GUI_TIME).clone())
                 .name(LangManager.get(uuid, "gui.send.time.name"))
                 .lore(timeLore)
                 .build());
 
+        // 대상 플레이어 설정 아이템
         OfflinePlayer target = MailService.getTargetPlayer(uuid);
         ItemStack targetItem;
-
         if (target != null && target.getName() != null) {
             targetItem = getCachedHead(target);
         } else {
-            targetItem = new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_GUI_TARGET))
+            targetItem = new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_GUI_TARGET).clone())
                     .name(LangManager.get(uuid, "gui.send.target.name"))
                     .lore(LangManager.get(uuid, "gui.send.target.lore"))
                     .build();
         }
-
         inv.setItem(SLOT_TARGET, targetItem);
 
+        // 아이템 첨부칸
         ItemStack item = MailService.getAttachedItem(uuid);
         if (item != null) {
             inv.setItem(SLOT_ITEM, item);
         }
 
-        inv.setItem(SLOT_CONFIRM, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_GUI_CONFIRM))
+        // 확인 버튼
+        inv.setItem(SLOT_CONFIRM, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_GUI_CONFIRM).clone())
                 .name(LangManager.get(uuid, "gui.send.confirm.name"))
                 .lore(LangManager.get(uuid, "gui.send.confirm.lore"))
                 .build());
 
-        inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
+        // 뒤로가기 버튼
+        inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
                 .name("§c" + LangManager.get(uuid, "gui.back.name"))
                 .lore(LangManager.get(uuid, "gui.back.lore"))
                 .build());

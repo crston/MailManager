@@ -99,13 +99,26 @@ public class SendAllExcludeGUI implements Listener, InventoryHolder {
                         }
                     }
 
-                    if (safePage > 0)
-                        inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON)).name(LangManager.get(lang, "gui.previous")).build());
-                    if (safePage < maxPage)
-                        inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON)).name(LangManager.get(lang, "gui.next")).build());
+                    if (safePage > 0) {
+                        inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON).clone())
+                                .name(LangManager.get(lang, "gui.previous"))
+                                .build());
+                    }
+                    if (safePage < maxPage) {
+                        inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON).clone())
+                                .name(LangManager.get(lang, "gui.next"))
+                                .build());
+                    }
 
-                    inv.setItem(SLOT_SEARCH, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BLACKLIST_EXCLUDE_SEARCH)).name(LangManager.get(lang, "gui.exclude.search")).lore(LangManager.get(lang, "gui.exclude.search.lore")).build());
-                    inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON)).name(LangManager.get(lang, "gui.back.name")).lore(LangManager.get(lang, "gui.back.lore")).build());
+                    inv.setItem(SLOT_SEARCH, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BLACKLIST_EXCLUDE_SEARCH).clone())
+                            .name(LangManager.get(lang, "gui.exclude.search"))
+                            .lore(LangManager.get(lang, "gui.exclude.search.lore"))
+                            .build());
+
+                    inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
+                            .name(LangManager.get(lang, "gui.back.name"))
+                            .lore(LangManager.get(lang, "gui.back.lore"))
+                            .build());
 
                     player.openInventory(inv);
                 } finally {

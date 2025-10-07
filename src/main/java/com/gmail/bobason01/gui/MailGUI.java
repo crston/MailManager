@@ -82,20 +82,34 @@ public class MailGUI implements Listener, InventoryHolder {
             inv.setItem(i - start, item);
         }
 
-        if (page > 0) inv.setItem(PREV_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON).getType(), LangManager.get(uuid, "gui.previous")));
-        if (end < mails.size()) inv.setItem(NEXT_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON).getType(), LangManager.get(uuid, "gui.next")));
+        // 이전 / 다음 버튼
+        if (page > 0) {
+            inv.setItem(PREV_BTN_SLOT, createButton(
+                    ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON).clone(),
+                    LangManager.get(uuid, "gui.previous")));
+        }
+        if (end < mails.size()) {
+            inv.setItem(NEXT_BTN_SLOT, createButton(
+                    ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON).clone(),
+                    LangManager.get(uuid, "gui.next")));
+        }
 
-        inv.setItem(SEND_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SEND_BUTTON).getType(), LangManager.get(uuid, "gui.send.title")));
-        inv.setItem(SETTING_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SETTING_BUTTON).getType(), LangManager.get(uuid, "gui.setting.title")));
+        // 보내기 / 설정 버튼
+        inv.setItem(SEND_BTN_SLOT, createButton(
+                ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SEND_BUTTON).clone(),
+                LangManager.get(uuid, "gui.send.title")));
+        inv.setItem(SETTING_BTN_SLOT, createButton(
+                ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SETTING_BUTTON).clone(),
+                LangManager.get(uuid, "gui.setting.title")));
 
         player.openInventory(inv);
     }
 
-    private ItemStack createButton(Material material, String name) {
-        ItemStack item = new ItemStack(material);
+    private ItemStack createButton(ItemStack base, String name) {
+        ItemStack item = base.clone(); // clone으로 원본 훼손 방지
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(name);
+            meta.setDisplayName(name); // 이름만 덮어쓰기
             item.setItemMeta(meta);
         }
         return item;

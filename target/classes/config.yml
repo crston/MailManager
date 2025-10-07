@@ -1,63 +1,153 @@
-# MailManager Config File
-
-# Set default language (ko or en, etc.)
-default-language: en
-
-# Data auto-save cycle (in seconds)
-auto-save-interval: 300
-
-# --- GUI Item Setting ---
-# Use the Bukkit Item Name. (예: https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Material.html)
 items:
-  mail_gui:
-    send_button:
-      material: WRITABLE_BOOK
-      damage: 0
-      custom-model-data: 0
-      hide-flags: false
-    setting_button: COMPARATOR
+  mail:
+    gui:
+      send-button:
+        material: WRITABLE_BOOK
+        custom-model-data: 0
+        damage: 0
+        hide-flags:
+          - HIDE_ENCHANTS
+          - HIDE_ATTRIBUTES
+          - HIDE_UNBREAKABLE
+          - HIDE_DESTROYS
+          - HIDE_PLACED_ON
+          - HIDE_POTION_EFFECTS
+      setting-button:
+        material: COMPARATOR
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+        unbreakable: false
   page:
-    next_button: ARROW
-    previous_button: ARROW
-  back_button: BARRIER
-  setting_gui:
-    notify_on: LIME_DYE
-    notify_off: GRAY_DYE
-    blacklist_button: BARRIER
-    language_button: BOOK
-  language_gui:
-    language_item: PAPER
-  send_gui:
-    time_button: CLOCK
-    target_button: PLAYER_HEAD
-    confirm_button: GREEN_WOOL
-  send_all_gui:
-    exclude_button: BARRIER
-    confirm_button: GREEN_WOOL
-  time_gui:
-    time_unit_item: CLOCK
-    permanent_button: BARRIER
-    chat_input_button: WRITABLE_BOOK
-    confirm_button: LIME_CONCRETE
-  blacklist_exclude_gui:
-    search_button: COMPASS
-  delete_gui:
-    confirm_button: RED_WOOL
-    cancel_button: GREEN_WOOL
+    next-button:
+      material: ARROW
+      custom-model-data: 0
+      damage: 0
+      hide-flags: false
+    previous-button:
+      material: ARROW
+      custom-model-data: 0
+      damage: 0
+      hide-flags: false
+  back-button:
+    material: BARRIER
+    custom-model-data: 0
+    damage: 0
+    hide-flags: false
+  setting:
+    notify-on:
+      material: LIME_DYE
+      custom-model-data: 0
+      damage: 0
+      hide-flags: false
+    notify-off:
+      material: GRAY_DYE
+      custom-model-data: 0
+      damage: 0
+      hide-flags: false
+    blacklist:
+      material: BARRIER
+      custom-model-data: 0
+      damage: 0
+      hide-flags: false
+    language:
+      material: BOOK
+      custom-model-data: 0
+      damage: 0
+      hide-flags: false
+  language:
+    gui-item:
+      material: PAPER
+      custom-model-data: 0
+      damage: 0
+      hide-flags: false
+  send:
+    gui:
+      time:
+        material: CLOCK
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+      target:
+        material: PLAYER_HEAD
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+      confirm:
+        material: GREEN_WOOL
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+  sendall:
+    gui:
+      time:
+        material: CLOCK
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+      exclude:
+        material: BARRIER
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+      confirm:
+        material: GREEN_WOOL
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+  time:
+    gui:
+      unit:
+        material: CLOCK
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+      permanent:
+        material: BARRIER
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+      chat-input:
+        material: WRITABLE_BOOK
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+      confirm:
+        material: LIME_CONCRETE
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+  blacklist:
+    exclude-search:
+      material: COMPASS
+      custom-model-data: 0
+      damage: 0
+      hide-flags: false
+  delete:
+    gui:
+      confirm-button:
+        material: RED_WOOL
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+      cancel-button:
+        material: GREEN_WOOL
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
 
-# --- Sound Effect Settings ---
-## Use the Bukkit Sound name. (Example: https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Sound.html)
 sounds:
   gui:
     click: UI_BUTTON_CLICK
-    click_fail: BLOCK_NOTE_BLOCK_BASS
-    page_turn: ITEM_BOOK_PAGE_TURN
+    click-fail: BLOCK_NOTE_BLOCK_BASS
+    page-turn: ITEM_BOOK_PAGE_TURN
   mail:
-    claim_success: ENTITY_ITEM_PICKUP
-    claim_fail: ENTITY_VILLAGER_NO
-    delete_success: BLOCK_ANVIL_LAND
-    send_success: ENTITY_PLAYER_LEVELUP
-    receive_notification: UI_TOAST_IN
+    claim-success: ENTITY_ITEM_PICKUP
+    claim-fail: ENTITY_VILLAGER_NO
+    delete-success: BLOCK_ANVIL_LAND
+    send-success: ENTITY_PLAYER_LEVELUP
+    receive-notification: UI_TOAST_IN
+    reminder: ENTITY_EXPERIENCE_ORB_PICKUP
   action:
-    setting_change: ENTITY_EXPERIENCE_ORB_PICKUP
-    selection_complete: BLOCK_NOTE_BLOCK_PLING
+    setting-change: ENTITY_EXPERIENCE_ORB_PICKUP
+    selection-complete: BLOCK_NOTE_BLOCK_PLING

@@ -24,13 +24,15 @@ public class MailDeleteConfirmGUI implements InventoryHolder {
     }
 
     private void setupItems(Player player) {
-        inventory.setItem(YES_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.DELETE_GUI_CONFIRM_BUTTON))
-                .name(ChatColor.translateAlternateColorCodes('&', "&cYES")) // 이렇게 수정해주세요.
+        // 확인 버튼
+        inventory.setItem(YES_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.DELETE_GUI_CONFIRM_BUTTON).clone())
+                .name(ChatColor.translateAlternateColorCodes('&', "&cYES"))
                 .lore(LangManager.get(player.getUniqueId(), "gui.delete.yes_lore"))
                 .build());
 
-        inventory.setItem(NO_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.DELETE_GUI_CANCEL_BUTTON))
-                .name(ChatColor.translateAlternateColorCodes('&', "&aNO")) // 여기도 수정해주세요.
+        // 취소 버튼
+        inventory.setItem(NO_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.DELETE_GUI_CANCEL_BUTTON).clone())
+                .name(ChatColor.translateAlternateColorCodes('&', "&aNO"))
                 .lore(LangManager.get(player.getUniqueId(), "gui.delete.no_lore"))
                 .build());
     }

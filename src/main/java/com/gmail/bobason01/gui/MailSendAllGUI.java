@@ -5,7 +5,7 @@ import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.MailService;
 import com.gmail.bobason01.utils.ItemBuilder;
-import com.gmail.bobason01.utils.TimeUtil; // TimeUtil import 추가
+import com.gmail.bobason01.utils.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -18,7 +18,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.*; // List, Map import 추가
+import java.util.*;
 
 public class MailSendAllGUI implements Listener, InventoryHolder {
 
@@ -42,11 +42,11 @@ public class MailSendAllGUI implements Listener, InventoryHolder {
 
     public void open(Player player) {
         UUID uuid = player.getUniqueId();
-        String lang = LangManager.getLanguage(uuid); // lang 변수 추가
+        String lang = LangManager.getLanguage(uuid);
         String title = LangManager.get(uuid, "gui.sendall.title");
         Inventory inv = Bukkit.createInventory(this, 27, title);
 
-        // --- 시간 표시 로직 시작 ---
+        // --- 시간 표시 ---
         Map<String, Integer> timeData = MailService.getTimeData(uuid);
         String formatted = TimeUtil.format(timeData, lang);
         long expireAt = MailService.getExpireTime(uuid);
@@ -59,14 +59,14 @@ public class MailSendAllGUI implements Listener, InventoryHolder {
         } else {
             timeLore.add(LangManager.get(uuid, "gui.sendall.time.no_expire"));
         }
-        // --- 시간 표시 로직 끝 ---
 
-        inv.setItem(SLOT_TIME, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_GUI_TIME))
+        // --- GUI 아이템들 ---
+        inv.setItem(SLOT_TIME, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_GUI_TIME).clone())
                 .name(LangManager.get(uuid, "gui.sendall.expire.name"))
-                .lore(timeLore) // 수정된 lore 적용
+                .lore(timeLore)
                 .build());
 
-        inv.setItem(SLOT_EXCLUDE, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_ALL_GUI_EXCLUDE))
+        inv.setItem(SLOT_EXCLUDE, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_ALL_GUI_EXCLUDE).clone())
                 .name(LangManager.get(uuid, "gui.sendall.exclude.name"))
                 .lore(LangManager.get(uuid, "gui.sendall.exclude.lore"))
                 .build());
@@ -76,12 +76,12 @@ public class MailSendAllGUI implements Listener, InventoryHolder {
             inv.setItem(SLOT_ITEM, attached);
         }
 
-        inv.setItem(SLOT_CONFIRM, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_ALL_GUI_CONFIRM))
+        inv.setItem(SLOT_CONFIRM, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SEND_ALL_GUI_CONFIRM).clone())
                 .name(LangManager.get(uuid, "gui.sendall.confirm.name"))
                 .lore(LangManager.get(uuid, "gui.sendall.confirm.lore"))
                 .build());
 
-        inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
+        inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
                 .name("§c" + LangManager.get(uuid, "gui.back.name"))
                 .lore(Collections.singletonList("§7" + LangManager.get(uuid, "gui.back.lore")))
                 .build());
