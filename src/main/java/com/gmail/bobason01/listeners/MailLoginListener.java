@@ -27,7 +27,8 @@ public class MailLoginListener implements Listener {
 
         Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
             if (!player.isOnline()) return;
-            if (MailDataManager.getInstance().isNotifyEnabled(uuid) && !MailDataManager.getInstance().getUnreadMails(uuid).isEmpty()) {
+            if (MailDataManager.getInstance().isNotify(uuid)
+                    && !MailDataManager.getInstance().getUnreadMails(uuid).isEmpty()) {
                 Bukkit.getScheduler().runTask(plugin, () -> sendMailNotification(player));
             }
         }, 60L);
@@ -46,6 +47,7 @@ public class MailLoginListener implements Listener {
         );
 
         player.sendMessage(LangManager.get(lang, "login.message"));
-        player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.MAIL_RECEIVE_NOTIFICATION), 1.0f, 1.2f);
+
+        ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_RECEIVE_NOTIFICATION);
     }
 }

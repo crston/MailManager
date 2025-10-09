@@ -133,7 +133,7 @@ public class SendAllExcludeGUI implements Listener, InventoryHolder {
         AtomicLong lastClick = lastClickMap.computeIfAbsent(player.getUniqueId(), k -> new AtomicLong(0));
 
         if (now - lastClick.get() < PAGE_COOLDOWN_MS) {
-            player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK_FAIL), 1.0f, 0.5f);
+            ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK_FAIL);
             return false;
         }
 
@@ -183,7 +183,7 @@ public class SendAllExcludeGUI implements Listener, InventoryHolder {
                         excluded.add(targetId);
                         player.sendMessage(LangManager.get(uuid, "gui.exclude.excluded").replace("%name%", name));
                     }
-                    player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1f, 1f);
+                    ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                     MailDataManager.getInstance().setExclude(uuid, excluded);
                     open(player, page);
                 }

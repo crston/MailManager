@@ -99,7 +99,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             }
 
             Mail mail = new Mail(senderId, target.getUniqueId(), item, now, expire);
-            MailDataManager.getInstance().addMail(target.getUniqueId(), mail);
+            MailDataManager.getInstance().addMail(mail);
             sender.sendMessage(LangManager.get(lang, "cmd.send.success").replace("%name%", Objects.requireNonNull(target.getName())));
             return true;
         }
@@ -140,7 +140,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             for (OfflinePlayer target : Bukkit.getOfflinePlayers()) {
                 if (target.hasPlayedBefore()) {
                     Mail mail = new Mail(senderId, target.getUniqueId(), item, now, expire);
-                    MailDataManager.getInstance().addMail(target.getUniqueId(), mail);
+                    MailDataManager.getInstance().addMail(mail);
                     count++;
                 }
             }
@@ -152,6 +152,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
         if (sub.equalsIgnoreCase("reload")) {
             Objects.requireNonNull(plugin).reloadConfig();
             ConfigManager.reload();
+            LangManager.loadAll(plugin.getDataFolder());
             sender.sendMessage(LangManager.get(lang, "cmd.reload"));
             return true;
         }

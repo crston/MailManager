@@ -52,7 +52,7 @@ public class MailService {
                     .toList();
 
             for (Mail mail : mailsToSend) {
-                MailDataManager.getInstance().addMail(mail.getReceiver(), mail);
+                MailDataManager.getInstance().addMail(mail);
             }
 
             int count = mailsToSend.size();
@@ -78,7 +78,7 @@ public class MailService {
         LocalDateTime expireAt = buildExpireTime(now, session.time);
         Mail mail = new Mail(senderId, session.target, item, now, expireAt);
 
-        MailDataManager.getInstance().addMail(session.target, mail);
+        MailDataManager.getInstance().addMail(mail);
         sessions.remove(senderId);
 
         sender.sendMessage(LangManager.get(lang, "mail.send.success"));

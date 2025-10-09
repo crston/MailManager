@@ -125,7 +125,6 @@ public class Mail implements Serializable {
     @java.io.Serial
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
         in.defaultReadObject();
-        @SuppressWarnings("unchecked")
         Map<String, Object> itemMap = (Map<String, Object>) in.readObject();
         if (itemMap != null) {
             this.item = ItemStack.deserialize(itemMap);

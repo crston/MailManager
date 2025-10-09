@@ -8,18 +8,51 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.entity.Player;
 
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 
 public class ConfigManager {
 
     private static JavaPlugin plugin;
     private static FileConfiguration config;
 
-    private static final Map<ItemType, ItemStack> itemCache = new EnumMap<>(ItemType.class);
-    private static final Map<SoundType, Sound> soundCache = new EnumMap<>(SoundType.class);
+    private static final ItemStack[] itemCache = new ItemStack[ItemType.values().length];
+    private static final SoundData[] soundCache = new SoundData[SoundType.values().length];
+
+    public static class SoundData {
+        private final Sound soundEnum;
+        private final String soundString;
+        private final float volume;
+        private final float pitch;
+
+        public SoundData(Sound soundEnum, String soundString, float volume, float pitch) {
+            this.soundEnum = soundEnum;
+            this.soundString = soundString;
+            this.volume = volume;
+            this.pitch = pitch;
+        }
+
+        public boolean isEnum() {
+            return soundEnum != null;
+        }
+
+        public Sound getSoundEnum() {
+            return soundEnum;
+        }
+
+        public String getSoundString() {
+            return soundString;
+        }
+
+        public float getVolume() {
+            return volume;
+        }
+
+        public float getPitch() {
+            return pitch;
+        }
+    }
 
     public enum ItemType {
         MAIL_GUI_SEND_BUTTON("mail.gui.send-button", Material.WRITABLE_BOOK),
@@ -64,22 +97,22 @@ public class ConfigManager {
     }
 
     public enum SoundType {
-        GUI_CLICK("gui.click", Sound.UI_BUTTON_CLICK),
-        GUI_CLICK_FAIL("gui.click-fail", Sound.BLOCK_NOTE_BLOCK_BASS),
-        GUI_PAGE_TURN("gui.page-turn", Sound.ITEM_BOOK_PAGE_TURN),
-        MAIL_CLAIM_SUCCESS("mail.claim-success", Sound.ENTITY_ITEM_PICKUP),
-        MAIL_CLAIM_FAIL("mail.claim-fail", Sound.ENTITY_VILLAGER_NO),
-        MAIL_DELETE_SUCCESS("mail.delete-success", Sound.BLOCK_ANVIL_LAND),
-        MAIL_SEND_SUCCESS("mail.send-success", Sound.ENTITY_PLAYER_LEVELUP),
-        MAIL_RECEIVE_NOTIFICATION("mail.receive-notification", Sound.UI_TOAST_IN),
-        MAIL_REMINDER("mail.reminder", Sound.ENTITY_EXPERIENCE_ORB_PICKUP),
-        ACTION_SETTING_CHANGE("action.setting-change", Sound.ENTITY_EXPERIENCE_ORB_PICKUP),
-        ACTION_SELECTION_COMPLETE("action.selection-complete", Sound.BLOCK_NOTE_BLOCK_PLING);
+        GUI_CLICK("gui.click", "UI_BUTTON_CLICK"),
+        GUI_CLICK_FAIL("gui.click-fail", "BLOCK_NOTE_BLOCK_BASS"),
+        GUI_PAGE_TURN("gui.page-turn", "ITEM_BOOK_PAGE_TURN"),
+        MAIL_CLAIM_SUCCESS("mail.claim-success", "ENTITY_ITEM_PICKUP"),
+        MAIL_CLAIM_FAIL("mail.claim-fail", "ENTITY_VILLAGER_NO"),
+        MAIL_DELETE_SUCCESS("mail.delete-success", "BLOCK_ANVIL_LAND"),
+        MAIL_SEND_SUCCESS("mail.send-success", "ENTITY_PLAYER_LEVELUP"),
+        MAIL_RECEIVE_NOTIFICATION("mail.receive-notification", "UI_TOAST_IN"),
+        MAIL_REMINDER("mail.reminder", "ENTITY_EXPERIENCE_ORB_PICKUP"),
+        ACTION_SETTING_CHANGE("action.setting-change", "ENTITY_EXPERIENCE_ORB_PICKUP"),
+        ACTION_SELECTION_COMPLETE("action.selection-complete", "BLOCK_NOTE_BLOCK_PLING");
 
         private final String path;
-        private final Sound defaultSound;
+        private final String defaultSound;
 
-        SoundType(String path, Sound defaultSound) {
+        SoundType(String path, String defaultSound) {
             this.path = path;
             this.defaultSound = defaultSound;
         }
@@ -88,7 +121,7 @@ public class ConfigManager {
             return path;
         }
 
-        public Sound getDefaultSound() {
+        public String getDefaultSound() {
             return defaultSound;
         }
     }
@@ -102,8 +135,6 @@ public class ConfigManager {
     public static void reload() {
         plugin.reloadConfig();
         config = plugin.getConfig();
-        itemCache.clear();
-        soundCache.clear();
         preload();
     }
 
@@ -114,59 +145,60 @@ public class ConfigManager {
             int customModelData = config.getInt(path + ".custom-model-data", 0);
             int damage = config.getInt(path + ".damage", 0);
             boolean hideFlags = config.getBoolean(path + ".hide-flags", false);
+            boolean unbreakable = config.getBoolean(path + ".unbreakable", false);
             List<String> flagList = config.getStringList(path + ".flags");
+            ItemStack item;
             try {
                 Material material = Material.valueOf(materialName.toUpperCase());
-                ItemStack itemStack = new ItemStack(material);
-                ItemMeta itemMeta = itemStack.getItemMeta();
-                if (itemMeta != null) {
-                    itemMeta.setCustomModelData(customModelData);
-
-                    if (itemMeta instanceof Damageable damageable) {
-                        damageable.setDamage(damage);
-                    }
-
-                    if (hideFlags) {
-                        itemMeta.addItemFlags(ItemFlag.values());
-                    }
-
+                item = new ItemStack(material);
+                ItemMeta meta = item.getItemMeta();
+                if (meta != null) {
+                    if (customModelData != 0) meta.setCustomModelData(customModelData);
+                    if (meta instanceof Damageable d && damage > 0) d.setDamage(damage);
+                    if (unbreakable) meta.setUnbreakable(true);
+                    if (hideFlags) meta.addItemFlags(ItemFlag.values());
                     if (!flagList.isEmpty()) {
-                        for (String flagName : flagList) {
+                        for (String f : flagList) {
                             try {
-                                ItemFlag flag = ItemFlag.valueOf(flagName.toUpperCase());
-                                itemMeta.addItemFlags(flag);
-                            } catch (IllegalArgumentException e) {
-                                plugin.getLogger().warning("Invalid item flag in config.yml at '" + path + ".flags': " + flagName);
-                            }
+                                meta.addItemFlags(ItemFlag.valueOf(f.toUpperCase()));
+                            } catch (Exception ignored) {}
                         }
                     }
-
-                    itemStack.setItemMeta(itemMeta);
+                    item.setItemMeta(meta);
                 }
-                itemCache.put(type, itemStack);
-            } catch (IllegalArgumentException e) {
-                plugin.getLogger().warning("Invalid material name in config.yml at '" + path + "': " + materialName);
-                itemCache.put(type, new ItemStack(type.getDefaultMaterial()));
+            } catch (Exception e) {
+                item = new ItemStack(type.getDefaultMaterial());
             }
+            itemCache[type.ordinal()] = item;
         }
 
         for (SoundType type : SoundType.values()) {
             String path = "sounds." + type.getPath();
-            String soundName = config.getString(path, type.getDefaultSound().name());
+            String soundName = config.getString(path + ".name", type.getDefaultSound());
+            float volume = (float) config.getDouble(path + ".volume", 1.0);
+            float pitch = (float) config.getDouble(path + ".pitch", 1.0);
+            Sound enumSound = null;
             try {
-                soundCache.put(type, Sound.valueOf(soundName.toUpperCase()));
-            } catch (IllegalArgumentException e) {
-                plugin.getLogger().warning("Invalid sound name in config.yml at '" + path + "': " + soundName);
-                soundCache.put(type, type.getDefaultSound());
-            }
+                enumSound = Sound.valueOf(soundName.toUpperCase());
+            } catch (Exception ignored) {}
+            soundCache[type.ordinal()] = new SoundData(enumSound, soundName, volume, pitch);
         }
     }
 
     public static ItemStack getItem(ItemType type) {
-        return itemCache.getOrDefault(type, new ItemStack(type.getDefaultMaterial())).clone();
+        return itemCache[type.ordinal()].clone();
     }
 
-    public static Sound getSound(SoundType type) {
-        return soundCache.getOrDefault(type, type.getDefaultSound());
+    public static SoundData getSoundData(SoundType type) {
+        return soundCache[type.ordinal()];
+    }
+
+    public static void playSound(Player player, SoundType type) {
+        SoundData data = soundCache[type.ordinal()];
+        if (data.isEnum()) {
+            player.playSound(player.getLocation(), data.getSoundEnum(), data.getVolume(), data.getPitch());
+        } else {
+            player.playSound(player.getLocation(), data.getSoundString(), data.getVolume(), data.getPitch());
+        }
     }
 }

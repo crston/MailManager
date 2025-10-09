@@ -1,3 +1,21 @@
+default-language: en
+
+database:
+  type: SQLITE
+  host: localhost
+  port: 3306
+  name: maildb
+  user: root
+  pass: password
+  pool:
+    maximumPoolSize: 10
+    minimumIdle: 2
+    connectionTimeoutMs: 10000
+    idleTimeoutMs: 60000
+    maxLifetimeMs: 1800000
+flush:
+  intervalTicks: 40
+
 items:
   mail:
     gui:
@@ -5,13 +23,8 @@ items:
         material: WRITABLE_BOOK
         custom-model-data: 0
         damage: 0
-        hide-flags:
-          - HIDE_ENCHANTS
-          - HIDE_ATTRIBUTES
-          - HIDE_UNBREAKABLE
-          - HIDE_DESTROYS
-          - HIDE_PLACED_ON
-          - HIDE_POTION_EFFECTS
+        hide-flags: false
+        unbreakable: false
       setting-button:
         material: COMPARATOR
         custom-model-data: 0
@@ -138,16 +151,49 @@ items:
 
 sounds:
   gui:
-    click: UI_BUTTON_CLICK
-    click-fail: BLOCK_NOTE_BLOCK_BASS
-    page-turn: ITEM_BOOK_PAGE_TURN
+    click:
+      name: UI_BUTTON_CLICK
+      volume: 1.0
+      pitch: 1.0
+    click-fail:
+      name: BLOCK_NOTE_BLOCK_BASS
+      volume: 0.8
+      pitch: 0.8
+    page-turn:
+      name: ITEM_BOOK_PAGE_TURN
+      volume: 1.0
+      pitch: 1.2
   mail:
-    claim-success: ENTITY_ITEM_PICKUP
-    claim-fail: ENTITY_VILLAGER_NO
-    delete-success: BLOCK_ANVIL_LAND
-    send-success: ENTITY_PLAYER_LEVELUP
-    receive-notification: UI_TOAST_IN
-    reminder: ENTITY_EXPERIENCE_ORB_PICKUP
+    claim-success:
+      name: ENTITY_ITEM_PICKUP
+      volume: 1.0
+      pitch: 1.0
+    claim-fail:
+      name: ENTITY_VILLAGER_NO
+      volume: 1.0
+      pitch: 1.0
+    delete-success:
+      name: BLOCK_ANVIL_LAND
+      volume: 1.0
+      pitch: 0.7
+    send-success:
+      name: ENTITY_PLAYER_LEVELUP
+      volume: 1.0
+      pitch: 1.0
+    receive-notification:
+      name: UI_TOAST_IN
+      volume: 1.0
+      pitch: 1.0
+    reminder:
+      name: ENTITY_EXPERIENCE_ORB_PICKUP
+      volume: 1.0
+      pitch: 1.0
   action:
-    setting-change: ENTITY_EXPERIENCE_ORB_PICKUP
-    selection-complete: BLOCK_NOTE_BLOCK_PLING
+    setting-change:
+      name: ENTITY_EXPERIENCE_ORB_PICKUP
+      volume: 1.0
+      pitch: 1.0
+    selection-complete:
+      name: BLOCK_NOTE_BLOCK_PLING
+      volume: 1.0
+      pitch: 1.0

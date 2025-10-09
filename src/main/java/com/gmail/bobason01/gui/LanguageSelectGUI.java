@@ -81,7 +81,7 @@ public class LanguageSelectGUI implements Listener, InventoryHolder {
         if (!LangManager.getAvailableLanguages().contains(selectedLang)) return;
 
         LangManager.setLanguage(player.getUniqueId(), selectedLang);
-        player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.ACTION_SETTING_CHANGE), 1.0f, 1.2f);
+        ConfigManager.playSound(player, ConfigManager.SoundType.ACTION_SETTING_CHANGE);
         MailManager.getInstance().mailSettingGUI.open(player);
     }
 }

@@ -138,7 +138,7 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
         long now = System.currentTimeMillis();
         AtomicLong lastClick = lastClickMap.computeIfAbsent(player.getUniqueId(), k -> new AtomicLong(0));
         if (now - lastClick.get() < PAGE_COOLDOWN_MS) {
-            player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK_FAIL), 1.0f, 0.5f);
+            ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK_FAIL);
             return false;
         }
         lastClick.set(now);
@@ -169,7 +169,7 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
             case SLOT_PREV -> open(player, page - 1);
             case SLOT_NEXT -> open(player, page + 1);
             case SLOT_BACK -> {
-                player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1.0f, 1.0f);
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                 MailManager.getInstance().mailSettingGUI.open(player);
             }
             default -> {
@@ -191,7 +191,7 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
                         blocked.add(targetId);
                         player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked").replace("%name%", name));
                     }
-                    player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1f, 1f);
+                    ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                     MailDataManager.getInstance().setBlacklist(uuid, blocked);
                     open(player, page);
                 }

@@ -130,7 +130,7 @@ public class MailSendAllGUI implements Listener, InventoryHolder {
                 MailService.setAttachedItem(uuid, null);
                 sentSet.add(uuid);
                 player.sendMessage(LangManager.get(uuid, "mail.sendall.success"));
-                player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.MAIL_SEND_SUCCESS), 1.0f, 1.0f);
+                ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_SEND_SUCCESS);
                 player.closeInventory();
             }
             case SLOT_BACK -> manager.mailGUI.open(player);

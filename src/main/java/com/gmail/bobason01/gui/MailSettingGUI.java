@@ -6,7 +6,6 @@ import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.MailDataManager;
 import com.gmail.bobason01.utils.ItemBuilder;
 import org.bukkit.Bukkit;
-import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -40,7 +39,7 @@ public class MailSettingGUI implements Listener, InventoryHolder {
     public void open(Player player) {
         UUID uuid = player.getUniqueId();
         String lang = LangManager.getLanguage(uuid);
-        boolean notifyEnabled = MailDataManager.getInstance().isNotifyEnabled(uuid);
+        boolean notifyEnabled = MailDataManager.getInstance().isNotify(uuid);
 
         // 알림 상태에 따라 다른 아이템 불러오기
         ItemStack notifyItem = (notifyEnabled
@@ -88,7 +87,6 @@ public class MailSettingGUI implements Listener, InventoryHolder {
         ItemStack clicked = e.getCurrentItem();
         if (clicked == null || clicked.getType().isAir()) return;
 
-        Sound clickSound = ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK);
         MailManager manager = MailManager.getInstance();
 
         switch (e.getRawSlot()) {
@@ -96,15 +94,26 @@ public class MailSettingGUI implements Listener, InventoryHolder {
                 boolean newState = MailDataManager.getInstance().toggleNotification(player.getUniqueId());
                 String messageKey = newState ? "gui.notify.enabled" : "gui.notify.disabled";
                 player.sendMessage(LangManager.get(player.getUniqueId(), messageKey));
-                player.playSound(player.getLocation(),
-                        ConfigManager.getSound(ConfigManager.SoundType.ACTION_SETTING_CHANGE),
-                        1.0f,
-                        newState ? 1.2f : 0.8f);
+
+                ConfigManager.playSound(
+                        player,
+                        ConfigManager.SoundType.ACTION_SETTING_CHANGE
+                );
+
                 open(player);
             }
-            case BLACKLIST_SLOT -> manager.blacklistSelectGUI.open(player);
-            case LANGUAGE_SLOT -> manager.languageSelectGUI.open(player);
-            case BACK_SLOT -> manager.mailGUI.open(player);
+            case BLACKLIST_SLOT -> {
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
+                manager.blacklistSelectGUI.open(player);
+            }
+            case LANGUAGE_SLOT -> {
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
+                manager.languageSelectGUI.open(player);
+            }
+            case BACK_SLOT -> {
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
+                manager.mailGUI.open(player);
+            }
         }
     }
 }

@@ -73,7 +73,7 @@ public final class MailManager extends JavaPlugin {
 
         long autoSaveInterval = 20L * getConfig().getLong("auto-save-interval", 300);
         Bukkit.getScheduler().runTaskTimerAsynchronously(this,
-                MailDataManager.getInstance()::save, autoSaveInterval, autoSaveInterval);
+                () -> MailDataManager.getInstance().flush(), autoSaveInterval, autoSaveInterval);
 
         MailReminderTask.start(this);
 

@@ -106,10 +106,10 @@ public class MailGUI implements Listener, InventoryHolder {
     }
 
     private ItemStack createButton(ItemStack base, String name) {
-        ItemStack item = base.clone(); // clone으로 원본 훼손 방지
+        ItemStack item = base.clone();
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(name); // 이름만 덮어쓰기
+            meta.setDisplayName(name);
             item.setItemMeta(meta);
         }
         return item;
@@ -141,19 +141,19 @@ public class MailGUI implements Listener, InventoryHolder {
 
         switch (slot) {
             case SEND_BTN_SLOT:
-                player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1.0f, 1.0f);
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                 manager.mailSendGUI.open(player);
                 break;
             case SETTING_BTN_SLOT:
-                player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1.0f, 1.0f);
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                 manager.mailSettingGUI.open(player);
                 break;
             case PREV_BTN_SLOT:
-                player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_PAGE_TURN), 1.0f, 1.0f);
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_PAGE_TURN);
                 open(player, currentPage - 1);
                 break;
             case NEXT_BTN_SLOT:
-                player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_PAGE_TURN), 1.0f, 1.0f);
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_PAGE_TURN);
                 open(player, currentPage + 1);
                 break;
             default:
@@ -166,7 +166,7 @@ public class MailGUI implements Listener, InventoryHolder {
                     Mail mail = mails.get(mailIndex);
 
                     if (e.getClick() == ClickType.RIGHT) {
-                        player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1.0f, 1.0f);
+                        ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                         mailToDelete.put(uuid, mail);
                         new MailDeleteConfirmGUI(player).open(player);
                         return;
@@ -176,15 +176,15 @@ public class MailGUI implements Listener, InventoryHolder {
                     if (item != null && item.getType() != Material.AIR) {
                         if (player.getInventory().firstEmpty() == -1) {
                             player.sendMessage(LangManager.get(uuid, "mail.receive.failed"));
-                            player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.MAIL_CLAIM_FAIL), 1.0f, 1.0f);
+                            ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_FAIL);
                             return;
                         }
                         player.getInventory().addItem(item);
                     }
 
-                    MailDataManager.getInstance().removeMail(uuid, mail);
+                    MailDataManager.getInstance().removeMail(mail);
                     player.sendMessage(LangManager.get(uuid, "mail.claim_success"));
-                    player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.MAIL_CLAIM_SUCCESS), 1.0f, 1.2f);
+                    ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
                     open(player, currentPage);
                 }
                 break;
@@ -204,12 +204,12 @@ public class MailGUI implements Listener, InventoryHolder {
         }
 
         if (slot == MailDeleteConfirmGUI.YES_SLOT) {
-            MailDataManager.getInstance().removeMail(uuid, mail);
+            MailDataManager.getInstance().removeMail(mail);
             player.sendMessage(LangManager.get(uuid, "mail.deleted"));
-            player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.MAIL_DELETE_SUCCESS), 1.0f, 1.0f);
+            ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_DELETE_SUCCESS);
         } else if (slot == MailDeleteConfirmGUI.NO_SLOT) {
             player.sendMessage(LangManager.get(uuid, "mail.delete_cancel"));
-            player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1.0f, 1.0f);
+            ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
         }
 
         Bukkit.getScheduler().runTaskLater(plugin, () -> open(player, currentPage), 2L);

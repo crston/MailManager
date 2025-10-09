@@ -6,7 +6,7 @@
 
     <groupId>com.gmail.bobason01</groupId>
     <artifactId>MailManager</artifactId>
-    <version>8.0</version>
+    <version>11.0</version>
     <packaging>jar</packaging>
 
     <name>MailManager</name>
@@ -68,6 +68,10 @@
             <id>phoenix</id>
             <url>https://nexus.phoenixdevt.fr/repository/maven-public/</url>
         </repository>
+        <repository>
+            <id>matteodev</id>
+            <url>https://maven.devs.beer/</url>
+        </repository>
     </repositories>
 
     <dependencies>
@@ -103,6 +107,27 @@
             <groupId>net.Indyuce</groupId>
             <artifactId>MMOItems-API</artifactId>
             <version>6.9.5-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>5.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.45.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>8.0.33</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.lone</groupId>
+            <artifactId>api-itemsadder</artifactId>
+            <version>4.0.10</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

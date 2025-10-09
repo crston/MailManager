@@ -96,7 +96,7 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
                         }
                     }
 
-                    // 다음/이전/뒤로가기 버튼 (clone 필수!)
+                    // 다음/이전/뒤로가기 버튼
                     if (safePage < maxPage) {
                         inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON).clone())
                                 .name("§a" + LangManager.get(lang, "gui.next"))
@@ -125,7 +125,7 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
         long now = System.currentTimeMillis();
         AtomicLong lastClick = lastPageClickMap.computeIfAbsent(uuid, k -> new AtomicLong(0));
         if (now - lastClick.get() < PAGE_COOLDOWN_MS) {
-            player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK_FAIL), 1.0f, 0.5f);
+            ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK_FAIL);
             return false;
         }
         lastClick.set(now);
@@ -149,9 +149,18 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
         if (!hasCooldownPassed(player)) return;
 
         switch (slot) {
-            case SLOT_NEXT -> open(player, currentPage + 1);
-            case SLOT_PREV -> open(player, currentPage - 1);
-            case SLOT_BACK -> MailManager.getInstance().mailSendGUI.open(player);
+            case SLOT_NEXT -> {
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_PAGE_TURN);
+                open(player, currentPage + 1);
+            }
+            case SLOT_PREV -> {
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_PAGE_TURN);
+                open(player, currentPage - 1);
+            }
+            case SLOT_BACK -> {
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
+                MailManager.getInstance().mailSendGUI.open(player);
+            }
             default -> {
                 if (clicked.getType() != Material.PLAYER_HEAD) return;
                 String name = ChatColor.stripColor(Objects.requireNonNull(clicked.getItemMeta()).getDisplayName());
@@ -159,13 +168,13 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
                 OfflinePlayer target = PlayerCache.getByName(name);
                 if (target == null || target.getUniqueId().equals(uuid)) {
                     player.sendMessage(LangManager.get(uuid, "gui.target.invalid"));
-                    player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK_FAIL), 1.0f, 0.6f);
+                    ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK_FAIL);
                     return;
                 }
 
                 MailService.setTarget(uuid, target);
                 player.sendMessage(LangManager.get(uuid, "gui.target.selected").replace("%target%", name));
-                player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.ACTION_SETTING_CHANGE), 1.0f, 1.2f);
+                ConfigManager.playSound(player, ConfigManager.SoundType.ACTION_SETTING_CHANGE);
                 MailManager.getInstance().mailSendGUI.open(player);
             }
         }

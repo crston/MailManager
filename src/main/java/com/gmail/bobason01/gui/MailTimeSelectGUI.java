@@ -108,7 +108,7 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
 
             time.put(unit, value);
             MailService.setTimeData(uuid, time);
-            player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1, 1);
+            ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
             open(player, parentGuiMap.get(uuid));
             return;
         }
@@ -117,7 +117,7 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
             case PERMANENT_SLOT -> {
                 MailService.setTimeData(uuid, new HashMap<>());
                 player.sendMessage(LangManager.get(uuid, "time.permanent"));
-                player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.GUI_CLICK), 1, 1);
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                 open(player, parentGuiMap.get(uuid));
             }
             case CHAT_INPUT_SLOT -> {
@@ -130,7 +130,7 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
     }
 
     private void goBack(Player player) {
-        player.playSound(player.getLocation(), ConfigManager.getSound(ConfigManager.SoundType.ACTION_SELECTION_COMPLETE), 1, 1.2f);
+        ConfigManager.playSound(player, ConfigManager.SoundType.ACTION_SELECTION_COMPLETE);
         Class<?> parentClass = parentGuiMap.remove(player.getUniqueId());
         MailManager manager = MailManager.getInstance();
 
