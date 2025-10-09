@@ -7,9 +7,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -17,8 +15,8 @@ import java.util.*;
 
 public class Mail implements Serializable {
 
-    @java.io.Serial
-    private static final long serialVersionUID = 2L;
+    @Serial
+    private static final long serialVersionUID = 3L;
     private static final transient DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final transient Map<UUID, String> nameCache = new HashMap<>();
 
@@ -28,18 +26,23 @@ public class Mail implements Serializable {
     private final LocalDateTime sentAt;
     private final LocalDateTime expireAt;
 
-    private transient ItemStack item;
+    private final List<ItemStack> items; // 여러 아이템 지원
     private transient String cachedSenderName;
 
-    public Mail(UUID sender, UUID receiver, ItemStack item, LocalDateTime sentAt, LocalDateTime expireAt) {
-        this(UUID.randomUUID(), sender, receiver, item, sentAt, expireAt);
+    public Mail(UUID sender, UUID receiver, List<ItemStack> items, LocalDateTime sentAt, LocalDateTime expireAt) {
+        this(UUID.randomUUID(), sender, receiver, items, sentAt, expireAt);
     }
 
-    public Mail(UUID mailId, UUID sender, UUID receiver, ItemStack item, LocalDateTime sentAt, LocalDateTime expireAt) {
+    public Mail(UUID mailId, UUID sender, UUID receiver, List<ItemStack> items, LocalDateTime sentAt, LocalDateTime expireAt) {
         this.mailId = Objects.requireNonNull(mailId);
         this.sender = sender;
         this.receiver = receiver;
-        this.item = item != null ? item.clone() : null;
+        this.items = new ArrayList<>();
+        if (items != null) {
+            for (ItemStack item : items) {
+                if (item != null) this.items.add(item.clone());
+            }
+        }
         this.sentAt = sentAt;
         this.expireAt = expireAt;
     }
@@ -47,7 +50,11 @@ public class Mail implements Serializable {
     public UUID getMailId() { return mailId; }
     public UUID getSender() { return sender; }
     public UUID getReceiver() { return receiver; }
-    public ItemStack getItem() { return item != null ? item.clone() : null; }
+    public List<ItemStack> getItems() {
+        List<ItemStack> copy = new ArrayList<>();
+        for (ItemStack i : items) copy.add(i.clone());
+        return copy;
+    }
     public LocalDateTime getSentAt() { return sentAt; }
     public LocalDateTime getExpireAt() { return expireAt; }
 
@@ -56,8 +63,9 @@ public class Mail implements Serializable {
     }
 
     public ItemStack toItemStack(Player viewer) {
-        if (item == null) return null;
-        ItemStack display = item.clone();
+        if (items == null || items.isEmpty()) return null;
+
+        ItemStack display = items.get(0).clone(); // 대표 아이콘
         ItemMeta meta = display.getItemMeta();
 
         if (meta != null) {
@@ -86,6 +94,7 @@ public class Mail implements Serializable {
                 lore.add("§c" + LangManager.get(lang, "mail.lore.expired"));
             }
         }
+        lore.add("§a" + LangManager.get(lang, "mail.send.amount") + " - " + items.size());
         return lore;
     }
 
@@ -102,7 +111,7 @@ public class Mail implements Serializable {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (!(o instanceof Mail)) return false;
         Mail mail = (Mail) o;
         return mailId.equals(mail.mailId);
     }
@@ -110,24 +119,5 @@ public class Mail implements Serializable {
     @Override
     public int hashCode() {
         return mailId.hashCode();
-    }
-
-    @java.io.Serial
-    private void writeObject(ObjectOutputStream out) throws IOException {
-        out.defaultWriteObject();
-        if (item != null) {
-            out.writeObject(item.serialize());
-        } else {
-            out.writeObject(null);
-        }
-    }
-
-    @java.io.Serial
-    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
-        in.defaultReadObject();
-        Map<String, Object> itemMap = (Map<String, Object>) in.readObject();
-        if (itemMap != null) {
-            this.item = ItemStack.deserialize(itemMap);
-        }
     }
 }

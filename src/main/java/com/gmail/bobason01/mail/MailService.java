@@ -17,7 +17,8 @@ public class MailService {
 
     private static final long SESSION_TIMEOUT = 5 * 60 * 1000L;
     private static final Map<UUID, MailSession> sessions = new ConcurrentHashMap<>();
-    private static final ExecutorService sendExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    private static final ExecutorService sendExecutor =
+            Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
     public static void init(Plugin plugin) {
         long interval = SESSION_TIMEOUT / 50L;
@@ -27,20 +28,29 @@ public class MailService {
         }, interval, interval);
     }
 
-    public static void sendAll(Player sender, Plugin plugin) {
-        final UUID senderId = sender.getUniqueId();
-        final MailSession session = sessions.get(senderId);
-        final String lang = LangManager.getLanguage(senderId);
+    public static void shutdown() {
+        sendExecutor.shutdown();
+    }
 
-        if (session == null || isInvalidItem(session.item)) {
+    public static void sendAll(Player sender, Plugin plugin) {
+        UUID senderId = sender.getUniqueId();
+        MailSession session = sessions.get(senderId);
+        String lang = LangManager.getLanguage(senderId);
+
+        if (session == null || session.items.isEmpty()) {
             sender.sendMessage(LangManager.get(lang, "mail.sendall.invalid"));
             return;
         }
 
-        final ItemStack baseItem = session.item.clone();
-        final LocalDateTime now = LocalDateTime.now();
-        final LocalDateTime expireAt = buildExpireTime(now, session.time);
-        final Set<UUID> exclude = MailDataManager.getInstance().getExclude(senderId);
+        List<ItemStack> baseItems = cloneValidItems(session.items);
+        if (baseItems.isEmpty()) {
+            sender.sendMessage(LangManager.get(lang, "mail.sendall.no_item"));
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expireAt = buildExpireTime(now, session.time);
+        Set<UUID> exclude = MailDataManager.getInstance().getExclude(senderId);
 
         CompletableFuture.runAsync(() -> {
             List<Mail> mailsToSend = PlayerCache.getCachedPlayers().parallelStream()
@@ -48,7 +58,7 @@ public class MailService {
                     .filter(targetId -> !targetId.equals(senderId))
                     .filter(targetId -> !exclude.contains(targetId))
                     .filter(targetId -> !MailDataManager.getInstance().getBlacklist(targetId).contains(senderId))
-                    .map(targetId -> new Mail(senderId, targetId, baseItem, now, expireAt))
+                    .map(targetId -> new Mail(senderId, targetId, baseItems, now, expireAt))
                     .toList();
 
             for (Mail mail : mailsToSend) {
@@ -58,7 +68,8 @@ public class MailService {
             int count = mailsToSend.size();
             Bukkit.getScheduler().runTask(plugin, () -> {
                 sessions.remove(senderId);
-                sender.sendMessage(LangManager.get(lang, "mail.sendall.success").replace("%count%", String.valueOf(count)));
+                sender.sendMessage(LangManager.get(lang, "mail.sendall.success")
+                        .replace("%count%", String.valueOf(count)));
             });
         }, sendExecutor);
     }
@@ -73,11 +84,16 @@ public class MailService {
             return;
         }
 
-        ItemStack item = session.item.clone();
+        List<ItemStack> baseItems = cloneValidItems(session.items);
+        if (baseItems.isEmpty()) {
+            sender.sendMessage(LangManager.get(lang, "mail.send.no_item"));
+            return;
+        }
+
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expireAt = buildExpireTime(now, session.time);
-        Mail mail = new Mail(senderId, session.target, item, now, expireAt);
 
+        Mail mail = new Mail(senderId, session.target, baseItems, now, expireAt);
         MailDataManager.getInstance().addMail(mail);
         sessions.remove(senderId);
 
@@ -108,13 +124,18 @@ public class MailService {
         return targetId != null ? PlayerCache.getByUUID(targetId) : null;
     }
 
-    public static void setAttachedItem(UUID playerId, ItemStack item) {
-        getOrCreateSession(playerId).item = isInvalidItem(item) ? null : item.clone();
+    public static void setAttachedItems(UUID playerId, List<ItemStack> items) {
+        getOrCreateSession(playerId).items = cloneValidItems(items);
     }
 
-    public static ItemStack getAttachedItem(UUID playerId) {
+    public static List<ItemStack> getAttachedItems(UUID playerId) {
         MailSession session = getSession(playerId);
-        return (session != null && session.item != null) ? session.item.clone() : null;
+        return (session == null) ? new ArrayList<>() : cloneValidItems(session.items);
+    }
+
+    public static void clearAttached(UUID playerId) {
+        MailSession session = getSession(playerId);
+        if (session != null) session.items.clear();
     }
 
     public static void setTimeData(UUID playerId, Map<String, Integer> time) {
@@ -132,12 +153,13 @@ public class MailService {
         return expire.atZone(TimeZone.getDefault().toZoneId()).toInstant().toEpochMilli();
     }
 
-    private static boolean isValidSession(MailSession session) {
-        return session != null && session.item != null && session.item.getType() != Material.AIR;
+    public static boolean isReadyToAttach(UUID playerId) {
+        MailSession session = getSession(playerId);
+        return session != null && (session.time != null && !session.time.isEmpty());
     }
 
-    private static boolean isInvalidItem(ItemStack item) {
-        return item == null || item.getType() == Material.AIR;
+    private static boolean isValidSession(MailSession session) {
+        return session != null && session.items != null && !session.items.isEmpty();
     }
 
     private static LocalDateTime buildExpireTime(LocalDateTime base, Map<String, Integer> timeData) {
@@ -153,8 +175,20 @@ public class MailService {
                 .plusSeconds(timeData.getOrDefault("second", 0));
     }
 
+    private static List<ItemStack> cloneValidItems(List<ItemStack> items) {
+        List<ItemStack> clones = new ArrayList<>();
+        if (items != null) {
+            for (ItemStack item : items) {
+                if (item != null && item.getType() != Material.AIR) {
+                    clones.add(item.clone());
+                }
+            }
+        }
+        return clones;
+    }
+
     public static class MailSession {
-        public ItemStack item;
+        public List<ItemStack> items = new ArrayList<>();
         public Map<String, Integer> time = new HashMap<>();
         public UUID target;
         public long lastAccess = System.currentTimeMillis();

@@ -82,7 +82,6 @@ public class MailGUI implements Listener, InventoryHolder {
             inv.setItem(i - start, item);
         }
 
-        // 이전 / 다음 버튼
         if (page > 0) {
             inv.setItem(PREV_BTN_SLOT, createButton(
                     ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON).clone(),
@@ -94,10 +93,12 @@ public class MailGUI implements Listener, InventoryHolder {
                     LangManager.get(uuid, "gui.next")));
         }
 
-        // 보내기 / 설정 버튼
-        inv.setItem(SEND_BTN_SLOT, createButton(
-                ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SEND_BUTTON).clone(),
-                LangManager.get(uuid, "gui.send.title")));
+        if (player.hasPermission("mail.send")) {
+            inv.setItem(SEND_BTN_SLOT, createButton(
+                    ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SEND_BUTTON).clone(),
+                    LangManager.get(uuid, "gui.send.title")));
+        }
+
         inv.setItem(SETTING_BTN_SLOT, createButton(
                 ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SETTING_BUTTON).clone(),
                 LangManager.get(uuid, "gui.setting.title")));
@@ -141,6 +142,10 @@ public class MailGUI implements Listener, InventoryHolder {
 
         switch (slot) {
             case SEND_BTN_SLOT:
+                if (!player.hasPermission("mail.send")) {
+                    player.sendMessage(LangManager.get(uuid, "mail.send.no_permission"));
+                    return;
+                }
                 ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                 manager.mailSendGUI.open(player);
                 break;
@@ -168,24 +173,11 @@ public class MailGUI implements Listener, InventoryHolder {
                     if (e.getClick() == ClickType.RIGHT) {
                         ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                         mailToDelete.put(uuid, mail);
-                        new MailDeleteConfirmGUI(player).open(player);
+                        new MailDeleteConfirmGUI(player, plugin, mail).open(player);
                         return;
                     }
 
-                    ItemStack item = mail.getItem();
-                    if (item != null && item.getType() != Material.AIR) {
-                        if (player.getInventory().firstEmpty() == -1) {
-                            player.sendMessage(LangManager.get(uuid, "mail.receive.failed"));
-                            ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_FAIL);
-                            return;
-                        }
-                        player.getInventory().addItem(item);
-                    }
-
-                    MailDataManager.getInstance().removeMail(mail);
-                    player.sendMessage(LangManager.get(uuid, "mail.claim_success"));
-                    ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
-                    open(player, currentPage);
+                    manager.mailViewGUI.open(player, mail);
                 }
                 break;
         }

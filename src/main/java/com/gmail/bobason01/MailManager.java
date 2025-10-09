@@ -30,6 +30,8 @@ public final class MailManager extends JavaPlugin {
     public BlacklistSelectGUI blacklistSelectGUI;
     public SendAllExcludeGUI sendAllExcludeGUI;
     public LanguageSelectGUI languageSelectGUI;
+    public MailAttachGUI mailAttachGUI;
+    public MailViewGUI mailViewGUI;
 
     public static MailManager getInstance() {
         return instance;
@@ -40,8 +42,11 @@ public final class MailManager extends JavaPlugin {
         instance = this;
 
         ConfigManager.load(this);
-        copyLangFile("en.yml");
-        copyLangFile("ko.yml");
+        copyLangFile("en_us.yml");
+        copyLangFile("ko_kr.yml");
+        copyLangFile("ja_jp.yml");
+        copyLangFile("zh_cn.yml");
+        copyLangFile("zh_tw.yml");
         LangManager.loadAll(getDataFolder());
         MailDataManager.getInstance().load(this);
         MailService.init(this);
@@ -55,6 +60,8 @@ public final class MailManager extends JavaPlugin {
         this.sendAllExcludeGUI = new SendAllExcludeGUI(this);
         this.languageSelectGUI = new LanguageSelectGUI(this);
         this.mailGUI = new MailGUI(this);
+        this.mailAttachGUI = new MailAttachGUI(this);
+        this.mailViewGUI = new MailViewGUI(this);
 
 
         Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> PlayerCache.refresh(this), 0L, 20L * 300);
@@ -67,7 +74,7 @@ public final class MailManager extends JavaPlugin {
         registerListeners(
                 mailGUI, mailSendGUI, mailSendAllGUI,
                 mailSettingGUI, mailTimeSelectGUI, mailTargetSelectGUI,
-                blacklistSelectGUI, sendAllExcludeGUI, languageSelectGUI,
+                blacklistSelectGUI, sendAllExcludeGUI, languageSelectGUI, mailAttachGUI, mailViewGUI,
                 new MailLoginListener(this)
         );
 

@@ -1,4 +1,4 @@
-default-language: en
+default-language: en_us
 
 database:
   type: SQLITE
@@ -24,13 +24,21 @@ items:
         custom-model-data: 0
         damage: 0
         hide-flags: false
-        unbreakable: false
       setting-button:
         material: COMPARATOR
         custom-model-data: 0
         damage: 0
         hide-flags: false
-        unbreakable: false
+      claim-button:
+        material: CHEST
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+      delete-button:
+        material: RED_WOOL
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
   page:
     next-button:
       material: ARROW
@@ -100,6 +108,11 @@ items:
         hide-flags: false
       exclude:
         material: BARRIER
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+      attach:
+        material: CHEST
         custom-model-data: 0
         damage: 0
         hide-flags: false

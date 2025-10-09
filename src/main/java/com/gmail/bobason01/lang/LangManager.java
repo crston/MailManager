@@ -17,7 +17,7 @@ import java.util.logging.Level;
 
 public class LangManager {
 
-    private static String defaultLang = "en";
+    private static String defaultLang = "en_us";
     private static final Map<String, YamlConfiguration> langConfigs = new HashMap<>();
     private static final Map<UUID, String> userLang = new ConcurrentHashMap<>();
 
@@ -27,7 +27,7 @@ public class LangManager {
         File configFile = new File(dataFolder, "config.yml");
         if (configFile.exists()) {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
-            defaultLang = config.getString("default-language", "en");
+            defaultLang = config.getString("default-language", "en_us");
         }
 
         File langFolder = new File(dataFolder, "lang");
@@ -50,7 +50,7 @@ public class LangManager {
         }
 
         if (!langConfigs.containsKey(defaultLang)) {
-            defaultLang = "en";
+            defaultLang = "en_us";
         }
     }
 
@@ -71,7 +71,7 @@ public class LangManager {
             config = langConfigs.get(defaultLang);
         }
         if (config == null) {
-            config = langConfigs.get("en");
+            config = langConfigs.get("en_us");
         }
         if (config == null) {
             return "§c[ERROR] Language files not found!";
