@@ -53,6 +53,7 @@ mail:
   claim_success: "&aメールのアイテムを受け取りました。"
   deleted: "&aメールを削除しました。"
   delete_cancel: "&c削除をキャンセルしました。"
+  inventory_full: "&cインベントリに空きがないため、一部のアイテムを受け取れませんでした。"
   send:
     amount: "アイテム数"
     invalid: "&cアイテムと宛先を指定してください。"

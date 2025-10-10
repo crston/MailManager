@@ -53,6 +53,7 @@ mail:
   claim_success: "&aSuccessfully claimed mail item."
   deleted: "&aMail deleted."
   delete_cancel: "&cMail deletion canceled."
+  inventory_full: "&cYour inventory is full. Some items could not be claimed."
   send:
     amount: "Item Amount"
     invalid: "&cYou must specify both item and target."

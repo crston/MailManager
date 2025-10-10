@@ -53,6 +53,7 @@ mail:
   claim_success: "&a우편 아이템을 성공적으로 수령했습니다."
   deleted: "&a우편을 삭제했습니다."
   delete_cancel: "&c우편 삭제를 취소했습니다."
+  inventory_full: "&c인벤토리에 공간이 부족하여 일부 아이템을 수령하지 못했습니다."
   send:
     amount: "아이템 개수"
     invalid: "&c보낼 아이템과 대상을 모두 지정해야 합니다."

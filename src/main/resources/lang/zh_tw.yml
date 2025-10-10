@@ -53,6 +53,7 @@ mail:
   claim_success: "&a成功領取郵件物品。"
   deleted: "&a郵件已刪除。"
   delete_cancel: "&c已取消刪除郵件。"
+  inventory_full: "&c背包空間不足，部分物品無法領取。"
   send:
     amount: "物品數量"
     invalid: "&c必須指定物品和目標。"

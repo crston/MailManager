@@ -23,10 +23,10 @@ import java.util.*;
 public class MailViewGUI implements Listener, InventoryHolder {
 
     private static final int SIZE = 54;
-    private static final int MAX_ITEMS = 36;      // 아이템 슬롯 0~35
-    private static final int SLOT_CLAIM_ALL = 48; // 모든 아이템 수령
-    private static final int SLOT_DELETE = 50;    // 우편 삭제
-    private static final int SLOT_BACK = 53;      // 뒤로가기
+    private static final int MAX_ITEMS = 36;
+    private static final int SLOT_CLAIM_ALL = 48;
+    private static final int SLOT_DELETE = 50;
+    private static final int SLOT_BACK = 53;
 
     private final Plugin plugin;
     private Inventory inv;
@@ -55,7 +55,6 @@ public class MailViewGUI implements Listener, InventoryHolder {
     private void refreshInventory() {
         inv.clear();
 
-        // 아이템 다시 채우기
         List<ItemStack> items = mail.getItems();
         for (int i = 0; i < Math.min(MAX_ITEMS, items.size()); i++) {
             ItemStack item = items.get(i);
@@ -66,17 +65,14 @@ public class MailViewGUI implements Listener, InventoryHolder {
 
         String lang = LangManager.getLanguage(owner);
 
-        // 모든 아이템 수령 버튼
         inv.setItem(SLOT_CLAIM_ALL, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_CLAIM_BUTTON).clone())
                 .name(LangManager.get(lang, "gui.mail.claim_all"))
                 .build());
 
-        // 우편 삭제 버튼
         inv.setItem(SLOT_DELETE, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_DELETE_BUTTON).clone())
                 .name(LangManager.get(lang, "gui.mail.delete"))
                 .build());
 
-        // 뒤로가기 버튼
         inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
                 .name("§c" + LangManager.get(lang, "gui.back.name"))
                 .build());
@@ -105,44 +101,55 @@ public class MailViewGUI implements Listener, InventoryHolder {
         }
 
         if (slot == SLOT_CLAIM_ALL) {
-            claimItems(player, new ArrayList<>(mail.getItems()));
+            List<ItemStack> before = new ArrayList<>(mail.getItems());
+            List<ItemStack> remain = claimItems(player, before);
             mail.getItems().clear();
-            MailDataManager.getInstance().removeMail(mail);
-            player.sendMessage(LangManager.get(uuid, "mail.claim_success"));
-            new MailGUI(plugin).open(player);
+            mail.getItems().addAll(remain);
+
+            if (remain.isEmpty()) {
+                MailDataManager.getInstance().removeMail(mail);
+                player.sendMessage(LangManager.get(uuid, "mail.claim_success"));
+                new MailGUI(plugin).open(player);
+            } else {
+                MailDataManager.getInstance().updateMail(mail);
+                player.sendMessage(LangManager.get(uuid, "mail.inventory_full"));
+                refreshInventory();
+            }
             return;
         }
 
-        // 개별 아이템 수령
         if (slot < MAX_ITEMS) {
             ItemStack clicked = e.getCurrentItem();
             if (clicked != null && clicked.getType() != Material.AIR) {
-                claimItems(player, Collections.singletonList(clicked.clone()));
+                List<ItemStack> remain = claimItems(player, Collections.singletonList(clicked.clone()));
 
-                List<ItemStack> items = mail.getItems();
-                if (slot < items.size()) {
-                    items.remove(slot);
-                }
-
-                if (mail.getItems().isEmpty()) {
-                    MailDataManager.getInstance().removeMail(mail);
-                    new MailGUI(plugin).open(player);
+                if (remain.isEmpty()) {
+                    List<ItemStack> items = mail.getItems();
+                    if (slot < items.size()) {
+                        items.remove(slot);
+                    }
+                    if (items.isEmpty()) {
+                        MailDataManager.getInstance().removeMail(mail);
+                        new MailGUI(plugin).open(player);
+                    } else {
+                        MailDataManager.getInstance().updateMail(mail);
+                        refreshInventory();
+                    }
                 } else {
-                    MailDataManager.getInstance().updateMail(mail);
-                    refreshInventory();
+                    player.sendMessage(LangManager.get(uuid, "mail.inventory_full"));
                 }
             }
         }
     }
 
-    private void claimItems(Player player, List<ItemStack> items) {
+    private List<ItemStack> claimItems(Player player, List<ItemStack> items) {
+        List<ItemStack> remainAll = new ArrayList<>();
         for (ItemStack item : items) {
             if (item == null || item.getType() == Material.AIR) continue;
             Map<Integer, ItemStack> remain = player.getInventory().addItem(item.clone());
-            for (ItemStack leftover : remain.values()) {
-                player.getWorld().dropItemNaturally(player.getLocation(), leftover);
-            }
+            remainAll.addAll(remain.values());
         }
+        return remainAll;
     }
 
     @EventHandler
