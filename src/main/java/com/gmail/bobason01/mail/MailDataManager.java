@@ -33,19 +33,30 @@ public class MailDataManager {
 
     public void load(JavaPlugin plugin) {
         try {
-            DatabaseType type = DatabaseType.valueOf(MailManager.getInstance().getConfig().getString("database.type", "SQLITE").toUpperCase());
+            DatabaseType type = DatabaseType.valueOf(
+                    MailManager.getInstance().getConfig()
+                            .getString("database.type", "SQLITE").toUpperCase()
+            );
+
             if (type == DatabaseType.YAML) {
                 throw new UnsupportedOperationException("YAML storage not optimized, use JDBC");
             } else {
                 DataSource ds = DataSourceFactory.build(type);
                 storage = new JdbcStorage(ds, type == DatabaseType.MYSQL);
             }
+
             storage.connect();
             storage.ensureSchema();
             loadAll();
+
             int interval = MailManager.getInstance().getConfig().getInt("flush.intervalTicks", 40);
             if (started.compareAndSet(false, true)) {
-                taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(MailManager.getInstance(), this::flush, interval, interval);
+                taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(
+                        MailManager.getInstance(),
+                        this::flush,
+                        interval,
+                        interval
+                );
             }
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "[MailManager] Initialization failed", e);
@@ -56,7 +67,7 @@ public class MailDataManager {
         try {
             if (taskId != -1) Bukkit.getScheduler().cancelTask(taskId);
             flush();
-            storage.disconnect();
+            if (storage != null) storage.disconnect();
         } catch (Exception e) {
             Bukkit.getLogger().log(Level.SEVERE, "[MailManager] Shutdown failed", e);
         }
@@ -68,14 +79,19 @@ public class MailDataManager {
             try {
                 List<Mail> list = storage.loadMails(u);
                 if (!list.isEmpty()) mailMap.put(u, new ArrayDeque<>(list));
+
                 Boolean n = storage.loadNotifySetting(u);
                 if (n != null) notifyMap.put(u, n);
+
                 Set<UUID> bl = storage.loadBlacklist(u);
                 if (!bl.isEmpty()) blacklistMap.put(u, bl);
+
                 Set<UUID> ex = storage.loadExclude(u);
                 if (!ex.isEmpty()) excludeMap.put(u, ex);
+
                 String lang = storage.loadPlayerLanguage(u);
                 if (lang != null) LangManager.loadUserLanguage(u, lang);
+
             } catch (Exception e) {
                 Bukkit.getLogger().log(Level.WARNING, "[MailManager] Load failed for " + u, e);
             }
@@ -105,8 +121,15 @@ public class MailDataManager {
 
     public void removeMail(Mail mail) {
         Deque<Mail> dq = mailMap.get(mail.getReceiver());
-        if (dq != null) dq.remove(mail);
+        if (dq != null) dq.removeIf(m -> m.getMailId().equals(mail.getMailId()));
         deleteQueue.add(new MailStorage.MailRecord(mail.getReceiver(), mail));
+    }
+
+    public void updateMail(Mail mail) {
+        Deque<Mail> dq = mailMap.computeIfAbsent(mail.getReceiver(), k -> new ArrayDeque<>());
+        dq.removeIf(m -> m.getMailId().equals(mail.getMailId()));
+        dq.add(mail);
+        insertQueue.add(new MailStorage.MailRecord(mail.getReceiver(), mail)); // UPSERT 처리
     }
 
     public List<Mail> getMails(UUID u) {
@@ -127,14 +150,18 @@ public class MailDataManager {
         try { storage.saveBlacklist(o, l); } catch (Exception ignored) {}
     }
 
-    public Set<UUID> getBlacklist(UUID o) { return blacklistMap.getOrDefault(o, Collections.emptySet()); }
+    public Set<UUID> getBlacklist(UUID o) {
+        return blacklistMap.getOrDefault(o, Collections.emptySet());
+    }
 
     public void setExclude(UUID u, Set<UUID> l) {
         excludeMap.put(u, l);
         try { storage.saveExclude(u, l); } catch (Exception ignored) {}
     }
 
-    public Set<UUID> getExclude(UUID u) { return excludeMap.getOrDefault(u, Collections.emptySet()); }
+    public Set<UUID> getExclude(UUID u) {
+        return excludeMap.getOrDefault(u, Collections.emptySet());
+    }
 
     public void savePlayerLanguage(UUID u, String l) {
         try { storage.savePlayerLanguage(u, l); } catch (Exception ignored) {}
@@ -147,6 +174,8 @@ public class MailDataManager {
     }
 
     public List<Mail> getUnreadMails(UUID uuid) {
-        return getMails(uuid).stream().filter(mail -> !mail.isExpired()).toList();
+        return getMails(uuid).stream()
+                .filter(mail -> !mail.isExpired())
+                .toList();
     }
 }

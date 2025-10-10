@@ -4,24 +4,35 @@ language:
 
 # 指令相關訊息
 cmd:
+  inv:
+    usage: "&c用法: /mail inv <create|edit|open|delete> <id>"
+    no-player: "&c此指令只能由玩家使用。"
+    no-permission: "&c你沒有使用此指令的權限。"
+    not-number: "&cID 必須是數字。"
+    exists: "&cID %id% 的背包已存在。"
+    created: "&a已建立背包 #%id%。"
+    deleted: "&c已刪除背包 #%id%。"
+    not-found: "&cID %id% 的背包不存在。"
   gui:
-    unavailable: "無法在控制台開啟GUI。"
+    unavailable: "主控台無法開啟GUI。"
   send:
-    usage: "用法: /mail send <玩家> <物品ID> [過期時間]"
+    target-offline: "&c目標玩家不在線上。"
+    target-online: "&c目標玩家在線上。"
+    usage: "用法: /mail send <玩家> <物品ID> [到期時間]"
     success: "&a成功寄送郵件給 %name%。"
   sendall:
-    usage: "用法: /mail sendall <物品ID> [過期時間]"
-    success: "&a成功群發郵件給 %count% 位玩家。"
+    usage: "用法: /mail sendall <物品ID> [到期時間]"
+    success: "&a已向 %count% 位玩家群發郵件。"
   reload: "&a配置已重新載入。"
-  player-only: "此指令僅限玩家使用。"
+  player-only: "此指令只能由玩家使用。"
   player:
     notfound: "&c找不到玩家 '%name%'。"
   item:
     invalid: "&c物品ID '%id%' 無效。"
   expire:
-    invalid: "&c過期時間格式錯誤。(例: 7d, 12h, 30m, 15s)"
+    invalid: "&c到期時間格式無效。(範例: 7d, 12h, 30m, 15s)"
   mmoitems:
-    missing: "&cMMOItems 插件未啟用。"
+    missing: "&c未啟用 MMOItems 外掛。"
   setlang:
     usage: "&e用法: /mail setlang <語言代碼>"
     not-found: "&c找不到語言 '%lang%'。可用語言: %langs%"
@@ -33,10 +44,10 @@ mail:
     success: "&a已附加 %count% 個物品。"
   unknown: "未知"
   lore:
-    sender: "寄件人: %sender%"
+    sender: "寄件者: %sender%"
     sent: "寄送時間: %time%"
-    expire: "過期時間: %time%"
-    expired: "&c已過期"
+    expire: "到期時間: %time%"
+    expired: "&c已到期"
   receive:
     failed: "&c背包空間不足，無法接收郵件。"
   claim_success: "&a成功領取郵件物品。"
@@ -44,38 +55,45 @@ mail:
   delete_cancel: "&c已取消刪除郵件。"
   send:
     amount: "物品數量"
-    invalid: "&c必須指定物品和收件人才能寄送。"
+    invalid: "&c必須指定物品和目標。"
     success: "&a郵件寄送成功。"
-    cooldown: "&c寄送過快，請稍後再試。"
+    cooldown: "&c寄送過於頻繁，請稍後再試。"
     no_permission: "&c你沒有寄送郵件的權限。"
   sendall:
     invalid: "&c未指定要寄送的物品。"
-    success: "&a群發郵件已寄出，將依序處理。"
-    cooldown: "&c寄送過快，請稍後再試。"
+    success: "&a群發郵件已開始，將依序寄送。"
+    cooldown: "&c寄送過於頻繁，請稍後再試。"
     no_item: "&c請先登錄要寄送的物品。"
-    select_first: "&c請先設定過期時間，然後(如需要)選擇排除對象。"
+    select_first: "&c請先設定到期時間，再選擇要排除的玩家（如需要）。"
   notify:
-    message: "&e你有新郵件！ &7(/mail)"
+    message: "&e你收到了新郵件! &7(/mail)"
     title:
-      main: "&6[!] 新郵件到達"
-      sub: "&f使用 /mail 查看"
+      main: "&6[!] 新郵件"
+      sub: "&f使用 /mail 指令查看。"
 
 # 登入提示
 login:
   title:
     main: "&6你有未讀郵件"
-    sub: "&f共有 %count% 封郵件在等待。"
+    sub: "&f共有 %count% 封郵件等待你查看。"
   message: "&e你有 %count% 封未讀郵件。 &7(/mail)"
 
-# GUI 相關文字
+# GUI相關
 gui:
+  mailinv:
+    edit:
+      title: "郵件背包 %id% [編輯]"
+    view:
+      title: "郵件背包 %id%"
+    saved: "§a已儲存背包 #%id%"
+    closed: "§7已關閉背包 #%id%"
   mail:
     title: "郵箱"
     view:
-      title: "郵件詳情"
+      title: "郵件詳細"
     claim_all: "§a[領取所有物品]"
     delete: "§c[刪除郵件]"
-    claim_success: "§a已領取郵件物品！"
+    claim_success: "§a已領取郵件物品!"
     deleted: "§c郵件已刪除。"
     lore:
       claim: "&e» 左鍵: 領取物品"
@@ -83,92 +101,92 @@ gui:
   attach:
     title: "&a附加物品"
   delete:
-    title: "刪除確認"
-    yes: "&c是，刪除。"
-    yes_lore: "&7此郵件將被永久刪除。"
+    title: "確認刪除"
+    yes: "&c是的，刪除。"
+    yes_lore: "&7永久刪除此郵件。"
     no: "&a否，取消。"
     no_lore: "&7返回郵箱。"
   send:
     title: "寄送郵件"
     time:
-      name: "&b設定過期時間"
+      name: "&b設定到期時間"
       duration: "&f剩餘: &e%time%"
-      expires: "&f過期於: &e%date%"
+      expires: "&f到期日期: &e%date%"
       no_expire: "&a永久"
     target:
       name: "&d選擇收件人"
-      lore: "&7選擇要寄給誰。"
+      lore: "&7選擇誰會收到郵件。"
     item:
-      first: "§7要寄送的物品 (顯示第一個)"
-      more: "§7另外附加了 %count% 個物品"
+      first: "§7顯示附加的第1個物品"
+      more: "§7另外 %count% 個物品"
     attach:
       name: "&e附加物品"
       lore: "&7登錄要寄送的物品。"
     no_item: "無物品"
-    no_item_lore: "放入此處可附加物品。"
+    no_item_lore: "將物品放入此處附加。"
     confirm:
       name: "&a寄送"
-      lore: "&7以當前設定寄送郵件。"
+      lore: "&7以設定內容寄送郵件。"
   sendall:
     title: "群發郵件"
     expire:
-      name: "&b設定過期時間"
-      lore: "&7為所有郵件設定過期時間。"
+      name: "&b設定到期時間"
+      lore: "&7設定所有郵件的到期時間。"
     exclude:
       name: "&c設定排除對象"
-      lore: "&7選擇要從群發中排除的玩家。"
+      lore: "&7選擇要排除的玩家。"
     attach:
       name: "&e附加物品"
-      lore: "&7登錄群發要包含的物品。"
+      lore: "&7登錄群發物品。"
     confirm:
       name: "&a群發"
-      lore: "&7向伺服器所有玩家寄送郵件。"
+      lore: "&7寄送郵件給伺服器所有玩家。"
   setting:
     title: "郵件設定"
   notify:
-    name: "&6郵件通知"
-    lore: "&7切換新郵件通知。"
-    enabled: "&a郵件通知已開啟。"
-    disabled: "&c郵件通知已關閉。"
+    name: "&6新郵件提醒"
+    lore: "&7切換新郵件提醒開關。"
+    enabled: "&a已開啟提醒。"
+    disabled: "&c已關閉提醒。"
   blacklist:
     title: "封鎖名單"
     search_prompt: "&7封鎖特定玩家的郵件。"
     allowed: "&a未封鎖"
     blocked: "&c已封鎖"
-    unblocked: "&a已解除對 %name% 的封鎖。"
+    unblocked: "&a已取消封鎖 %name%。"
     blocked_msg: "&c已封鎖 %name%。"
     not_found: "&c找不到玩家 '%input%'。"
   exclude:
-    title: "排除名單"
+    title: "排除清單"
     search: "&b搜尋玩家"
-    search.lore: "&7依名稱搜尋並切換。"
-    search.prompt: "&e請在聊天輸入要搜尋的玩家名稱。"
+    search.lore: "&7以名字搜尋並切換。"
+    search.prompt: "&e請輸入玩家名以搜尋。"
     status:
       excluded: "&c已排除"
       included: "&a已包含"
-    excluded: "&c已將 %name% 加入排除名單。"
-    included: "&a已將 %name% 從排除名單移除。"
+    excluded: "&c已將 %name% 加入排除清單。"
+    included: "&a已將 %name% 移出排除清單。"
     notfound: "&c找不到玩家 '%input%'。"
   language:
     title: "語言設定"
     name: "&b語言設定"
-    lore: "&7更改插件語言。"
+    lore: "&7更改外掛語言。"
     selected: "&a» %lang% (已選擇)"
     unselected: "&7» %lang%"
   time:
-    title: "設定過期時間"
+    title: "設定到期時間"
     chat-input:
-      name: "&e透過聊天輸入時間"
-      lore: "&7(例: 1d12h30m 或輸入 -1 為永久)"
+      name: "&e在聊天中輸入時間"
+      lore: "&7(範例: 1d12h30m，-1 代表永久)"
   permanent:
-    name: "&a永久"
-    lore: "&7此郵件不會過期。"
+    name: "&a永久保存"
+    lore: "&7郵件不會到期。"
   time-unit:
     lore: "&e左鍵: +1 | 右鍵: -1\n&eShift+左鍵: +10 | Shift+右鍵: -10"
     second:
       name: "&f秒: &e%value%"
     minute:
-      name: "&f分鐘: &e%value%"
+      name: "&f分: &e%value%"
     hour:
       name: "&f小時: &e%value%"
     day:
@@ -179,11 +197,11 @@ gui:
       name: "&f年: &e%value%"
   target:
     title: "選擇收件人 (%page%/%maxpage%)"
-    invalid: "&c無效的目標。"
+    invalid: "&c無效的對象。"
     selected: "&a已將收件人設定為 '%target%'。"
   select-complete:
-    name: "&a選擇完成"
-    lore: "&7使用此時間並返回。"
+    name: "&a完成選擇"
+    lore: "&7以此時間設定並返回。"
   search:
     name: "&b搜尋玩家"
   previous: "&a上一頁"
@@ -200,10 +218,10 @@ time:
     month: "月"
     day: "天"
     hour: "小時"
-    minute: "分鐘"
+    minute: "分"
     second: "秒"
   chat:
-    prompt: "&e請輸入時間。(例: 3d12h)"
+    prompt: "&e請輸入時間。(範例: 3d12h)"
     instruction: "&e(單位: y, M, d, h, m, s / 永久: -1)"
-    invalid: "&c格式錯誤，請重新輸入。"
+    invalid: "&c格式無效，請重新輸入。"
   confirmed: "&a時間設定完成。"

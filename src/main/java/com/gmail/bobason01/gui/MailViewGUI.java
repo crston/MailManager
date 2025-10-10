@@ -23,7 +23,7 @@ import java.util.*;
 public class MailViewGUI implements Listener, InventoryHolder {
 
     private static final int SIZE = 54;
-    private static final int MAX_ITEMS = 36;      // 아이템은 0~35번 슬롯까지만
+    private static final int MAX_ITEMS = 36;      // 아이템 슬롯 0~35
     private static final int SLOT_CLAIM_ALL = 48; // 모든 아이템 수령
     private static final int SLOT_DELETE = 50;    // 우편 삭제
     private static final int SLOT_BACK = 53;      // 뒤로가기
@@ -46,21 +46,32 @@ public class MailViewGUI implements Listener, InventoryHolder {
         this.mail = mail;
         this.owner = player.getUniqueId();
 
-        String lang = LangManager.getLanguage(owner);
         inv = Bukkit.createInventory(this, SIZE, LangManager.get(owner, "gui.mail.view.title"));
 
-        // 아이템 표시 (0~35번까지만)
+        refreshInventory();
+        player.openInventory(inv);
+    }
+
+    private void refreshInventory() {
+        inv.clear();
+
+        // 아이템 다시 채우기
         List<ItemStack> items = mail.getItems();
         for (int i = 0; i < Math.min(MAX_ITEMS, items.size()); i++) {
-            inv.setItem(i, items.get(i).clone());
+            ItemStack item = items.get(i);
+            if (item != null && item.getType() != Material.AIR) {
+                inv.setItem(i, item.clone());
+            }
         }
+
+        String lang = LangManager.getLanguage(owner);
 
         // 모든 아이템 수령 버튼
         inv.setItem(SLOT_CLAIM_ALL, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_CLAIM_BUTTON).clone())
                 .name(LangManager.get(lang, "gui.mail.claim_all"))
                 .build());
 
-        // 우편 삭제 버튼 (RED_WOOL)
+        // 우편 삭제 버튼
         inv.setItem(SLOT_DELETE, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_DELETE_BUTTON).clone())
                 .name(LangManager.get(lang, "gui.mail.delete"))
                 .build());
@@ -69,8 +80,6 @@ public class MailViewGUI implements Listener, InventoryHolder {
         inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
                 .name("§c" + LangManager.get(lang, "gui.back.name"))
                 .build());
-
-        player.openInventory(inv);
     }
 
     @EventHandler
@@ -97,19 +106,31 @@ public class MailViewGUI implements Listener, InventoryHolder {
 
         if (slot == SLOT_CLAIM_ALL) {
             claimItems(player, new ArrayList<>(mail.getItems()));
+            mail.getItems().clear();
             MailDataManager.getInstance().removeMail(mail);
             player.sendMessage(LangManager.get(uuid, "mail.claim_success"));
             new MailGUI(plugin).open(player);
             return;
         }
 
-        // 개별 아이템 수령 (0~35번까지만 허용)
+        // 개별 아이템 수령
         if (slot < MAX_ITEMS) {
             ItemStack clicked = e.getCurrentItem();
             if (clicked != null && clicked.getType() != Material.AIR) {
-                claimItems(player, Collections.singletonList(clicked));
-                inv.setItem(slot, null);
-                mail.getItems().remove(clicked);
+                claimItems(player, Collections.singletonList(clicked.clone()));
+
+                List<ItemStack> items = mail.getItems();
+                if (slot < items.size()) {
+                    items.remove(slot);
+                }
+
+                if (mail.getItems().isEmpty()) {
+                    MailDataManager.getInstance().removeMail(mail);
+                    new MailGUI(plugin).open(player);
+                } else {
+                    MailDataManager.getInstance().updateMail(mail);
+                    refreshInventory();
+                }
             }
         }
     }
@@ -127,8 +148,11 @@ public class MailViewGUI implements Listener, InventoryHolder {
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
         if (!(e.getInventory().getHolder() instanceof MailViewGUI) || !(e.getPlayer() instanceof Player)) return;
+
         if (mail.getItems().isEmpty()) {
             MailDataManager.getInstance().removeMail(mail);
+        } else {
+            MailDataManager.getInstance().updateMail(mail);
         }
     }
 }

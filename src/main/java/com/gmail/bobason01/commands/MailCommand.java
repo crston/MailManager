@@ -3,6 +3,7 @@ package com.gmail.bobason01.commands;
 import com.gmail.bobason01.MailManager;
 import com.gmail.bobason01.cache.PlayerCache;
 import com.gmail.bobason01.config.ConfigManager;
+import com.gmail.bobason01.gui.MailInventoryGUI;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.Mail;
 import com.gmail.bobason01.mail.MailDataManager;
@@ -22,11 +23,14 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.File;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class MailCommand implements CommandExecutor, TabCompleter {
 
@@ -34,8 +38,15 @@ public class MailCommand implements CommandExecutor, TabCompleter {
     private static final String MMOITEMS_PREFIX = "mmoitems:";
     private static final String ITEMSADDER_PREFIX = "itemsadder:";
     private static final String MODEL_PREFIX = "model:";
-    private static final List<String> SUB_COMMANDS = Arrays.asList("send", "sendall", "reload", "setlang");
+
+    private static final List<String> SUB_COMMANDS = Arrays.asList("send", "sendall", "reload", "setlang", "inv");
     private static final List<String> TIME_SUGGESTIONS = Arrays.asList("7d", "12h", "30m", "15s", "1h", "5m");
+
+    private static final Map<Integer, ItemStack[]> invMap = new HashMap<>(16);
+    private static final File invFile = new File(MailManager.getInstance().getDataFolder(), "inventories.yml");
+    private static final FileConfiguration invConfig = YamlConfiguration.loadConfiguration(invFile);
+
+    static { loadInventories(); }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
@@ -44,18 +55,14 @@ public class MailCommand implements CommandExecutor, TabCompleter {
         String lang = (sender instanceof Player p) ? LangManager.getLanguage(p.getUniqueId()) : "en";
 
         if (args.length == 0) {
-            if (sender instanceof Player player) {
-                MailManager.getInstance().mailGUI.open(player);
-            } else {
-                sender.sendMessage(LangManager.get(lang, "cmd.gui.unavailable"));
-            }
+            if (sender instanceof Player player) MailManager.getInstance().mailGUI.open(player);
+            else sender.sendMessage(LangManager.get(lang, "cmd.gui.unavailable"));
             return true;
         }
 
         String sub = args[0].toLowerCase();
         boolean isPlayer = sender instanceof Player;
 
-        // ---------------- SEND ----------------
         if (sub.equals("send")) {
             if (args.length < 3) {
                 if (isPlayer) MailManager.getInstance().mailSendGUI.open((Player) sender);
@@ -63,33 +70,27 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
 
-            // 대상 확인
             OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
             if (target == null || (!target.isOnline() && !target.hasPlayedBefore())) {
                 sender.sendMessage(LangManager.get(lang, "cmd.player.notfound").replace("%name%", args[1]));
                 return true;
             }
 
-            // 아이템 파싱
-            String itemId = args[2];
-            ItemStack item = parseItem(itemId, lang, sender);
-            if (item == null || item.getType() == Material.AIR) {
-                sender.sendMessage(LangManager.get(lang, "cmd.item.invalid").replace("%id%", itemId));
+            List<ItemStack> items = parseItems(args[2], lang);
+            if (items.isEmpty()) {
+                sender.sendMessage(LangManager.get(lang, "cmd.item.invalid").replace("%id%", args[2]));
                 return true;
             }
 
-            // 시간 + 옵션 파싱
             LocalDateTime now = LocalDateTime.now();
             LocalDateTime expire = now.plusDays(30);
             boolean onlineOnly = false, offlineOnly = false;
 
             if (args.length >= 4) {
                 String lastArg = args[args.length - 1];
-                if (lastArg.equalsIgnoreCase("-online")) {
-                    onlineOnly = true;
-                } else if (lastArg.equalsIgnoreCase("-offline")) {
-                    offlineOnly = true;
-                }
+                if (lastArg.equalsIgnoreCase("-online")) onlineOnly = true;
+                else if (lastArg.equalsIgnoreCase("-offline")) offlineOnly = true;
+
                 if (args.length >= 5 || (!lastArg.startsWith("-"))) {
                     expire = parseExpireTime(args[3], now);
                     if (expire == null) {
@@ -108,13 +109,12 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
 
-            Mail mail = new Mail(senderId, target.getUniqueId(), Collections.singletonList(item), now, expire);
+            Mail mail = new Mail(senderId, target.getUniqueId(), items, now, expire);
             MailDataManager.getInstance().addMail(mail);
             sender.sendMessage(LangManager.get(lang, "cmd.send.success").replace("%name%", Objects.requireNonNull(target.getName())));
             return true;
         }
 
-        // ---------------- SENDALL ----------------
         if (sub.equals("sendall")) {
             if (args.length < 2) {
                 if (isPlayer) MailManager.getInstance().mailSendAllGUI.open((Player) sender);
@@ -122,10 +122,9 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
 
-            String itemId = args[1];
-            ItemStack item = parseItem(itemId, lang, sender);
-            if (item == null || item.getType() == Material.AIR) {
-                sender.sendMessage(LangManager.get(lang, "cmd.item.invalid").replace("%id%", itemId));
+            List<ItemStack> items = parseItems(args[1], lang);
+            if (items.isEmpty()) {
+                sender.sendMessage(LangManager.get(lang, "cmd.item.invalid").replace("%id%", args[1]));
                 return true;
             }
 
@@ -135,11 +134,9 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
             if (args.length >= 3) {
                 String lastArg = args[args.length - 1];
-                if (lastArg.equalsIgnoreCase("-online")) {
-                    onlineOnly = true;
-                } else if (lastArg.equalsIgnoreCase("-offline")) {
-                    offlineOnly = true;
-                }
+                if (lastArg.equalsIgnoreCase("-online")) onlineOnly = true;
+                else if (lastArg.equalsIgnoreCase("-offline")) offlineOnly = true;
+
                 if (args.length >= 4 || (!lastArg.startsWith("-"))) {
                     expire = parseExpireTime(args[2], now);
                     if (expire == null) {
@@ -155,7 +152,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 if (onlineOnly && !target.isOnline()) continue;
                 if (offlineOnly && target.isOnline()) continue;
 
-                Mail mail = new Mail(senderId, target.getUniqueId(), Collections.singletonList(item), now, expire);
+                Mail mail = new Mail(senderId, target.getUniqueId(), items, now, expire);
                 MailDataManager.getInstance().addMail(mail);
                 count++;
             }
@@ -164,7 +161,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        // ---------------- RELOAD ----------------
         if (sub.equals("reload")) {
             Objects.requireNonNull(plugin).reloadConfig();
             ConfigManager.reload();
@@ -173,7 +169,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        // ---------------- SETLANG ----------------
         if (sub.equals("setlang")) {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage(LangManager.get(lang, "cmd.player-only"));
@@ -193,10 +188,150 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        if (sub.equals("inv")) {
+            if (!sender.hasPermission("mail.inv.manage")) {
+                sender.sendMessage(LangManager.get(lang, "cmd.inv.no-permission"));
+                return true;
+            }
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage(LangManager.get(lang, "cmd.inv.no-player"));
+                return true;
+            }
+            if (args.length < 3) {
+                sender.sendMessage(LangManager.get(lang, "cmd.inv.usage"));
+                return true;
+            }
+
+            String action = args[1].toLowerCase();
+            int id;
+            try {
+                id = Integer.parseInt(args[2]);
+            } catch (NumberFormatException ex) {
+                sender.sendMessage(LangManager.get(lang, "cmd.inv.not-number"));
+                return true;
+            }
+
+            switch (action) {
+                case "create" -> {
+                    if (invMap.containsKey(id)) {
+                        sender.sendMessage(LangManager.get(lang, "cmd.inv.exists").replace("%id%", String.valueOf(id)));
+                        return true;
+                    }
+                    invMap.put(id, new ItemStack[36]);
+                    saveInventories();
+                    sender.sendMessage(LangManager.get(lang, "cmd.inv.created").replace("%id%", String.valueOf(id)));
+                }
+                case "edit" -> {
+                    if (!invMap.containsKey(id)) {
+                        sender.sendMessage(LangManager.get(lang, "cmd.inv.not-found").replace("%id%", String.valueOf(id)));
+                        return true;
+                    }
+                    MailInventoryGUI gui = new MailInventoryGUI(id, true);
+                    Bukkit.getPluginManager().registerEvents(gui, MailManager.getInstance());
+                    gui.open(player);
+                }
+                case "open" -> {
+                    if (!invMap.containsKey(id)) {
+                        sender.sendMessage(LangManager.get(lang, "cmd.inv.not-found").replace("%id%", String.valueOf(id)));
+                        return true;
+                    }
+                    MailInventoryGUI gui = new MailInventoryGUI(id, false);
+                    Bukkit.getPluginManager().registerEvents(gui, MailManager.getInstance());
+                    gui.open(player);
+                }
+                case "delete" -> {
+                    if (!invMap.containsKey(id)) {
+                        sender.sendMessage(LangManager.get(lang, "cmd.inv.not-found").replace("%id%", String.valueOf(id)));
+                        return true;
+                    }
+                    invMap.remove(id);
+                    saveInventories();
+                    sender.sendMessage(LangManager.get(lang, "cmd.inv.deleted").replace("%id%", String.valueOf(id)));
+                }
+                default -> sender.sendMessage(LangManager.get(lang, "cmd.inv.usage"));
+            }
+            return true;
+        }
+
         return false;
     }
 
-    private ItemStack parseItem(String id, String lang, CommandSender sender) {
+    public static ItemStack[] getInventory(int id) {
+        return invMap.getOrDefault(id, new ItemStack[36]);
+    }
+
+    public static void saveInventory(int id, ItemStack[] contents) {
+        ItemStack[] copy = new ItemStack[36];
+        for (int i = 0; i < 36; i++) {
+            ItemStack item = (i < contents.length) ? contents[i] : null;
+            copy[i] = (item != null && item.getType() != Material.AIR) ? item.clone() : null;
+        }
+        invMap.put(id, copy);
+        saveInventories();
+    }
+
+    private static void loadInventories() {
+        if (!invFile.exists()) return;
+        for (String key : invConfig.getKeys(false)) {
+            int id;
+            try { id = Integer.parseInt(key); } catch (NumberFormatException ignored) { continue; }
+            List<ItemStack> list = (List<ItemStack>) invConfig.getList(key);
+            if (list == null) continue;
+            ItemStack[] arr = new ItemStack[36];
+            for (int i = 0; i < Math.min(36, list.size()); i++) arr[i] = list.get(i);
+            invMap.put(id, arr);
+        }
+    }
+
+    private static void saveInventories() {
+        for (Map.Entry<Integer, ItemStack[]> e : invMap.entrySet()) {
+            invConfig.set(String.valueOf(e.getKey()), Arrays.asList(e.getValue()));
+        }
+        try { invConfig.save(invFile); } catch (IOException ex) { ex.printStackTrace(); }
+    }
+
+    private List<ItemStack> parseItems(String input, String lang) {
+        List<ItemStack> result = new ArrayList<>(4);
+        String[] parts = input.split(",");
+        for (String raw : parts) {
+            String part = raw.trim();
+            if (part.isEmpty()) continue;
+
+            if (part.regionMatches(true, 0, "inv:", 0, 4)) {
+                try {
+                    int invId = Integer.parseInt(part.substring(4).trim());
+                    ItemStack[] arr = getInventory(invId);
+                    for (ItemStack item : arr) {
+                        if (item != null && item.getType() != Material.AIR) result.add(item.clone());
+                    }
+                } catch (Exception ignored) {}
+                continue;
+            }
+
+            ItemStack direct = parseSingleItem(part);
+            if (direct != null && direct.getType() != Material.AIR) {
+                result.add(direct);
+                continue;
+            }
+
+            int idx = part.lastIndexOf(':');
+            if (idx > 0) {
+                String base = part.substring(0, idx);
+                String tail = part.substring(idx + 1);
+                try {
+                    int amount = Integer.parseInt(tail);
+                    ItemStack baseItem = parseSingleItem(base);
+                    if (baseItem != null && baseItem.getType() != Material.AIR) {
+                        baseItem.setAmount(amount);
+                        result.add(baseItem);
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return result;
+    }
+
+    private ItemStack parseSingleItem(String id) {
         try {
             if (id.regionMatches(true, 0, MMOITEMS_PREFIX, 0, MMOITEMS_PREFIX.length())) {
                 if (!Bukkit.getPluginManager().isPluginEnabled("MMOItems")) return null;
@@ -216,7 +351,8 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 return (stack != null) ? stack.getItemStack() : null;
             }
             if (id.regionMatches(true, 0, MODEL_PREFIX, 0, MODEL_PREFIX.length())) {
-                String[] parts = id.substring(MODEL_PREFIX.length()).split(":");
+                String rest = id.substring(MODEL_PREFIX.length());
+                String[] parts = rest.split(":");
                 if (parts.length != 2) return null;
                 Material material = Material.matchMaterial(parts[0].toUpperCase());
                 if (material == null) return null;
@@ -225,9 +361,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             }
             Material mat = Material.matchMaterial(id.toUpperCase());
             return (mat != null) ? new ItemStack(mat) : null;
-        } catch (Exception e) {
-            return null;
-        }
+        } catch (Exception e) { return null; }
     }
 
     private LocalDateTime parseExpireTime(String input, LocalDateTime now) {
@@ -241,9 +375,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 case 's' -> now.plusSeconds(value);
                 default -> null;
             };
-        } catch (Exception e) {
-            return null;
-        }
+        } catch (Exception e) { return null; }
     }
 
     @Override
@@ -251,27 +383,39 @@ public class MailCommand implements CommandExecutor, TabCompleter {
         int len = args.length;
         String prefix = args[len - 1].toLowerCase();
 
-        if (len == 1) {
-            return SUB_COMMANDS.stream().filter(cmd -> cmd.startsWith(prefix)).collect(Collectors.toList());
-        }
+        if (len == 1) return filterPrefix(SUB_COMMANDS, prefix);
 
         String sub = args[0].toLowerCase();
 
-        if (len == 2 && sub.equals("setlang")) {
-            return LangManager.getAvailableLanguages().stream().filter(l -> l.startsWith(prefix)).collect(Collectors.toList());
+        if (sub.equals("inv")) {
+            if (len == 2) return filterPrefix(Arrays.asList("create", "edit", "open", "delete"), prefix);
+            if (len == 3) {
+                List<String> ids = new ArrayList<>();
+                for (Integer id : invMap.keySet()) {
+                    String s = String.valueOf(id);
+                    if (s.startsWith(prefix)) ids.add(s);
+                }
+                return ids;
+            }
         }
 
+        if (len == 2 && sub.equals("setlang"))
+            return filterPrefix(LangManager.getAvailableLanguages(), prefix);
+
         if (len == 2 && sub.equals("send")) {
-            return PlayerCache.getCachedPlayers().stream()
-                    .filter(OfflinePlayer::hasPlayedBefore)
-                    .map(OfflinePlayer::getName)
-                    .filter(Objects::nonNull)
-                    .filter(name -> name.toLowerCase().startsWith(prefix))
-                    .collect(Collectors.toList());
+            List<String> players = new ArrayList<>();
+            for (OfflinePlayer p : PlayerCache.getCachedPlayers()) {
+                if (p.hasPlayedBefore()) {
+                    String name = p.getName();
+                    if (name != null && name.toLowerCase().startsWith(prefix)) players.add(name);
+                }
+            }
+            return players;
         }
 
         if ((len == 2 && sub.equals("sendall")) || (len == 3 && sub.equals("send"))) {
             List<String> result = new ArrayList<>();
+
             if (Bukkit.getPluginManager().isPluginEnabled("MMOItems")) {
                 try {
                     for (Type type : MMOItems.plugin.getTypes().getAll()) {
@@ -282,30 +426,43 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                     }
                 } catch (Exception ignored) {}
             }
+
             if (Bukkit.getPluginManager().isPluginEnabled("ItemsAdder")) {
                 try {
                     for (Object namespacedId : CustomStack.getNamespacedIdsInRegistry()) {
-                        String fullId = ITEMSADDER_PREFIX + namespacedId;
+                        String fullId = ITEMSADDER_PREFIX + namespacedId.toString();
                         if (fullId.toLowerCase().startsWith(prefix)) result.add(fullId);
                     }
                 } catch (Exception ignored) {}
             }
+
             for (Material mat : Material.values()) {
-                if (mat.isItem() && mat.name().toLowerCase().startsWith(prefix)) {
-                    result.add(mat.name().toLowerCase());
+                if (mat.isItem()) {
+                    String name = mat.name().toLowerCase();
+                    if (name.startsWith(prefix)) result.add(name);
                 }
             }
+
+            for (Integer invId : invMap.keySet()) {
+                String fullId = "inv:" + invId;
+                if (fullId.startsWith(prefix)) result.add(fullId);
+            }
+
             return result;
         }
 
-        if ((len == 3 && sub.equals("sendall")) || (len == 4 && sub.equals("send"))) {
-            return TIME_SUGGESTIONS.stream().filter(s -> s.startsWith(prefix)).collect(Collectors.toList());
-        }
+        if ((len == 3 && sub.equals("sendall")) || (len == 4 && sub.equals("send")))
+            return filterPrefix(TIME_SUGGESTIONS, prefix);
 
-        if (len >= 3 && (sub.equals("sendall") || sub.equals("send"))) {
-            return Arrays.asList("-online", "-offline").stream().filter(opt -> opt.startsWith(prefix)).collect(Collectors.toList());
-        }
+        if (len >= 3 && (sub.equals("sendall") || sub.equals("send")))
+            return filterPrefix(Arrays.asList("-online", "-offline"), prefix);
 
         return Collections.emptyList();
+    }
+
+    private List<String> filterPrefix(Collection<String> base, String prefix) {
+        List<String> out = new ArrayList<>();
+        for (String s : base) if (s.startsWith(prefix)) out.add(s);
+        return out;
     }
 }

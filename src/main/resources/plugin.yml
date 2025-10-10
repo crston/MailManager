@@ -1,5 +1,5 @@
 name: MailManager
-version: 13.0
+version: 14.0
 main: com.gmail.bobason01.MailManager
 api-version: 1.16
 author: bobason01
@@ -11,6 +11,9 @@ permissions:
   mail.use:
     description: Allows players to use the mail system
     default: true
+  mail.send:
+    description: Allows send mail to other players
+    default: op
   mail.admin:
     description: Allows access to administrative mail features
     default: op

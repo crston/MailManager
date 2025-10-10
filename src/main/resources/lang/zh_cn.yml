@@ -2,24 +2,35 @@
 language:
   name: "简体中文"
 
-# 指令相关消息
+# 命令相关信息
 cmd:
+  inv:
+    usage: "&c用法: /mail inv <create|edit|open|delete> <id>"
+    no-player: "&c此命令只能由玩家使用。"
+    no-permission: "&c你没有使用该命令的权限。"
+    not-number: "&cID 必须是数字。"
+    exists: "&cID %id% 的背包已存在。"
+    created: "&a已创建背包 #%id%。"
+    deleted: "&c已删除背包 #%id%。"
+    not-found: "&cID %id% 的背包不存在。"
   gui:
-    unavailable: "无法在控制台打开GUI。"
+    unavailable: "控制台无法打开GUI。"
   send:
+    target-offline: "&c目标玩家不在线。"
+    target-online: "&c目标玩家在线。"
     usage: "用法: /mail send <玩家> <物品ID> [过期时间]"
-    success: "&a成功发送邮件给 %name%。"
+    success: "&a成功向 %name% 发送了邮件。"
   sendall:
     usage: "用法: /mail sendall <物品ID> [过期时间]"
-    success: "&a成功群发邮件给 %count% 位玩家。"
-  reload: "&a配置已重新加载。"
+    success: "&a已向 %count% 名玩家群发邮件。"
+  reload: "&a配置已重载。"
   player-only: "此命令只能由玩家使用。"
   player:
     notfound: "&c未找到玩家 '%name%'。"
   item:
     invalid: "&c物品ID '%id%' 无效。"
   expire:
-    invalid: "&c过期时间格式错误。(例: 7d, 12h, 30m, 15s)"
+    invalid: "&c过期时间格式无效。(示例: 7d, 12h, 30m, 15s)"
   mmoitems:
     missing: "&c未启用 MMOItems 插件。"
   setlang:
@@ -39,43 +50,50 @@ mail:
     expired: "&c已过期"
   receive:
     failed: "&c背包空间不足，无法接收邮件。"
-  claim_success: "&a成功领取邮件物品。"
+  claim_success: "&a成功领取了邮件物品。"
   deleted: "&a邮件已删除。"
   delete_cancel: "&c已取消删除邮件。"
   send:
     amount: "物品数量"
-    invalid: "&c必须指定物品和目标才能发送。"
+    invalid: "&c必须指定物品和目标。"
     success: "&a邮件发送成功。"
-    cooldown: "&c发送过快，请稍后重试。"
-    no_permission: "&c你没有权限发送邮件。"
+    cooldown: "&c发送过于频繁，请稍后重试。"
+    no_permission: "&c你没有发送邮件的权限。"
   sendall:
     invalid: "&c未指定要发送的物品。"
-    success: "&a已群发邮件，将依次发送。"
-    cooldown: "&c发送过快，请稍后重试。"
+    success: "&a群发邮件已开始，将依次发送。"
+    cooldown: "&c发送过于频繁，请稍后重试。"
     no_item: "&c请先注册要发送的物品。"
-    select_first: "&c请先设置过期时间，然后(如有需要)选择排除对象。"
+    select_first: "&c请先设置过期时间，再选择要排除的玩家（如需要）。"
   notify:
-    message: "&e你有新邮件！ &7(/mail)"
+    message: "&e你收到了新邮件! &7(/mail)"
     title:
-      main: "&6[!] 新邮件到达"
-      sub: "&f使用 /mail 查看"
+      main: "&6[!] 新邮件"
+      sub: "&f使用 /mail 命令查看。"
 
 # 登录提示
 login:
   title:
     main: "&6你有未读邮件"
-    sub: "&f共有 %count% 封邮件在等待。"
+    sub: "&f共有 %count% 封邮件等待你查看。"
   message: "&e你有 %count% 封未读邮件。 &7(/mail)"
 
-# GUI 相关文本
+# GUI相关
 gui:
+  mailinv:
+    edit:
+      title: "邮件背包 %id% [编辑]"
+    view:
+      title: "邮件背包 %id%"
+    saved: "§a已保存背包 #%id%"
+    closed: "§7已关闭背包 #%id%"
   mail:
     title: "邮箱"
     view:
       title: "邮件详情"
-    claim_all: "§a[领取全部物品]"
+    claim_all: "§a[领取所有物品]"
     delete: "§c[删除邮件]"
-    claim_success: "§a已领取邮件物品！"
+    claim_success: "§a已领取邮件物品!"
     deleted: "§c邮件已删除。"
     lore:
       claim: "&e» 左键: 领取物品"
@@ -83,71 +101,71 @@ gui:
   attach:
     title: "&a附加物品"
   delete:
-    title: "删除确认"
-    yes: "&c是，删除。"
-    yes_lore: "&7此邮件将被永久删除。"
+    title: "确认删除"
+    yes: "&c是的，删除。"
+    yes_lore: "&7永久删除该邮件。"
     no: "&a否，取消。"
     no_lore: "&7返回邮箱。"
   send:
     title: "发送邮件"
     time:
       name: "&b设置过期时间"
-      duration: "&f剩余: &e%time%"
-      expires: "&f过期于: &e%date%"
+      duration: "&f剩余时间: &e%time%"
+      expires: "&f过期日期: &e%date%"
       no_expire: "&a永久"
     target:
       name: "&d选择收件人"
-      lore: "&7选择要发送给谁。"
+      lore: "&7选择邮件的接收者。"
     item:
-      first: "§7要发送的物品 (显示第一个)"
-      more: "§7另外附加了 %count% 个物品"
+      first: "§7附加的第1个物品显示"
+      more: "§7另外 %count% 个物品"
     attach:
       name: "&e附加物品"
       lore: "&7注册要发送的物品。"
     no_item: "无物品"
-    no_item_lore: "放入这里可附加物品。"
+    no_item_lore: "将物品放入此处附加。"
     confirm:
       name: "&a发送"
-      lore: "&7以当前设置发送邮件。"
+      lore: "&7按设定发送邮件。"
   sendall:
     title: "群发邮件"
     expire:
       name: "&b设置过期时间"
-      lore: "&7为所有邮件设置过期时间。"
+      lore: "&7设置所有邮件的过期时间。"
     exclude:
       name: "&c设置排除对象"
-      lore: "&7选择要从群发中排除的玩家。"
+      lore: "&7选择要排除的玩家。"
     attach:
       name: "&e附加物品"
-      lore: "&7注册群发要包含的物品。"
+      lore: "&7注册群发物品。"
     confirm:
       name: "&a群发"
-      lore: "&7向服务器所有玩家发送邮件。"
+      lore: "&7发送邮件给服务器所有玩家。"
   setting:
     title: "邮件设置"
   notify:
-    name: "&6邮件提醒"
-    lore: "&7切换新邮件提醒。"
-    enabled: "&a已开启邮件提醒。"
-    disabled: "&c已关闭邮件提醒。"
+    name: "&6新邮件提醒"
+    lore: "&7切换新邮件提醒开关。"
+    enabled: "&a已开启提醒。"
+    disabled: "&c已关闭提醒。"
   blacklist:
     title: "黑名单"
-    search_prompt: "&7屏蔽特定玩家的邮件。"
+    search_prompt: "&7屏蔽来自特定玩家的邮件。"
     allowed: "&a未屏蔽"
     blocked: "&c已屏蔽"
-    unblocked: "&a已解除对 %name% 的屏蔽。"
+    unblocked: "&a已取消屏蔽 %name%。"
     blocked_msg: "&c已屏蔽 %name%。"
     not_found: "&c未找到玩家 '%input%'。"
   exclude:
     title: "排除列表"
     search: "&b搜索玩家"
     search.lore: "&7通过名字搜索并切换。"
-    search.prompt: "&e请输入要搜索的玩家名。"
+    search.prompt: "&e请输入玩家名以搜索。"
     status:
       excluded: "&c已排除"
       included: "&a已包含"
-    excluded: "&c已将 %name% 添加到排除列表。"
-    included: "&a已将 %name% 从排除列表移除。"
+    excluded: "&c已将 %name% 加入排除列表。"
+    included: "&a已将 %name% 移出排除列表。"
     notfound: "&c未找到玩家 '%input%'。"
   language:
     title: "语言设置"
@@ -158,17 +176,17 @@ gui:
   time:
     title: "设置过期时间"
     chat-input:
-      name: "&e通过聊天输入时间"
-      lore: "&7(例: 1d12h30m 或输入 -1 为永久)"
+      name: "&e聊天输入时间"
+      lore: "&7(示例: 1d12h30m，-1 表示永久)"
   permanent:
-    name: "&a永久"
-    lore: "&7此邮件不会过期。"
+    name: "&a永久保存"
+    lore: "&7邮件不会过期。"
   time-unit:
     lore: "&e左键: +1 | 右键: -1\n&eShift+左键: +10 | Shift+右键: -10"
     second:
       name: "&f秒: &e%value%"
     minute:
-      name: "&f分钟: &e%value%"
+      name: "&f分: &e%value%"
     hour:
       name: "&f小时: &e%value%"
     day:
@@ -183,7 +201,7 @@ gui:
     selected: "&a已将收件人设置为 '%target%'。"
   select-complete:
     name: "&a完成选择"
-    lore: "&7使用此时间并返回。"
+    lore: "&7以此时间设置并返回。"
   search:
     name: "&b搜索玩家"
   previous: "&a上一页"
@@ -200,10 +218,10 @@ time:
     month: "月"
     day: "天"
     hour: "小时"
-    minute: "分钟"
+    minute: "分"
     second: "秒"
   chat:
-    prompt: "&e请输入时间。(例: 3d12h)"
+    prompt: "&e请输入时间。(示例: 3d12h)"
     instruction: "&e(单位: y, M, d, h, m, s / 永久: -1)"
-    invalid: "&c格式错误，请重新输入。"
+    invalid: "&c格式无效，请重试。"
   confirmed: "&a时间设置完成。"

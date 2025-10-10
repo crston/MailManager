@@ -17,6 +17,7 @@ public class Mail implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 3L;
+
     private static final transient DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final transient Map<UUID, String> nameCache = new HashMap<>();
 
@@ -26,7 +27,7 @@ public class Mail implements Serializable {
     private final LocalDateTime sentAt;
     private final LocalDateTime expireAt;
 
-    private final List<ItemStack> items; // 여러 아이템 지원
+    private final List<ItemStack> items;
     private transient String cachedSenderName;
 
     public Mail(UUID sender, UUID receiver, List<ItemStack> items, LocalDateTime sentAt, LocalDateTime expireAt) {
@@ -34,7 +35,7 @@ public class Mail implements Serializable {
     }
 
     public Mail(UUID mailId, UUID sender, UUID receiver, List<ItemStack> items, LocalDateTime sentAt, LocalDateTime expireAt) {
-        this.mailId = Objects.requireNonNull(mailId);
+        this.mailId = Objects.requireNonNull(mailId, "mailId cannot be null");
         this.sender = sender;
         this.receiver = receiver;
         this.items = new ArrayList<>();
@@ -50,11 +51,11 @@ public class Mail implements Serializable {
     public UUID getMailId() { return mailId; }
     public UUID getSender() { return sender; }
     public UUID getReceiver() { return receiver; }
+
     public List<ItemStack> getItems() {
-        List<ItemStack> copy = new ArrayList<>();
-        for (ItemStack i : items) copy.add(i.clone());
-        return copy;
+        return items;
     }
+
     public LocalDateTime getSentAt() { return sentAt; }
     public LocalDateTime getExpireAt() { return expireAt; }
 
@@ -74,9 +75,9 @@ public class Mail implements Serializable {
                 cachedSenderName = resolveSenderName(lang);
             }
 
-            List<String> originalLore = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
-            originalLore.addAll(buildMailLore(lang));
-            meta.setLore(originalLore);
+            List<String> lore = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
+            lore.addAll(buildMailLore(lang));
+            meta.setLore(lore);
             display.setItemMeta(meta);
         }
         return display;
@@ -94,6 +95,7 @@ public class Mail implements Serializable {
                 lore.add("§c" + LangManager.get(lang, "mail.lore.expired"));
             }
         }
+
         lore.add("§a" + LangManager.get(lang, "mail.send.amount") + " - " + items.size());
         return lore;
     }
@@ -111,8 +113,7 @@ public class Mail implements Serializable {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Mail)) return false;
-        Mail mail = (Mail) o;
+        if (!(o instanceof Mail mail)) return false;
         return mailId.equals(mail.mailId);
     }
 

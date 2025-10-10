@@ -4,9 +4,20 @@ language:
 
 # 명령어 관련 메시지
 cmd:
+  inv:
+    usage: "&c사용법: /mail inv <create|edit|open|delete> <id>"
+    no-player: "&c이 명령어는 플레이어만 사용할 수 있습니다."
+    no-permission: "&c이 명령어를 사용할 권한이 없습니다."
+    not-number: "&cID는 숫자여야 합니다."
+    exists: "&cID %id% 인 인벤토리가 이미 존재합니다."
+    created: "&a인벤토리 #%id% 를 생성했습니다."
+    deleted: "&c인벤토리 #%id% 를 삭제했습니다."
+    not-found: "&cID %id% 인 인벤토리가 존재하지 않습니다."
   gui:
     unavailable: "콘솔에서는 GUI를 열 수 없습니다."
   send:
+    target-offline: "&c대상 플레이어가 오프라인입니다."
+    target-online: "&c대상 플레이어가 온라인입니다."
     usage: "사용법: /mail send <플레이어> <아이템ID> [만료시간]"
     success: "&a%name% 님에게 우편을 성공적으로 보냈습니다."
   sendall:
@@ -69,6 +80,13 @@ login:
 
 # GUI 관련 텍스트
 gui:
+  mailinv:
+    edit:
+      title: "메일 인벤토리 %id% [편집]"
+    view:
+      title: "메일 인벤토리 %id%"
+    saved: "§a인벤토리 #%id% 를 저장합니다"
+    closed: "§7인벤토리 #%id% 를 닫습니다"
   mail:
     title: "우편함"
     view:
