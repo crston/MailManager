@@ -19,6 +19,21 @@ flush:
 items:
   mail:
     gui:
+      select-button:
+        material: YELLOW_DYE
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+      claim-selected-button:
+        material: ENDER_CHEST
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
+      delete-selected-button:
+        material: RED_CONCRETE
+        custom-model-data: 0
+        damage: 0
+        hide-flags: false
       send-button:
         material: WRITABLE_BOOK
         custom-model-data: 0

@@ -1,8 +1,8 @@
-# Language Information
+# Language Info
 language:
   name: "English"
 
-# Command Messages
+# Command-related messages
 cmd:
   inv:
     usage: "&cUsage: /mail inv <create|edit|open|delete> <id>"
@@ -10,107 +10,113 @@ cmd:
     no-permission: "&cYou do not have permission to use this command."
     not-number: "&cID must be a number."
     exists: "&cInventory with ID %id% already exists."
-    created: "&aCreated inventory #%id%."
-    deleted: "&cDeleted inventory #%id%."
+    created: "&aInventory #%id% has been created."
+    deleted: "&cInventory #%id% has been deleted."
     not-found: "&cInventory with ID %id% does not exist."
   gui:
-    unavailable: "GUI cannot be opened from console."
+    unavailable: "&cYou cannot open a GUI from the console."
   send:
     target-offline: "&cThe target player is offline."
-    target-online: "&cThe target player is online."
-    usage: "Usage: /mail send <player> <itemID> [expireTime]"
+    target-online: "&aThe target player is online."
+    usage: "&eUsage: /mail send <player> <itemID> [expireTime]"
     success: "&aSuccessfully sent mail to %name%."
   sendall:
-    usage: "Usage: /mail sendall <itemID> [expireTime]"
-    success: "&aSuccessfully sent global mail to %count% players."
+    usage: "&eUsage: /mail sendall <itemID> [expireTime]"
+    success: "&aSuccessfully sent mail to %count% players."
   reload: "&aConfiguration reloaded."
-  player-only: "This command can only be used by players."
+  player-only: "&cThis command can only be used by players."
   player:
-    notfound: "&cPlayer '%name%' not found."
+    notfound: "&cPlayer '%name%' could not be found."
   item:
-    invalid: "&cInvalid item ID '%id%'."
+    invalid: "&cItem ID '%id%' is invalid."
   expire:
-    invalid: "&cInvalid expiration time format. (Example: 7d, 12h, 30m, 15s)"
+    invalid: "&cInvalid expire time format. (Example: 7d, 12h, 30m, 15s)"
   mmoitems:
-    missing: "&cMMOItems plugin is not enabled."
+    missing: "&cThe MMOItems plugin is not enabled."
   setlang:
     usage: "&eUsage: /mail setlang <languageCode>"
-    not-found: "&cLanguage '%lang%' not found. Available: %langs%"
-    success: "&aLanguage set to %lang%."
+    not-found: "&cLanguage '%lang%' not found. Available languages: %langs%"
+    success: "&aLanguage has been set to %lang%."
 
-# Mail System Messages
+# Mail system-related messages
 mail:
   attach:
     success: "&aAttached %count% items."
-  unknown: "Unknown"
+  unknown: "&7Unknown"
   lore:
-    sender: "Sender: %sender%"
-    sent: "Sent: %time%"
-    expire: "Expires: %time%"
+    sender: "&fSender: &e%sender%"
+    sent: "&fSent: &e%time%"
+    expire: "&fExpire: &e%time%"
     expired: "&cExpired"
   receive:
-    failed: "&cNot enough space in your inventory to receive the mail."
-  claim_success: "&aSuccessfully claimed mail item."
+    failed: "&cNot enough space in inventory to receive mail."
+  claim_success: "&aSuccessfully claimed mail items."
   deleted: "&aMail deleted."
-  delete_cancel: "&cMail deletion canceled."
-  inventory_full: "&cYour inventory is full. Some items could not be claimed."
+  deleted_multi: "&a%count% mails have been deleted."
+  delete_cancel: "&cMail deletion cancelled."
+  inventory_full: "&cInventory full, some items could not be received."
   send:
-    amount: "Item Amount"
-    invalid: "&cYou must specify both item and target."
+    amount: "&eItem Amount"
+    invalid: "&cYou must specify both an item and a target."
     success: "&aMail sent successfully."
-    cooldown: "&cYou are sending too quickly. Please try again later."
+    cooldown: "&cYou cannot send mail that quickly. Please wait a moment."
     no_permission: "&cYou do not have permission to send mail."
   sendall:
-    invalid: "&cNo item specified for sending."
-    success: "&aGlobal mail has been sent. Delivery will proceed sequentially."
-    cooldown: "&cYou are sending too quickly. Please try again later."
+    invalid: "&cNo item specified to send."
+    success: "&aMass mail has been sent. Delivery is in progress."
+    cooldown: "&cYou cannot send mail that quickly. Please wait a moment."
     no_item: "&cPlease register an item to send."
-    select_first: "&cPlease set the expiration time first, then (if needed) select excluded targets."
+    select_first: "&cSet the expire time first, and (if needed) select excluded players."
   notify:
     message: "&eYou have received new mail! &7(/mail)"
     title:
       main: "&6[!] New Mail Arrived"
-      sub: "&fCheck with /mail command."
+      sub: "&fCheck with /mail"
 
-# Login Notifications
+# Login notification messages
 login:
   title:
     main: "&6You have unread mail"
-    sub: "&fTotal %count% mail(s) are waiting for you."
-  message: "&eYou have %count% unread mail. &7(/mail)"
+    sub: "&fA total of %count% mails are waiting for you."
+  message: "&eYou have %count% unread mails. &7(/mail)"
 
-# GUI Text
+# GUI-related text
 gui:
   mailinv:
     edit:
-      title: "Mail Inventory %id% [Edit]"
+      title: "&bMail Inventory %id% &7[Edit]"
     view:
-      title: "Mail Inventory %id%"
-    saved: "§aSaved inventory #%id%"
-    closed: "§7Closed inventory #%id%"
+      title: "&bMail Inventory %id%"
+    saved: "&aInventory #%id% has been saved"
+    closed: "&7Inventory #%id% has been closed"
   mail:
-    title: "Mailbox"
+    title: "&6Mailbox"
     view:
-      title: "Mail Details"
-    claim_all: "§a[Claim All Items]"
-    delete: "§c[Delete Mail]"
-    claim_success: "§aClaimed mail item!"
-    deleted: "§cMail deleted."
+      title: "&eMail Details"
+    claim_all: "&a[Claim All Items]"
+    delete: "&c[Delete Mail]"
+    claim_success: "&aMail items claimed."
+    deleted: "&cMail deleted."
+    select_mode_on: "&aSelect Mode: ON"
+    select_mode_off: "&cSelect Mode: OFF"
+    claim_selected: "&aClaim Selected"
+    delete_selected: "&cDelete Selected"
+    no_selected: "&cNo mail selected."
     lore:
-      claim: "&e» Left-click: Claim item"
-      delete: "&c» Right-click: Delete mail"
+      claim: "&e» Left-Click: Claim Items"
+      delete: "&c» Right-Click: Delete Mail"
   attach:
     title: "&aAttach Items"
   delete:
-    title: "Confirm Deletion"
-    yes: "&cYes, delete."
-    yes_lore: "&7This will permanently delete the mail."
-    no: "&aNo, cancel."
+    title: "&cDelete Confirmation"
+    yes_name: "&cYes, delete"
+    yes_lore: "&7This mail will be permanently deleted."
+    no_name: "&aNo, cancel"
     no_lore: "&7Return to mailbox."
   send:
-    title: "Send Mail"
+    title: "&6Send Mail"
     time:
-      name: "&bSet Expiration Time"
+      name: "&bSet Expire Time"
       duration: "&fExpires in: &e%time%"
       expires: "&fExpires at: &e%date%"
       no_expire: "&aPermanent"
@@ -118,72 +124,72 @@ gui:
       name: "&dSelect Recipient"
       lore: "&7Choose who will receive the mail."
     item:
-      first: "§7First attached item shown"
-      more: "§7%count% more items attached"
+      first: "&7Item to send (&fFirst item shown)"
+      more: "&7%count% more items attached"
     attach:
       name: "&eAttach Item"
-      lore: "&7Register item to send."
-    no_item: "No Item"
-    no_item_lore: "Put an item here to attach it."
+      lore: "&7Register items to send."
+    no_item: "&cNo Item"
+    no_item_lore: "&7Place items here to attach."
     confirm:
       name: "&aSend"
-      lore: "&7Send mail with configured settings."
+      lore: "&7Send mail with the chosen settings."
   sendall:
-    title: "Send Global Mail"
+    title: "&6Mass Mail"
     expire:
-      name: "&bSet Expiration Time"
-      lore: "&7Set expiration time for all mails."
+      name: "&bSet Expire Time"
+      lore: "&7Set the expire time for all mails."
     exclude:
-      name: "&cSet Excluded Players"
-      lore: "&7Select players to exclude from global mail."
+      name: "&cSet Exclusions"
+      lore: "&7Choose players to exclude from mass mail."
     attach:
       name: "&eAttach Item"
-      lore: "&7Register item to include in global mail."
+      lore: "&7Register items for the mass mail."
     confirm:
-      name: "&aSend to All"
+      name: "&aSend All"
       lore: "&7Send mail to all players on the server."
   setting:
-    title: "Mail Settings"
+    title: "&6Mail Settings"
   notify:
-    name: "&6Mail Notifications"
-    lore: "&7Toggle notifications for new mail."
+    name: "&6Mail Notification"
+    lore: "&7Toggle new mail notifications."
     enabled: "&aMail notifications enabled."
     disabled: "&cMail notifications disabled."
   blacklist:
-    title: "Blacklist"
+    title: "&8Blocked List"
     search_prompt: "&7Block mail from specific players."
-    allowed: "&aNot blocked"
+    allowed: "&aNot Blocked"
     blocked: "&cBlocked"
     unblocked: "&aUnblocked %name%."
     blocked_msg: "&cBlocked %name%."
     not_found: "&cPlayer '%input%' not found."
   exclude:
-    title: "Exclude List"
+    title: "&8Exclusion List"
     search: "&bSearch Player"
-    search.lore: "&7Search by name to toggle."
-    search.prompt: "&eEnter player name to search."
+    search.lore: "&7Search by name to toggle inclusion."
+    search.prompt: "&eEnter player name in chat to search."
     status:
       excluded: "&cExcluded"
       included: "&aIncluded"
-    excluded: "&cAdded %name% to exclude list."
-    included: "&aRemoved %name% from exclude list."
+    excluded: "&c%name% has been added to the exclusion list."
+    included: "&a%name% has been removed from the exclusion list."
     notfound: "&cPlayer '%input%' not found."
   language:
-    title: "Language Settings"
+    title: "&bLanguage Settings"
     name: "&bLanguage Settings"
     lore: "&7Change the plugin language."
     selected: "&a» %lang% (Selected)"
     unselected: "&7» %lang%"
   time:
-    title: "Set Expiration Time"
+    title: "&bSet Expire Time"
     chat-input:
       name: "&eEnter Time in Chat"
-      lore: "&7(Example: 1d12h30m or -1 for permanent)"
+      lore: "&7(Example: 1d12h30m, or -1 for permanent)"
   permanent:
-    name: "&aPermanent Storage"
-    lore: "&7Mail will not expire."
+    name: "&aPermanent"
+    lore: "&7Set mail to never expire."
   time-unit:
-    lore: "&eLeft-click: +1 | Right-click: -1\n&eShift+Left: +10 | Shift+Right: -10"
+    lore: "&eLeft-Click: +1 | Right-Click: -1\n&eShift+Left: +10 | Shift+Right: -10"
     second:
       name: "&fSeconds: &e%value%"
     minute:
@@ -197,12 +203,12 @@ gui:
     year:
       name: "&fYears: &e%value%"
   target:
-    title: "Select Recipient (%page%/%maxpage%)"
+    title: "&dSelect Recipient &7(%page%/%maxpage%)"
     invalid: "&cInvalid target."
     selected: "&aRecipient set to '%target%'."
   select-complete:
-    name: "&aComplete Selection"
-    lore: "&7Set this time and go back."
+    name: "&aSelection Complete"
+    lore: "&7Confirm and return."
   search:
     name: "&bSearch Player"
   previous: "&aPrevious Page"
@@ -211,18 +217,18 @@ gui:
     name: "&cBack"
     lore: "&7Return to previous menu."
 
-# Time Messages
+# Time-related
 time:
-  permanent: "Permanent"
+  permanent: "&aPermanent"
   unit:
-    year: "year"
-    month: "month"
-    day: "day"
-    hour: "hour"
-    minute: "minute"
-    second: "second"
+    year: "&fYear"
+    month: "&fMonth"
+    day: "&fDay"
+    hour: "&fHour"
+    minute: "&fMinute"
+    second: "&fSecond"
   chat:
     prompt: "&eEnter time in chat. (Example: 3d12h)"
     instruction: "&e(Units: y, M, d, h, m, s / Permanent: -1)"
     invalid: "&cInvalid format. Please try again."
-  confirmed: "&aTime setting completed."
+  confirmed: "&aTime has been set."

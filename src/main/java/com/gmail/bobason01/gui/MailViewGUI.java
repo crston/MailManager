@@ -47,7 +47,6 @@ public class MailViewGUI implements Listener, InventoryHolder {
         this.owner = player.getUniqueId();
 
         inv = Bukkit.createInventory(this, SIZE, LangManager.get(owner, "gui.mail.view.title"));
-
         refreshInventory();
         player.openInventory(inv);
     }
@@ -89,14 +88,14 @@ public class MailViewGUI implements Listener, InventoryHolder {
         e.setCancelled(true);
 
         if (slot == SLOT_BACK) {
+            ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
             new MailGUI(plugin).open(player);
             return;
         }
 
         if (slot == SLOT_DELETE) {
-            MailDataManager.getInstance().removeMail(mail);
-            player.sendMessage(LangManager.get(uuid, "mail.deleted"));
-            new MailGUI(plugin).open(player);
+            ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
+            new MailDeleteConfirmGUI(player, plugin, mail).open(player);
             return;
         }
 
@@ -109,10 +108,12 @@ public class MailViewGUI implements Listener, InventoryHolder {
             if (remain.isEmpty()) {
                 MailDataManager.getInstance().removeMail(mail);
                 player.sendMessage(LangManager.get(uuid, "mail.claim_success"));
+                ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
                 new MailGUI(plugin).open(player);
             } else {
                 MailDataManager.getInstance().updateMail(mail);
                 player.sendMessage(LangManager.get(uuid, "mail.inventory_full"));
+                ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_FAIL);
                 refreshInventory();
             }
             return;
@@ -130,13 +131,16 @@ public class MailViewGUI implements Listener, InventoryHolder {
                     }
                     if (items.isEmpty()) {
                         MailDataManager.getInstance().removeMail(mail);
+                        ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
                         new MailGUI(plugin).open(player);
                     } else {
                         MailDataManager.getInstance().updateMail(mail);
+                        ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
                         refreshInventory();
                     }
                 } else {
                     player.sendMessage(LangManager.get(uuid, "mail.inventory_full"));
+                    ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_FAIL);
                 }
             }
         }
