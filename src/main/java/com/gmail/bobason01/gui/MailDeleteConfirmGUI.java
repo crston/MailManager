@@ -13,42 +13,42 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 public class MailDeleteConfirmGUI implements Listener, InventoryHolder {
 
-    public static final int YES_SLOT = 11;
-    public static final int NO_SLOT = 15;
+    private static final int SIZE = 27;
+    private static final int YES_SLOT = 11;
+    private static final int NO_SLOT = 15;
 
-    private static Plugin plugin;
+    private final Plugin plugin;
     private final Player player;
     private final List<Mail> mails;
     private Inventory inv;
 
-    public static void init(Plugin pl) {
-        plugin = pl;
+    public MailDeleteConfirmGUI(Plugin plugin) {
+        this.plugin = plugin;
+        this.player = null;
+        this.mails = null;
     }
 
-    // 단일 메일 삭제 생성자
     public MailDeleteConfirmGUI(Player player, Plugin plugin, Mail mail) {
+        this.plugin = plugin;
         this.player = player;
         this.mails = Collections.singletonList(mail);
     }
 
-    // 다중 메일 삭제 생성자
     public MailDeleteConfirmGUI(Player player, Plugin plugin, List<Mail> mails) {
+        this.plugin = plugin;
         this.player = player;
-        this.mails = mails;
-    }
-
-    // 기본 생성자
-    public MailDeleteConfirmGUI() {
-        this.player = null;
-        this.mails = null;
+        this.mails = (mails == null) ? Collections.emptyList() : new ArrayList<>(mails);
     }
 
     @Override
@@ -57,18 +57,22 @@ public class MailDeleteConfirmGUI implements Listener, InventoryHolder {
     }
 
     public void open(Player player) {
-        String title = LangManager.get(player.getUniqueId(), "gui.delete.title");
-        inv = Bukkit.createInventory(this, 27, title);
+        UUID uuid = player.getUniqueId();
+        String lang = LangManager.getLanguage(uuid);
+        inv = Bukkit.createInventory(this, SIZE, LangManager.get(lang, "gui.delete.title"));
 
-        inv.setItem(YES_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.DELETE_GUI_CONFIRM_BUTTON).clone())
-                .name(LangManager.get(player.getUniqueId(), "gui.delete.yes_name"))
-                .lore(LangManager.get(player.getUniqueId(), "gui.delete.yes_lore"))
-                .build());
+        ItemStack yes = new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.DELETE_GUI_CONFIRM_BUTTON).clone())
+                .name(LangManager.get(lang, "gui.delete.yes_name"))
+                .lore(LangManager.get(lang, "gui.delete.yes_lore"))
+                .build();
 
-        inv.setItem(NO_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.DELETE_GUI_CANCEL_BUTTON).clone())
-                .name(LangManager.get(player.getUniqueId(), "gui.delete.no_name"))
-                .lore(LangManager.get(player.getUniqueId(), "gui.delete.no_lore"))
-                .build());
+        ItemStack no = new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.DELETE_GUI_CANCEL_BUTTON).clone())
+                .name(LangManager.get(lang, "gui.delete.no_name"))
+                .lore(LangManager.get(lang, "gui.delete.no_lore"))
+                .build();
+
+        inv.setItem(YES_SLOT, yes);
+        inv.setItem(NO_SLOT, no);
 
         player.openInventory(inv);
     }
@@ -79,26 +83,26 @@ public class MailDeleteConfirmGUI implements Listener, InventoryHolder {
         if (!(e.getWhoClicked() instanceof Player p)) return;
 
         e.setCancelled(true);
-        int slot = e.getRawSlot();
+        if (gui.mails == null || gui.mails.isEmpty()) return;
 
-        if (gui.mails == null) return;
+        int slot = e.getRawSlot();
+        UUID uuid = p.getUniqueId();
 
         if (slot == YES_SLOT) {
             for (Mail mail : gui.mails) {
                 MailDataManager.getInstance().removeMail(mail);
             }
             if (gui.mails.size() > 1) {
-                p.sendMessage(LangManager.get(p.getUniqueId(), "mail.deleted_multi")
+                p.sendMessage(LangManager.get(uuid, "mail.deleted_multi")
                         .replace("{count}", String.valueOf(gui.mails.size())));
             } else {
-                p.sendMessage(LangManager.get(p.getUniqueId(), "mail.deleted"));
+                p.sendMessage(LangManager.get(uuid, "mail.deleted"));
             }
             ConfigManager.playSound(p, ConfigManager.SoundType.MAIL_DELETE_SUCCESS);
             p.closeInventory();
             Bukkit.getScheduler().runTaskLater(plugin, () -> new MailGUI(plugin).open(p), 2L);
-
         } else if (slot == NO_SLOT) {
-            p.sendMessage(LangManager.get(p.getUniqueId(), "mail.delete_cancel"));
+            p.sendMessage(LangManager.get(uuid, "mail.delete_cancel"));
             ConfigManager.playSound(p, ConfigManager.SoundType.GUI_CLICK);
             p.closeInventory();
             Bukkit.getScheduler().runTaskLater(plugin, () -> new MailGUI(plugin).open(p), 2L);

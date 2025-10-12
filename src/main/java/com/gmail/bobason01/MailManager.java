@@ -21,6 +21,11 @@ public final class MailManager extends JavaPlugin {
 
     private static MailManager instance;
 
+    public static MailManager getInstance() {
+        return instance;
+    }
+
+    // GUI 인스턴스들
     public MailGUI mailGUI;
     public MailSendGUI mailSendGUI;
     public MailSendAllGUI mailSendAllGUI;
@@ -32,10 +37,8 @@ public final class MailManager extends JavaPlugin {
     public LanguageSelectGUI languageSelectGUI;
     public MailAttachGUI mailAttachGUI;
     public MailViewGUI mailViewGUI;
-
-    public static MailManager getInstance() {
-        return instance;
-    }
+    public MailSelectGUI mailSelectGUI;
+    public MailDeleteConfirmGUI mailDeleteConfirmGUI;
 
     @Override
     public void onEnable() {
@@ -50,31 +53,32 @@ public final class MailManager extends JavaPlugin {
         copyLangFile("zh_tw.yml");
         LangManager.loadAll(getDataFolder());
 
-        // 메일 데이터 로드
+        // 메일 데이터 및 서비스 초기화
         MailDataManager.getInstance().load(this);
         MailService.init(this);
 
-        // GUI 초기화
-        this.mailSendGUI = new MailSendGUI(this);
-        this.mailSendAllGUI = new MailSendAllGUI(this);
-        this.mailSettingGUI = new MailSettingGUI(this);
-        this.mailTimeSelectGUI = new MailTimeSelectGUI(this);
-        this.mailTargetSelectGUI = new MailTargetSelectGUI(this);
-        this.blacklistSelectGUI = new BlacklistSelectGUI(this);
-        this.sendAllExcludeGUI = new SendAllExcludeGUI(this);
-        this.languageSelectGUI = new LanguageSelectGUI(this);
-        this.mailGUI = new MailGUI(this);
-        this.mailAttachGUI = new MailAttachGUI(this);
-        this.mailViewGUI = new MailViewGUI(this);
+        // GUI 인스턴스 생성 (ConfigManager 로드 이후)
+        mailGUI = new MailGUI(this);
+        mailSendGUI = new MailSendGUI(this);
+        mailSendAllGUI = new MailSendAllGUI(this);
+        mailSettingGUI = new MailSettingGUI(this);
+        mailTimeSelectGUI = new MailTimeSelectGUI(this);
+        mailTargetSelectGUI = new MailTargetSelectGUI(this);
+        blacklistSelectGUI = new BlacklistSelectGUI(this);
+        sendAllExcludeGUI = new SendAllExcludeGUI(this);
+        languageSelectGUI = new LanguageSelectGUI(this);
+        mailAttachGUI = new MailAttachGUI(this);
+        mailViewGUI = new MailViewGUI(this);
+        mailSelectGUI = new MailSelectGUI(this);
+        mailDeleteConfirmGUI = new MailDeleteConfirmGUI(this);
 
-        MailDeleteConfirmGUI.init(this);
-
-        // 플레이어 캐시 갱신 주기적 실행
-        Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> PlayerCache.refresh(this), 0L, 20L * 300);
+        // 플레이어 캐시 갱신 (5분 주기)
+        Bukkit.getScheduler().runTaskTimerAsynchronously(this,
+                () -> PlayerCache.refresh(this), 0L, 20L * 300);
 
         // 명령어 등록
         MailCommand mailCommand = new MailCommand();
-        PluginCommand command = Objects.requireNonNull(getCommand("mail"));
+        PluginCommand command = Objects.requireNonNull(getCommand("mail"), "mail command not found");
         command.setExecutor(mailCommand);
         command.setTabCompleter(mailCommand);
 
@@ -82,9 +86,10 @@ public final class MailManager extends JavaPlugin {
         registerListeners(
                 mailGUI, mailSendGUI, mailSendAllGUI,
                 mailSettingGUI, mailTimeSelectGUI, mailTargetSelectGUI,
-                blacklistSelectGUI, sendAllExcludeGUI, languageSelectGUI, mailAttachGUI, mailViewGUI,
+                blacklistSelectGUI, sendAllExcludeGUI, languageSelectGUI,
+                mailAttachGUI, mailViewGUI, mailSelectGUI,
                 new MailLoginListener(this),
-                new MailDeleteConfirmGUI()
+                mailDeleteConfirmGUI
         );
 
         // 자동 저장
@@ -110,7 +115,6 @@ public final class MailManager extends JavaPlugin {
             getLogger().warning("Could not create lang folder.");
             return;
         }
-
         File langFile = new File(langFolder, fileName);
         if (!langFile.exists()) {
             saveResource("lang/" + fileName, false);

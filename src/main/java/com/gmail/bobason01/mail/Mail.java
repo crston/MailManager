@@ -26,7 +26,6 @@ public class Mail implements Serializable {
     private final UUID receiver;
     private final LocalDateTime sentAt;
     private final LocalDateTime expireAt;
-
     private final List<ItemStack> items;
     private transient String cachedSenderName;
 
@@ -35,7 +34,7 @@ public class Mail implements Serializable {
     }
 
     public Mail(UUID mailId, UUID sender, UUID receiver, List<ItemStack> items, LocalDateTime sentAt, LocalDateTime expireAt) {
-        this.mailId = Objects.requireNonNull(mailId, "mailId cannot be null");
+        this.mailId = Objects.requireNonNull(mailId, "mailId");
         this.sender = sender;
         this.receiver = receiver;
         this.items = new ArrayList<>();
@@ -51,9 +50,15 @@ public class Mail implements Serializable {
     public UUID getMailId() { return mailId; }
     public UUID getSender() { return sender; }
     public UUID getReceiver() { return receiver; }
+    public List<ItemStack> getItems() { return items; }
 
-    public List<ItemStack> getItems() {
-        return items;
+    public void setItems(List<ItemStack> newItems) {
+        items.clear();
+        if (newItems != null) {
+            for (ItemStack item : newItems) {
+                if (item != null) items.add(item.clone());
+            }
+        }
     }
 
     public LocalDateTime getSentAt() { return sentAt; }
@@ -65,16 +70,11 @@ public class Mail implements Serializable {
 
     public ItemStack toItemStack(Player viewer) {
         if (items == null || items.isEmpty()) return null;
-
-        ItemStack display = items.get(0).clone(); // 대표 아이콘
+        ItemStack display = items.get(0).clone();
         ItemMeta meta = display.getItemMeta();
-
         if (meta != null) {
             String lang = LangManager.getLanguage(viewer.getUniqueId());
-            if (cachedSenderName == null) {
-                cachedSenderName = resolveSenderName(lang);
-            }
-
+            if (cachedSenderName == null) cachedSenderName = resolveSenderName(lang);
             List<String> lore = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
             lore.addAll(buildMailLore(lang));
             meta.setLore(lore);
@@ -88,32 +88,30 @@ public class Mail implements Serializable {
         lore.add("§r");
         lore.add("§7" + LangManager.get(lang, "mail.lore.sender").replace("%sender%", cachedSenderName));
         lore.add("§7" + LangManager.get(lang, "mail.lore.sent").replace("%time%", FORMATTER.format(sentAt)));
-
         if (expireAt != null) {
             lore.add("§7" + LangManager.get(lang, "mail.lore.expire").replace("%time%", FORMATTER.format(expireAt)));
-            if (isExpired()) {
-                lore.add("§c" + LangManager.get(lang, "mail.lore.expired"));
-            }
+            if (isExpired()) lore.add("§c" + LangManager.get(lang, "mail.lore.expired"));
         }
-
         lore.add("§a" + LangManager.get(lang, "mail.send.amount") + " - " + items.size());
         return lore;
     }
 
     private String resolveSenderName(String lang) {
         if (sender == null) return LangManager.get(lang, "mail.unknown");
-
-        return nameCache.computeIfAbsent(sender, id -> {
-            OfflinePlayer p = Bukkit.getOfflinePlayer(id);
-            String name = p.getName();
-            return (name != null) ? name : LangManager.get(lang, "mail.unknown");
-        });
+        String cached = nameCache.get(sender);
+        if (cached != null) return cached;
+        OfflinePlayer p = Bukkit.getOfflinePlayer(sender);
+        String name = p.getName();
+        String result = name != null ? name : LangManager.get(lang, "mail.unknown");
+        nameCache.put(sender, result);
+        return result;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Mail mail)) return false;
+        if (!(o instanceof Mail)) return false;
+        Mail mail = (Mail) o;
         return mailId.equals(mail.mailId);
     }
 

@@ -62,7 +62,7 @@ public class MailInventoryGUI implements Listener, InventoryHolder {
             return;
         }
 
-        // 편집 모드 → 변경사항 즉시 저장
+        // 편집 모드에서는 클릭 후 1틱 뒤 저장
         Bukkit.getScheduler().runTaskLater(MailManager.getInstance(), gui::save, 1L);
     }
 
@@ -82,15 +82,14 @@ public class MailInventoryGUI implements Listener, InventoryHolder {
     public void onClose(InventoryCloseEvent e) {
         if (!(e.getInventory().getHolder() instanceof MailInventoryGUI gui)) return;
 
-        if (gui.editable) {
-            gui.save();
-            if (e.getPlayer() instanceof Player p) {
-                p.sendMessage(LangManager.get(p.getUniqueId(), "gui.mailinv.saved")
+        if (e.getPlayer() instanceof Player p) {
+            UUID uuid = p.getUniqueId();
+            if (gui.editable) {
+                gui.save();
+                p.sendMessage(LangManager.get(uuid, "gui.mailinv.saved")
                         .replace("%id%", String.valueOf(gui.invId)));
-            }
-        } else {
-            if (e.getPlayer() instanceof Player p) {
-                p.sendMessage(LangManager.get(p.getUniqueId(), "gui.mailinv.closed")
+            } else {
+                p.sendMessage(LangManager.get(uuid, "gui.mailinv.closed")
                         .replace("%id%", String.valueOf(gui.invId)));
             }
         }

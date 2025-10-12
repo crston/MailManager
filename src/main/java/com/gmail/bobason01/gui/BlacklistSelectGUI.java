@@ -47,7 +47,7 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
 
     @Override
     public @NotNull Inventory getInventory() {
-        return null;
+        return Bukkit.createInventory(this, 54);
     }
 
     public void open(Player player) {
@@ -56,23 +56,26 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
 
     public void open(Player player, int page) {
         UUID uuid = player.getUniqueId();
-
         if (!loadingSet.add(uuid)) return;
         pageMap.put(uuid, page);
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                List<OfflinePlayer> players = PlayerCache.getCachedPlayers().stream()
-                        .filter(p -> p.getName() != null && !p.getUniqueId().equals(uuid))
-                        .sorted(Comparator.comparing(OfflinePlayer::getName, String.CASE_INSENSITIVE_ORDER))
-                        .toList();
+                List<OfflinePlayer> players = new ArrayList<>(PlayerCache.getCachedPlayers().size());
+                for (OfflinePlayer p : PlayerCache.getCachedPlayers()) {
+                    if (p.getName() != null && !p.getUniqueId().equals(uuid)) {
+                        players.add(p);
+                    }
+                }
+                players.sort(Comparator.comparing(OfflinePlayer::getName, String.CASE_INSENSITIVE_ORDER));
 
                 int maxPage = Math.max(0, (players.size() - 1) / PAGE_SIZE);
                 int safePage = Math.min(Math.max(page, 0), maxPage);
                 int start = safePage * PAGE_SIZE;
                 int end = Math.min(start + PAGE_SIZE, players.size());
                 List<OfflinePlayer> subList = players.subList(start, end);
-                Set<UUID> blocked = MailDataManager.getInstance().getBlacklist(uuid);
+
+                Set<UUID> blocked = new HashSet<>(MailDataManager.getInstance().getBlacklist(uuid));
 
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     try {
@@ -89,37 +92,32 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
                             boolean isBlocked = blocked.contains(target.getUniqueId());
                             ItemStack head = new ItemStack(Material.PLAYER_HEAD);
                             SkullMeta meta = (SkullMeta) head.getItemMeta();
-                            if (meta != null) {
-                                meta.setDisplayName((isBlocked ? "§c" : "§a") + target.getName());
-                                meta.setOwningPlayer(target);
-                                meta.setLore(Collections.singletonList(isBlocked
-                                        ? LangManager.get(lang, "gui.blacklist.blocked")
-                                        : LangManager.get(lang, "gui.blacklist.allowed")));
-                                head.setItemMeta(meta);
-                                inv.setItem(i, head);
-                            }
+                            meta.setDisplayName((isBlocked ? "§c" : "§a") + target.getName());
+                            meta.setOwningPlayer(target);
+                            meta.setLore(LangManager.getList(lang, isBlocked ? "gui.blacklist.blocked" : "gui.blacklist.allowed"));
+                            head.setItemMeta(meta);
+                            inv.setItem(i, head);
                         }
 
-                        // 검색 버튼
-                        inv.setItem(SLOT_SEARCH, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BLACKLIST_EXCLUDE_SEARCH).clone())
+                        inv.setItem(SLOT_SEARCH, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BLACKLIST_EXCLUDE_SEARCH))
                                 .name("§b" + LangManager.get(lang, "gui.search.name"))
-                                .lore(LangManager.get(lang, "gui.blacklist.search_prompt"))
+                                .lore(LangManager.getList(lang, "gui.blacklist.search_prompt"))
                                 .build());
 
-                        // 이전/다음 버튼
-                        if (safePage > 0)
-                            inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON).clone())
+                        if (safePage > 0) {
+                            inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON))
                                     .name("§a" + LangManager.get(lang, "gui.previous"))
                                     .build());
-                        if (safePage < maxPage)
-                            inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON).clone())
+                        }
+                        if (safePage < maxPage) {
+                            inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON))
                                     .name("§a" + LangManager.get(lang, "gui.next"))
                                     .build());
+                        }
 
-                        // 뒤로가기 버튼
-                        inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
+                        inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
                                 .name("§c" + LangManager.get(lang, "gui.back.name"))
-                                .lore("§7" + LangManager.get(lang, "gui.back.lore"))
+                                .lore(LangManager.getList(lang, "gui.back.lore"))
                                 .build());
 
                         player.openInventory(inv);
@@ -147,9 +145,7 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
-        if (!(e.getInventory().getHolder() instanceof BlacklistSelectGUI) || !(e.getWhoClicked() instanceof Player player)) {
-            return;
-        }
+        if (!(e.getInventory().getHolder() instanceof BlacklistSelectGUI) || !(e.getWhoClicked() instanceof Player player)) return;
 
         e.setCancelled(true);
         int slot = e.getRawSlot();
@@ -157,14 +153,13 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
 
         UUID uuid = player.getUniqueId();
         int page = pageMap.getOrDefault(uuid, 0);
-
         if (!hasCooldownPassed(player)) return;
 
         switch (slot) {
             case SLOT_SEARCH -> {
                 player.closeInventory();
                 waitingForSearch.add(uuid);
-                player.sendMessage(LangManager.get(uuid, "gui.blacklist.search_prompt"));
+                player.sendMessage(LangManager.get(uuid, "gui.blacklist.search_prompt_single"));
             }
             case SLOT_PREV -> open(player, page - 1);
             case SLOT_NEXT -> open(player, page + 1);
@@ -189,7 +184,7 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
                         player.sendMessage(LangManager.get(uuid, "gui.blacklist.unblocked").replace("%name%", name));
                     } else {
                         blocked.add(targetId);
-                        player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked").replace("%name%", name));
+                        player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked_msg").replace("%name%", name));
                     }
                     ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                     MailDataManager.getInstance().setBlacklist(uuid, blocked);
@@ -205,6 +200,7 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
             UUID uuid = e.getPlayer().getUniqueId();
             pageMap.remove(uuid);
             loadingSet.remove(uuid);
+            waitingForSearch.remove(uuid);
         }
     }
 
@@ -233,7 +229,7 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
                 player.sendMessage(LangManager.get(uuid, "gui.blacklist.unblocked").replace("%name%", target.getName()));
             } else {
                 blocked.add(targetId);
-                player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked").replace("%name%", target.getName()));
+                player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked_msg").replace("%name%", target.getName()));
             }
             MailDataManager.getInstance().setBlacklist(uuid, blocked);
             open(player, currentPage);

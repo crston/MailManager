@@ -76,7 +76,7 @@ mail:
 # 접속 시 알림 메시지
 login:
   title:
-    main: "&6읽지 않은 우편이 있습니다"
+    main: "&6읽지 않은 우편이 있습니다."
     sub: "&f총 %count% 개의 우편이 당신을 기다립니다."
   message: "&e읽지 않은 우편이 %count% 개 있습니다. &7(/mail)"
 
@@ -87,8 +87,8 @@ gui:
       title: "&b메일 인벤토리 %id% &7[편집]"
     view:
       title: "&b메일 인벤토리 %id%"
-    saved: "&a인벤토리 #%id% 를 저장합니다"
-    closed: "&7인벤토리 #%id% 를 닫습니다"
+    saved: "&a인벤토리 #%id% 를 저장합니다."
+    closed: "&7인벤토리 #%id% 를 닫습니다."
   mail:
     title: "&6우편함"
     view:
@@ -97,10 +97,17 @@ gui:
     delete: "&c[우편 삭제]"
     claim_success: "&a우편 아이템을 수령했습니다."
     deleted: "&c우편을 삭제했습니다."
-    select_mode_on: "&a선택 모드: 켜짐"
-    select_mode_off: "&c선택 모드: 꺼짐"
+    select_title: "&6다중 우편 선택 (%page%/%maxpage%)"
+    select_name: "&6다중 우편 선택"
+    select_lore: "&e다중으로 우편을 수령받거나 삭제합니다."
     claim_selected: "&a선택 수령"
+    claim_selected_lore:
+      - "&7선택한 우편의 아이템을 모두 수령합니다."
+      - "&e인벤토리에 빈 공간이 필요합니다."
     delete_selected: "&c선택 삭제"
+    delete_selected_lore:
+      - "&7선택한 모든 우편을 삭제합니다."
+      - "&c이 작업은 되돌릴 수 없습니다!"
     no_selected: "&c선택된 메일이 없습니다."
     lore:
       claim: "&e» 좌클릭: 아이템 수령"
@@ -125,7 +132,7 @@ gui:
       lore: "&7누구에게 우편을 보낼지 선택합니다."
     item:
       first: "&7보낼 아이템 (&f첫 번째 아이템 표시)"
-      more: "&7외 %count% 개의 아이템이 더 첨부되었습니다"
+      more: "&7외 %count% 개의 아이템이 더 첨부되었습니다."
     attach:
       name: "&e아이템 첨부"
       lore: "&7보낼 아이템을 등록합니다."
@@ -157,6 +164,8 @@ gui:
     disabled: "&c우편 알림을 껐습니다."
   blacklist:
     title: "&8차단 목록"
+    name: "&8차단 목록"
+    lore: "&7차단할 플레이어를 선택합니다."
     search_prompt: "&7특정 플레이어로부터 오는 우편을 차단합니다."
     allowed: "&a차단되지 않음"
     blocked: "&c차단됨"

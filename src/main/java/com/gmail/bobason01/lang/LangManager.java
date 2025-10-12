@@ -81,6 +81,41 @@ public class LangManager {
         return ChatColor.translateAlternateColorCodes('&', message);
     }
 
+    public static List<String> getList(UUID uuid, String key) {
+        String lang = getLanguage(uuid);
+        return getList(lang, key);
+    }
+
+    public static List<String> getList(String lang, String key) {
+        YamlConfiguration config = langConfigs.get(lang);
+        if (config == null) {
+            config = langConfigs.get(defaultLang);
+        }
+        if (config == null) {
+            config = langConfigs.get("en_us");
+        }
+        if (config == null) {
+            return Collections.singletonList("§c[ERROR] Language files not found!");
+        }
+
+        List<String> messages = config.getStringList(key);
+        if (messages == null || messages.isEmpty()) {
+            // string 하나만 있는 경우를 대비
+            String single = config.getString(key);
+            if (single != null) {
+                messages = Collections.singletonList(single);
+            } else {
+                messages = Collections.singletonList("§cMissing: " + lang + "/" + key);
+            }
+        }
+
+        List<String> colored = new ArrayList<>();
+        for (String line : messages) {
+            colored.add(ChatColor.translateAlternateColorCodes('&', line));
+        }
+        return colored;
+    }
+
     public static void setLanguage(UUID uuid, String lang) {
         if (lang != null && !langConfigs.containsKey(lang)) {
             return;

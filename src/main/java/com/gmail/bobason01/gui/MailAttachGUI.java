@@ -23,7 +23,7 @@ import java.util.*;
 
 public class MailAttachGUI implements Listener, InventoryHolder {
 
-    private static final int SIZE = 54;   // 6줄
+    private static final int SIZE = 54;      // 6줄
     private static final int BACK_SLOT = 53; // 뒤로가기 버튼
 
     private final Plugin plugin;
@@ -49,14 +49,14 @@ public class MailAttachGUI implements Listener, InventoryHolder {
 
         // 기존 첨부 아이템 불러오기
         List<ItemStack> items = MailService.getAttachedItems(owner);
-        for (int i = 0; i < Math.min(items.size(), SIZE - 1); i++) {
+        for (int i = 0, max = Math.min(items.size(), SIZE - 1); i < max; i++) {
             inv.setItem(i, items.get(i).clone());
         }
 
         // 뒤로가기 버튼
-        inv.setItem(BACK_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
+        inv.setItem(BACK_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
                 .name("§c" + LangManager.get(owner, "gui.back.name"))
-                .lore(LangManager.get(owner, "gui.back.lore"))
+                .lore(LangManager.getList(owner, "gui.back.lore"))
                 .build());
 
         player.openInventory(inv);
@@ -83,37 +83,28 @@ public class MailAttachGUI implements Listener, InventoryHolder {
             return;
         }
 
-        // 아이템 변화 즉시 반영
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            gui.saveAttachedItems();
-            gui.refreshParent(player);
-        }, 1L);
+        scheduleUpdate(gui, player);
     }
 
     @EventHandler
     public void onDrag(InventoryDragEvent e) {
         if (!(e.getInventory().getHolder() instanceof MailAttachGUI gui)) return;
-
         if (e.getRawSlots().contains(BACK_SLOT)) {
             e.setCancelled(true);
             return;
         }
-
-        // 드래그도 반영
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            gui.saveAttachedItems();
-            if (e.getWhoClicked() instanceof Player player) {
-                gui.refreshParent(player);
-            }
-        }, 1L);
+        if (e.getWhoClicked() instanceof Player player) {
+            scheduleUpdate(gui, player);
+        }
     }
 
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
-        if (!(e.getInventory().getHolder() instanceof MailAttachGUI gui)) return;
-        gui.saveAttachedItems();
-        if (e.getPlayer() instanceof Player player) {
-            gui.refreshParent(player);
+        if (e.getInventory().getHolder() instanceof MailAttachGUI gui) {
+            gui.saveAttachedItems();
+            if (e.getPlayer() instanceof Player player) {
+                gui.refreshParent(player);
+            }
         }
     }
 
@@ -127,15 +118,22 @@ public class MailAttachGUI implements Listener, InventoryHolder {
                 items.add(item.clone());
             }
         }
-
         MailService.setAttachedItems(owner, items);
     }
 
     private void refreshParent(Player player) {
+        MailManager manager = MailManager.getInstance();
         if (returnGui == MailSendGUI.class) {
-            MailManager.getInstance().mailSendGUI.refresh(player);
+            manager.mailSendGUI.refresh(player);
         } else if (returnGui == MailSendAllGUI.class) {
-            MailManager.getInstance().mailSendAllGUI.refresh(player);
+            manager.mailSendAllGUI.refresh(player);
         }
+    }
+
+    private void scheduleUpdate(MailAttachGUI gui, Player player) {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            gui.saveAttachedItems();
+            gui.refreshParent(player);
+        }, 1L);
     }
 }

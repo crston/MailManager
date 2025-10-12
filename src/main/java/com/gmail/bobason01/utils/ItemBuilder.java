@@ -5,6 +5,7 @@ import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -36,7 +37,18 @@ public class ItemBuilder {
     public ItemBuilder lore(List<String> lore) {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setLore(lore);
+            List<String> current = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
+            current.addAll(lore);
+            meta.setLore(current);
+            item.setItemMeta(meta);
+        }
+        return this;
+    }
+
+    public ItemBuilder clearLore() {
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setLore(null);
             item.setItemMeta(meta);
         }
         return this;

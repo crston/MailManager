@@ -31,6 +31,14 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
     private static final int CONFIRM_SLOT = 31;
     private static final int BACK_SLOT = 35;
     private static final Pattern TIME_PATTERN = Pattern.compile("(\\d+)([smhdMy])");
+    private static final Map<Character, String> UNIT_MAP = Map.of(
+            's', "second",
+            'm', "minute",
+            'h', "hour",
+            'd', "day",
+            'M', "month",
+            'y', "year"
+    );
 
     private final Plugin plugin;
     private final Map<UUID, Class<? extends InventoryHolder>> parentGuiMap = new ConcurrentHashMap<>();
@@ -41,7 +49,7 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
 
     @Override
     public @NotNull Inventory getInventory() {
-        return null;
+        return Bukkit.createInventory(this, 36);
     }
 
     public void open(Player player, Class<? extends InventoryHolder> parent) {
@@ -56,33 +64,45 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
             String unit = TIME_UNITS.get(i);
             int value = time.getOrDefault(unit, 0);
 
-            inv.setItem(UNIT_START_SLOT + i, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_UNIT).clone())
+            inv.setItem(UNIT_START_SLOT + i, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_UNIT))
                     .name(LangManager.get(lang, "gui.time-unit." + unit + ".name").replace("%value%", String.valueOf(value)))
-                    .lore(LangManager.get(lang, "gui.time-unit.lore"))
+                    .lore(LangManager.getList(lang, "gui.time-unit.lore"))
                     .build());
         }
 
-        inv.setItem(PERMANENT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_PERMANENT).clone())
+        inv.setItem(PERMANENT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_PERMANENT))
                 .name(LangManager.get(lang, "gui.permanent.name"))
-                .lore(LangManager.get(lang, "gui.permanent.lore"))
+                .lore(LangManager.getList(lang, "gui.permanent.lore"))
                 .build());
 
-        inv.setItem(CHAT_INPUT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_CHAT_INPUT).clone())
+        inv.setItem(CHAT_INPUT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_CHAT_INPUT))
                 .name(LangManager.get(lang, "gui.time.chat-input.name"))
-                .lore(LangManager.get(lang, "gui.time.chat-input.lore"))
+                .lore(LangManager.getList(lang, "gui.time.chat-input.lore"))
                 .build());
 
-        inv.setItem(CONFIRM_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_CONFIRM).clone())
+        inv.setItem(CONFIRM_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_CONFIRM))
                 .name(LangManager.get(lang, "gui.select-complete.name"))
-                .lore(LangManager.get(lang, "gui.select-complete.lore"))
+                .lore(LangManager.getList(lang, "gui.select-complete.lore"))
                 .build());
 
-        inv.setItem(BACK_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
+        inv.setItem(BACK_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
                 .name(LangManager.get(lang, "gui.back.name"))
-                .lore(LangManager.get(lang, "gui.back.lore"))
+                .lore(LangManager.getList(lang, "gui.back.lore"))
                 .build());
 
         player.openInventory(inv);
+    }
+
+    private void updateUnitSlot(Player player, String unit, int value) {
+        String lang = LangManager.getLanguage(player.getUniqueId());
+        player.getOpenInventory().getTopInventory().setItem(
+                UNIT_START_SLOT + TIME_UNITS.indexOf(unit),
+                new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_UNIT))
+                        .name(LangManager.get(lang, "gui.time-unit." + unit + ".name").replace("%value%", String.valueOf(value)))
+                        .lore(LangManager.getList(lang, "gui.time-unit.lore"))
+                        .build()
+        );
+        player.updateInventory();
     }
 
     @EventHandler
@@ -97,19 +117,18 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
         Map<String, Integer> time = MailService.getTimeData(uuid);
 
         if (slot >= UNIT_START_SLOT && slot < UNIT_START_SLOT + TIME_UNITS.size()) {
-            int index = slot - UNIT_START_SLOT;
-            String unit = TIME_UNITS.get(index);
+            String unit = TIME_UNITS.get(slot - UNIT_START_SLOT);
             int value = time.getOrDefault(unit, 0);
 
             ClickType click = e.getClick();
-            if (click.isShiftClick()) value += (click.isLeftClick() ? 10 : -10);
-            else value += (click.isLeftClick() ? 1 : -1);
+            value += (click.isShiftClick() ? (click.isLeftClick() ? 10 : -10) : (click.isLeftClick() ? 1 : -1));
             value = Math.max(0, value);
 
             time.put(unit, value);
             MailService.setTimeData(uuid, time);
             ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
-            open(player, parentGuiMap.get(uuid));
+
+            updateUnitSlot(player, unit, value);
             return;
         }
 
@@ -183,15 +202,7 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
         Matcher matcher = TIME_PATTERN.matcher(input);
         while (matcher.find()) {
             int value = Integer.parseInt(matcher.group(1));
-            String unit = switch (matcher.group(2)) {
-                case "s" -> "second";
-                case "m" -> "minute";
-                case "h" -> "hour";
-                case "d" -> "day";
-                case "M" -> "month";
-                case "y" -> "year";
-                default -> null;
-            };
+            String unit = UNIT_MAP.get(matcher.group(2).charAt(0));
             if (unit != null) result.put(unit, value);
         }
         return result;

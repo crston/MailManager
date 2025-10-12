@@ -38,6 +38,7 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
     private final Map<UUID, Integer> playerPageMap = new ConcurrentHashMap<>();
     private final Map<UUID, AtomicLong> lastPageClickMap = new ConcurrentHashMap<>();
     private final Set<UUID> loadingSet = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, ItemStack> cachedHeads = new WeakHashMap<>();
 
     public MailTargetSelectGUI(Plugin plugin) {
         this.plugin = plugin;
@@ -45,7 +46,7 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
 
     @Override
     public @NotNull Inventory getInventory() {
-        return null;
+        return Bukkit.createInventory(this, 54);
     }
 
     public void open(Player player) {
@@ -54,9 +55,7 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
 
     public void open(Player player, int page) {
         UUID uuid = player.getUniqueId();
-
         if (!loadingSet.add(uuid)) return;
-
         playerPageMap.put(uuid, page);
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -69,7 +68,6 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
             int safePage = Math.min(Math.max(page, 0), maxPage);
             int start = safePage * PAGE_SIZE;
             int end = Math.min(start + PAGE_SIZE, allPlayers.size());
-
             List<OfflinePlayer> pagePlayers = allPlayers.subList(start, end);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -85,31 +83,25 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
 
                     // 플레이어 목록 채우기
                     for (int i = 0; i < pagePlayers.size(); i++) {
-                        OfflinePlayer target = pagePlayers.get(i);
-                        ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
-                        SkullMeta meta = (SkullMeta) skull.getItemMeta();
-                        if (meta != null) {
-                            meta.setDisplayName("§e" + target.getName());
-                            meta.setOwningPlayer(target);
-                            skull.setItemMeta(meta);
-                            inv.setItem(i, skull);
-                        }
+                        inv.setItem(i, getCachedHead(pagePlayers.get(i)));
                     }
 
-                    // 다음/이전/뒤로가기 버튼
+                    // 버튼
                     if (safePage < maxPage) {
-                        inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON).clone())
+                        inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON))
                                 .name("§a" + LangManager.get(lang, "gui.next"))
+                                .lore(LangManager.getList(lang, "gui.page.next_lore"))
                                 .build());
                     }
                     if (safePage > 0) {
-                        inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON).clone())
+                        inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON))
                                 .name("§a" + LangManager.get(lang, "gui.previous"))
+                                .lore(LangManager.getList(lang, "gui.page.prev_lore"))
                                 .build());
                     }
-                    inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
+                    inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
                             .name("§c" + LangManager.get(lang, "gui.back.name"))
-                            .lore(LangManager.get(lang, "gui.back.lore"))
+                            .lore(LangManager.getList(lang, "gui.back.lore"))
                             .build());
 
                     player.openInventory(inv);
@@ -120,10 +112,22 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
         });
     }
 
+    private ItemStack getCachedHead(OfflinePlayer target) {
+        return cachedHeads.computeIfAbsent(target.getUniqueId(), id -> {
+            ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
+            SkullMeta meta = (SkullMeta) skull.getItemMeta();
+            if (meta != null) {
+                meta.setDisplayName("§e" + target.getName());
+                meta.setOwningPlayer(target);
+                skull.setItemMeta(meta);
+            }
+            return skull;
+        }).clone();
+    }
+
     private boolean hasCooldownPassed(Player player) {
-        UUID uuid = player.getUniqueId();
         long now = System.currentTimeMillis();
-        AtomicLong lastClick = lastPageClickMap.computeIfAbsent(uuid, k -> new AtomicLong(0));
+        AtomicLong lastClick = lastPageClickMap.computeIfAbsent(player.getUniqueId(), k -> new AtomicLong(0));
         if (now - lastClick.get() < PAGE_COOLDOWN_MS) {
             ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK_FAIL);
             return false;
@@ -140,7 +144,7 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
 
         e.setCancelled(true);
         ItemStack clicked = e.getCurrentItem();
-        if (clicked == null || clicked.getType().isAir()) return;
+        if (clicked == null || clicked.getType() != Material.PLAYER_HEAD) return;
 
         UUID uuid = player.getUniqueId();
         int slot = e.getRawSlot();
@@ -162,16 +166,13 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
                 MailManager.getInstance().mailSendGUI.open(player);
             }
             default -> {
-                if (clicked.getType() != Material.PLAYER_HEAD) return;
                 String name = ChatColor.stripColor(Objects.requireNonNull(clicked.getItemMeta()).getDisplayName());
-
                 OfflinePlayer target = PlayerCache.getByName(name);
                 if (target == null || target.getUniqueId().equals(uuid)) {
                     player.sendMessage(LangManager.get(uuid, "gui.target.invalid"));
                     ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK_FAIL);
                     return;
                 }
-
                 MailService.setTarget(uuid, target);
                 player.sendMessage(LangManager.get(uuid, "gui.target.selected").replace("%target%", name));
                 ConfigManager.playSound(player, ConfigManager.SoundType.ACTION_SETTING_CHANGE);
@@ -183,8 +184,9 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
         if (e.getInventory().getHolder() instanceof MailTargetSelectGUI) {
-            playerPageMap.remove(e.getPlayer().getUniqueId());
-            loadingSet.remove(e.getPlayer().getUniqueId());
+            UUID uuid = e.getPlayer().getUniqueId();
+            playerPageMap.remove(uuid);
+            loadingSet.remove(uuid);
         }
     }
 }

@@ -37,18 +37,15 @@ public class MailDataManager {
                     MailManager.getInstance().getConfig()
                             .getString("database.type", "SQLITE").toUpperCase()
             );
-
             if (type == DatabaseType.YAML) {
                 throw new UnsupportedOperationException("YAML storage not optimized, use JDBC");
             } else {
                 DataSource ds = DataSourceFactory.build(type);
                 storage = new JdbcStorage(ds, type == DatabaseType.MYSQL);
             }
-
             storage.connect();
             storage.ensureSchema();
             loadAll();
-
             int interval = MailManager.getInstance().getConfig().getInt("flush.intervalTicks", 40);
             if (started.compareAndSet(false, true)) {
                 taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(
@@ -79,19 +76,14 @@ public class MailDataManager {
             try {
                 List<Mail> list = storage.loadMails(u);
                 if (!list.isEmpty()) mailMap.put(u, new ArrayDeque<>(list));
-
                 Boolean n = storage.loadNotifySetting(u);
                 if (n != null) notifyMap.put(u, n);
-
                 Set<UUID> bl = storage.loadBlacklist(u);
                 if (!bl.isEmpty()) blacklistMap.put(u, bl);
-
                 Set<UUID> ex = storage.loadExclude(u);
                 if (!ex.isEmpty()) excludeMap.put(u, ex);
-
                 String lang = storage.loadPlayerLanguage(u);
                 if (lang != null) LangManager.loadUserLanguage(u, lang);
-
             } catch (Exception e) {
                 Bukkit.getLogger().log(Level.WARNING, "[MailManager] Load failed for " + u, e);
             }
@@ -102,10 +94,8 @@ public class MailDataManager {
         List<MailStorage.MailRecord> ins = new ArrayList<>();
         MailStorage.MailRecord rec;
         while ((rec = insertQueue.poll()) != null) ins.add(rec);
-
         List<MailStorage.MailRecord> del = new ArrayList<>();
         while ((rec = deleteQueue.poll()) != null) del.add(rec);
-
         try {
             if (!ins.isEmpty()) storage.batchInsertMails(ins);
             if (!del.isEmpty()) storage.batchDeleteMails(del);
@@ -115,25 +105,52 @@ public class MailDataManager {
     }
 
     public void addMail(Mail mail) {
-        mailMap.computeIfAbsent(mail.getReceiver(), k -> new ArrayDeque<>()).add(mail);
+        Deque<Mail> dq = mailMap.get(mail.getReceiver());
+        if (dq == null) {
+            dq = new ArrayDeque<>();
+            mailMap.put(mail.getReceiver(), dq);
+        }
+        dq.add(mail);
         insertQueue.add(new MailStorage.MailRecord(mail.getReceiver(), mail));
     }
 
     public void removeMail(Mail mail) {
         Deque<Mail> dq = mailMap.get(mail.getReceiver());
-        if (dq != null) dq.removeIf(m -> m.getMailId().equals(mail.getMailId()));
+        if (dq != null) {
+            Iterator<Mail> it = dq.iterator();
+            while (it.hasNext()) {
+                Mail m = it.next();
+                if (m.getMailId().equals(mail.getMailId())) {
+                    it.remove();
+                    break;
+                }
+            }
+        }
         deleteQueue.add(new MailStorage.MailRecord(mail.getReceiver(), mail));
     }
 
     public void updateMail(Mail mail) {
-        Deque<Mail> dq = mailMap.computeIfAbsent(mail.getReceiver(), k -> new ArrayDeque<>());
-        dq.removeIf(m -> m.getMailId().equals(mail.getMailId()));
+        Deque<Mail> dq = mailMap.get(mail.getReceiver());
+        if (dq == null) {
+            dq = new ArrayDeque<>();
+            mailMap.put(mail.getReceiver(), dq);
+        }
+        Iterator<Mail> it = dq.iterator();
+        while (it.hasNext()) {
+            Mail m = it.next();
+            if (m.getMailId().equals(mail.getMailId())) {
+                it.remove();
+                break;
+            }
+        }
         dq.add(mail);
-        insertQueue.add(new MailStorage.MailRecord(mail.getReceiver(), mail)); // UPSERT 처리
+        insertQueue.add(new MailStorage.MailRecord(mail.getReceiver(), mail));
     }
 
     public List<Mail> getMails(UUID u) {
-        return new ArrayList<>(mailMap.getOrDefault(u, new ArrayDeque<>()));
+        Deque<Mail> dq = mailMap.get(u);
+        if (dq == null || dq.isEmpty()) return new ArrayList<>();
+        return new ArrayList<>(dq);
     }
 
     public void setNotify(UUID u, boolean e) {
@@ -142,7 +159,8 @@ public class MailDataManager {
     }
 
     public boolean isNotify(UUID u) {
-        return notifyMap.getOrDefault(u, true);
+        Boolean v = notifyMap.get(u);
+        return v == null || v;
     }
 
     public void setBlacklist(UUID o, Set<UUID> l) {
@@ -151,7 +169,9 @@ public class MailDataManager {
     }
 
     public Set<UUID> getBlacklist(UUID o) {
-        return blacklistMap.getOrDefault(o, Collections.emptySet());
+        Set<UUID> s = blacklistMap.get(o);
+        if (s == null) return Collections.emptySet();
+        return s;
     }
 
     public void setExclude(UUID u, Set<UUID> l) {
@@ -160,7 +180,9 @@ public class MailDataManager {
     }
 
     public Set<UUID> getExclude(UUID u) {
-        return excludeMap.getOrDefault(u, Collections.emptySet());
+        Set<UUID> s = excludeMap.get(u);
+        if (s == null) return Collections.emptySet();
+        return s;
     }
 
     public void savePlayerLanguage(UUID u, String l) {
@@ -174,8 +196,12 @@ public class MailDataManager {
     }
 
     public List<Mail> getUnreadMails(UUID uuid) {
-        return getMails(uuid).stream()
-                .filter(mail -> !mail.isExpired())
-                .toList();
+        List<Mail> list = getMails(uuid);
+        List<Mail> out = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            Mail m = list.get(i);
+            if (!m.isExpired()) out.add(m);
+        }
+        return out;
     }
 }

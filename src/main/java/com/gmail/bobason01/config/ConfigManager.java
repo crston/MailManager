@@ -69,6 +69,8 @@ public class ConfigManager {
         SETTING_GUI_NOTIFY_OFF("setting.notify-off", Material.GRAY_DYE),
         SETTING_GUI_BLACKLIST("setting.blacklist", Material.BARRIER),
         SETTING_GUI_LANGUAGE("setting.language", Material.BOOK),
+        SETTING_GUI_MULTI_SELECT("setting.multi-select", Material.SUNFLOWER),
+
         LANGUAGE_GUI_ITEM("language.gui-item", Material.PAPER),
         SEND_GUI_TIME("send.gui.time", Material.CLOCK),
         SEND_GUI_TARGET("send.gui.target", Material.PLAYER_HEAD),

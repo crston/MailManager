@@ -7,41 +7,41 @@ cmd:
   inv:
     usage: "&c使用方法: /mail inv <create|edit|open|delete> <id>"
     no-player: "&cこのコマンドはプレイヤーのみ使用できます。"
-    no-permission: "&cこのコマンドを使う権限がありません。"
+    no-permission: "&cこのコマンドを使用する権限がありません。"
     not-number: "&cIDは数字である必要があります。"
     exists: "&cID %id% のインベントリは既に存在します。"
     created: "&aインベントリ #%id% を作成しました。"
     deleted: "&cインベントリ #%id% を削除しました。"
     not-found: "&cID %id% のインベントリは存在しません。"
   gui:
-    unavailable: "&cコンソールからはGUIを開けません。"
+    unavailable: "&cコンソールではGUIを開けません。"
   send:
     target-offline: "&c対象プレイヤーはオフラインです。"
     target-online: "&a対象プレイヤーはオンラインです。"
     usage: "&e使用方法: /mail send <プレイヤー> <アイテムID> [有効期限]"
-    success: "&a%name% さんにメールを送信しました。"
+    success: "&a%name% に郵便を正常に送りました。"
   sendall:
     usage: "&e使用方法: /mail sendall <アイテムID> [有効期限]"
-    success: "&a合計 %count% 人のプレイヤーに一斉メールを送信しました。"
+    success: "&a合計 %count% 人のプレイヤーに一斉郵便を送りました。"
   reload: "&a設定をリロードしました。"
   player-only: "&cこのコマンドはプレイヤーのみ使用できます。"
   player:
     notfound: "&cプレイヤー '%name%' が見つかりません。"
   item:
-    invalid: "&cアイテムID '%id%' が無効です。"
+    invalid: "&cアイテムID '%id%' は無効です。"
   expire:
-    invalid: "&c有効期限の形式が間違っています。(例: 7d, 12h, 30m, 15s)"
+    invalid: "&c有効期限の形式が正しくありません。(例: 7d, 12h, 30m, 15s)"
   mmoitems:
     missing: "&cMMOItems プラグインが有効化されていません。"
   setlang:
     usage: "&e使用方法: /mail setlang <言語コード>"
-    not-found: "&c言語 '%lang%' が見つかりません。利用可能な言語: %langs%"
+    not-found: "&c言語 '%lang%' が見つかりません。利用可能: %langs%"
     success: "&a言語が %lang% に設定されました。"
 
-# メールシステム関連メッセージ
+# 郵便システム関連メッセージ
 mail:
   attach:
-    success: "&aアイテム %count% 個を添付しました。"
+    success: "&aアイテムを %count% 個添付しました。"
   unknown: "&7不明"
   lore:
     sender: "&f送信者: &e%sender%"
@@ -49,145 +49,154 @@ mail:
     expire: "&f有効期限: &e%time%"
     expired: "&c期限切れ"
   receive:
-    failed: "&cインベントリに空きがなく、メールを受け取れません。"
-  claim_success: "&aメールアイテムを受け取りました。"
-  deleted: "&aメールを削除しました。"
-  deleted_multi: "&a%count% 件のメールを削除しました。"
-  delete_cancel: "&cメール削除をキャンセルしました。"
-  inventory_full: "&cインベントリに空きがなく、一部のアイテムは受け取れませんでした。"
+    failed: "&cインベントリに空きがなく、郵便を受け取れません。"
+  claim_success: "&a郵便アイテムを受け取りました。"
+  deleted: "&a郵便を削除しました。"
+  deleted_multi: "&a%count% 通の郵便を削除しました。"
+  delete_cancel: "&c郵便の削除をキャンセルしました。"
+  inventory_full: "&cインベントリの空きが足りず、一部アイテムを受け取れませんでした。"
   send:
     amount: "&eアイテム数"
-    invalid: "&c送信するアイテムと対象を指定してください。"
-    success: "&aメールを送信しました。"
-    cooldown: "&c送信が早すぎます。しばらくしてから再試行してください。"
-    no_permission: "&cメールを送信する権限がありません。"
+    invalid: "&c送るアイテムと対象を指定してください。"
+    success: "&a郵便を正常に送りました。"
+    cooldown: "&c短時間に送信しすぎです。少し待ってから再試行してください。"
+    no_permission: "&c郵便を送る権限がありません。"
   sendall:
     invalid: "&c送信するアイテムが指定されていません。"
-    success: "&a一斉メールを送信しました。順次配信されます。"
-    cooldown: "&c送信が早すぎます。しばらくしてから再試行してください。"
+    success: "&a一斉郵便を送信しました。送信は順番に処理されます。"
+    cooldown: "&c短時間に送信しすぎです。少し待ってから再試行してください。"
     no_item: "&c送信するアイテムを登録してください。"
-    select_first: "&cまず有効期限を設定し、必要なら除外対象を選択してください。"
+    select_first: "&cまず有効期限を設定し、必要なら除外対象を選んでください。"
   notify:
-    message: "&e新しいメールが届きました! &7(/mail)"
+    message: "&e新しい郵便が届きました! &7(/mail)"
     title:
-      main: "&6[!] 新しいメールが届きました"
+      main: "&6[!] 新しい郵便"
       sub: "&f/mail コマンドで確認してください。"
 
-# ログイン時通知メッセージ
+# ログイン時の通知
 login:
   title:
-    main: "&6未読メールがあります"
-    sub: "&f合計 %count% 件のメールが待っています。"
-  message: "&e未読メールが %count% 件あります。 &7(/mail)"
+    main: "&6未読の郵便があります。"
+    sub: "&f合計 %count% 通の郵便が届いています。"
+  message: "&e未読の郵便が %count% 通あります。 &7(/mail)"
 
 # GUI関連テキスト
 gui:
   mailinv:
     edit:
-      title: "&bメールインベントリ %id% &7[編集]"
+      title: "&b郵便インベントリ %id% &7[編集]"
     view:
-      title: "&bメールインベントリ %id%"
-    saved: "&aインベントリ #%id% を保存しました"
-    closed: "&7インベントリ #%id% を閉じました"
+      title: "&b郵便インベントリ %id%"
+    saved: "&aインベントリ #%id% を保存しました。"
+    closed: "&7インベントリ #%id% を閉じました。"
   mail:
-    title: "&6メールボックス"
+    title: "&6郵便箱"
     view:
-      title: "&eメール詳細"
+      title: "&e郵便詳細"
     claim_all: "&a[全て受け取る]"
-    delete: "&c[メール削除]"
-    claim_success: "&aメールアイテムを受け取りました。"
-    deleted: "&cメールを削除しました。"
-    select_mode_on: "&a選択モード: ON"
-    select_mode_off: "&c選択モード: OFF"
-    claim_selected: "&a選択分を受け取る"
-    delete_selected: "&c選択分を削除"
-    no_selected: "&c選択されたメールがありません。"
+    delete: "&c[削除]"
+    claim_success: "&a郵便アイテムを受け取りました。"
+    deleted: "&c郵便を削除しました。"
+    select_title: "&6複数選択 (%page%/%maxpage%)"
+    select_name: "&6郵便を複数選択"
+    select_lore: "&e複数の郵便をまとめて受け取りまたは削除します。"
+    claim_selected: "&a選択した郵便を受け取る"
+    claim_selected_lore:
+      - "&7選択した郵便のアイテムを全て受け取ります。"
+      - "&eインベントリに空きが必要です。"
+    delete_selected: "&c選択した郵便を削除"
+    delete_selected_lore:
+      - "&7選択した全ての郵便を削除します。"
+      - "&cこの操作は取り消せません!"
+    no_selected: "&c選択された郵便がありません。"
     lore:
       claim: "&e» 左クリック: アイテム受け取り"
-      delete: "&c» 右クリック: メール削除"
+      delete: "&c» 右クリック: 郵便削除"
   attach:
     title: "&aアイテム添付"
   delete:
     title: "&c削除確認"
-    yes_name: "&cはい、削除します"
-    yes_lore: "&7このメールは完全に削除されます。"
-    no_name: "&aいいえ、キャンセルします"
-    no_lore: "&7メールボックスに戻ります。"
+    yes_name: "&cはい、削除します。"
+    yes_lore: "&7この郵便を完全に削除します。"
+    no_name: "&aいいえ、キャンセルします。"
+    no_lore: "&7郵便箱に戻ります。"
   send:
-    title: "&6メール送信"
+    title: "&6郵便を送る"
     time:
-      name: "&b有効期限設定"
-      duration: "&f残り: &e%time%"
-      expires: "&f有効期限日時: &e%date%"
+      name: "&b有効期限を設定"
+      duration: "&f残り時間: &e%time%"
+      expires: "&f期限: &e%date%"
       no_expire: "&a無期限"
     target:
-      name: "&d受信者選択"
-      lore: "&7誰に送信するかを選択します。"
+      name: "&d受取人を選択"
+      lore: "&7誰に郵便を送るかを選択します。"
     item:
       first: "&7送信アイテム (&f最初のアイテムを表示)"
-      more: "&7さらに %count% 個のアイテムが添付されています"
+      more: "&7さらに %count% 個のアイテムが添付されています。"
     attach:
       name: "&eアイテム添付"
-      lore: "&7送信するアイテムを登録します。"
+      lore: "&7送るアイテムを登録します。"
     no_item: "&cアイテムなし"
-    no_item_lore: "&7ここにアイテムを置くと添付されます。"
+    no_item_lore: "&7添付するアイテムをここに置いてください。"
     confirm:
       name: "&a送信"
-      lore: "&7設定内容でメールを送信します。"
+      lore: "&7設定内容で郵便を送信します。"
   sendall:
-    title: "&6一斉メール送信"
+    title: "&6一斉郵便"
     expire:
-      name: "&b有効期限設定"
-      lore: "&7すべてのメールに有効期限を設定します。"
+      name: "&b有効期限を設定"
+      lore: "&7全ての郵便の有効期限を設定します。"
     exclude:
       name: "&c除外対象設定"
-      lore: "&7一斉メールから除外するプレイヤーを選択します。"
+      lore: "&7一斉郵便から除外するプレイヤーを選びます。"
     attach:
       name: "&eアイテム添付"
-      lore: "&7一斉メールに含めるアイテムを登録します。"
+      lore: "&7全体郵便に含めるアイテムを登録します。"
     confirm:
       name: "&a一斉送信"
-      lore: "&7サーバーの全プレイヤーにメールを送信します。"
+      lore: "&7サーバーの全プレイヤーに郵便を送ります。"
   setting:
-    title: "&6メール設定"
+    title: "&6郵便設定"
   notify:
-    name: "&6メール通知"
-    lore: "&7新着メール通知をON/OFFします。"
-    enabled: "&aメール通知をONにしました。"
-    disabled: "&cメール通知をOFFにしました。"
+    name: "&6郵便通知"
+    lore: "&7新しい郵便の通知をオン/オフします。"
+    enabled: "&a郵便通知を有効化しました。"
+    disabled: "&c郵便通知を無効化しました。"
   blacklist:
     title: "&8ブロックリスト"
-    search_prompt: "&7特定プレイヤーからのメールをブロックします。"
-    allowed: "&aブロックされていません"
-    blocked: "&cブロック中"
-    unblocked: "&a%name% さんのブロックを解除しました。"
-    blocked_msg: "&c%name% さんをブロックしました。"
+    name: "&8ブロックリスト"
+    lore: "&7ブロックするプレイヤーを選びます。"
+    search_prompt: "&7特定のプレイヤーからの郵便をブロックします。"
+    allowed: "&aブロックされていない"
+    blocked: "&cブロック済み"
+    unblocked: "&a%name% のブロックを解除しました。"
+    blocked_msg: "&c%name% をブロックしました。"
     not_found: "&cプレイヤー '%input%' が見つかりません。"
   exclude:
-    title: "&8除外リスト"
+    title: "&8送信除外リスト"
     search: "&bプレイヤー検索"
     search.lore: "&7名前で検索して切り替えます。"
-    search.prompt: "&eチャットにプレイヤー名を入力してください。"
+    search.prompt: "&eチャットに検索するプレイヤー名を入力してください。"
     status:
-      excluded: "&c除外中"
+      excluded: "&c除外"
       included: "&a含まれる"
-    excluded: "&c%name% さんを除外リストに追加しました。"
-    included: "&a%name% さんを除外リストから削除しました。"
+    excluded: "&c%name% を除外リストに追加しました。"
+    included: "&a%name% を除外リストから削除しました。"
     notfound: "&cプレイヤー '%input%' が見つかりません。"
   language:
     title: "&b言語設定"
     name: "&b言語設定"
     lore: "&7プラグインの言語を変更します。"
-    selected: "&a» %lang% (選択中)"
+    selected: "&a» %lang% (選択済み)"
     unselected: "&7» %lang%"
   time:
-    title: "&b有効期限設定"
+    title: "&b有効期限を設定"
     chat-input:
-      name: "&eチャットで時間入力"
+      name: "&eチャットで時間を入力"
       lore: "&7(例: 1d12h30m または -1 で無期限)"
   permanent:
-    name: "&a無期限"
-    lore: "&7メールが期限切れにならないようにします。"
+    name: "&a無期限保存"
+    lore: "&7この郵便が期限切れにならないようにします。"
   time-unit:
     lore: "&e左クリック: +1 | 右クリック: -1\n&eShift+左クリック: +10 | Shift+右クリック: -10"
     second:
@@ -203,9 +212,9 @@ gui:
     year:
       name: "&f年: &e%value%"
   target:
-    title: "&d受信者選択 &7(%page%/%maxpage%)"
+    title: "&d受取人選択 &7(%page%/%maxpage%)"
     invalid: "&c無効な対象です。"
-    selected: "&a受信者を '%target%' さんに設定しました。"
+    selected: "&a受取人を '%target%' に設定しました。"
   select-complete:
     name: "&a選択完了"
     lore: "&7この時間で設定して戻ります。"
@@ -222,7 +231,7 @@ time:
   permanent: "&a無期限"
   unit:
     year: "&f年"
-    month: "&f月"
+    month: "&fヶ月"
     day: "&f日"
     hour: "&f時間"
     minute: "&f分"
@@ -230,5 +239,5 @@ time:
   chat:
     prompt: "&eチャットに時間を入力してください。(例: 3d12h)"
     instruction: "&e(単位: y, M, d, h, m, s / 無期限: -1)"
-    invalid: "&c形式が無効です。もう一度入力してください。"
-  confirmed: "&a時間設定が完了しました。"
+    invalid: "&c形式が正しくありません。再入力してください。"
+  confirmed: "&a時間が設定されました。"

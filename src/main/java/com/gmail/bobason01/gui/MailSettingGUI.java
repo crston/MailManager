@@ -20,9 +20,10 @@ import java.util.UUID;
 
 public class MailSettingGUI implements Listener, InventoryHolder {
 
-    private static final int NOTIFY_SLOT = 11;
-    private static final int LANGUAGE_SLOT = 13;
-    private static final int BLACKLIST_SLOT = 15;
+    private static final int NOTIFY_SLOT = 10;
+    private static final int LANGUAGE_SLOT = 12;
+    private static final int BLACKLIST_SLOT = 14;
+    private static final int MULTI_SELECT_SLOT = 16;
     private static final int BACK_SLOT = 26;
 
     private final Plugin plugin;
@@ -33,7 +34,7 @@ public class MailSettingGUI implements Listener, InventoryHolder {
 
     @Override
     public @NotNull Inventory getInventory() {
-        return null;
+        return Bukkit.createInventory(this, 27);
     }
 
     public void open(Player player) {
@@ -41,36 +42,39 @@ public class MailSettingGUI implements Listener, InventoryHolder {
         String lang = LangManager.getLanguage(uuid);
         boolean notifyEnabled = MailDataManager.getInstance().isNotify(uuid);
 
-        // 알림 상태에 따라 다른 아이템 불러오기
-        ItemStack notifyItem = (notifyEnabled
-                ? ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_ON)
-                : ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_OFF)).clone();
-
-        String title = LangManager.get(lang, "gui.setting.title");
+        String title = LangManager.get(uuid, "gui.setting.title");
         Inventory inv = Bukkit.createInventory(this, 27, title);
 
         // 알림 버튼
-        inv.setItem(NOTIFY_SLOT, new ItemBuilder(notifyItem)
+        inv.setItem(NOTIFY_SLOT, new ItemBuilder(
+                notifyEnabled ? ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_ON)
+                        : ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_OFF))
                 .name(LangManager.get(uuid, "gui.notify.name"))
-                .lore(LangManager.get(uuid, "gui.notify.lore"))
+                .lore(LangManager.getList(uuid, "gui.notify.lore"))
                 .build());
 
         // 블랙리스트 버튼
-        inv.setItem(BLACKLIST_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_BLACKLIST).clone())
-                .name(LangManager.get(lang, "gui.blacklist.title"))
-                .lore(LangManager.get(lang, "gui.blacklist.search_prompt"))
+        inv.setItem(BLACKLIST_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_BLACKLIST))
+                .name(LangManager.get(uuid, "gui.blacklist.title"))
+                .lore(LangManager.getList(uuid, "gui.blacklist.lore"))
                 .build());
 
-        // 언어 선택 버튼
-        inv.setItem(LANGUAGE_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_LANGUAGE).clone())
-                .name(LangManager.get(lang, "gui.language.name"))
-                .lore(LangManager.get(lang, "gui.language.lore"))
+        // 언어 버튼
+        inv.setItem(LANGUAGE_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_LANGUAGE))
+                .name(LangManager.get(uuid, "gui.language.name"))
+                .lore(LangManager.getList(uuid, "gui.language.lore"))
+                .build());
+
+        // 멀티 선택 버튼
+        inv.setItem(MULTI_SELECT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SELECT_BUTTON))
+                .name(LangManager.get(uuid, "gui.mail.select_name"))
+                .lore(LangManager.getList(uuid, "gui.mail.select_lore"))
                 .build());
 
         // 뒤로가기 버튼
-        inv.setItem(BACK_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON).clone())
-                .name(LangManager.get(lang, "gui.back.name"))
-                .lore(LangManager.get(lang, "gui.back.lore"))
+        inv.setItem(BACK_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
+                .name("§c" + LangManager.get(uuid, "gui.back.name"))
+                .lore(LangManager.getList(uuid, "gui.back.lore"))
                 .build());
 
         player.openInventory(inv);
@@ -87,19 +91,15 @@ public class MailSettingGUI implements Listener, InventoryHolder {
         ItemStack clicked = e.getCurrentItem();
         if (clicked == null || clicked.getType().isAir()) return;
 
+        UUID uuid = player.getUniqueId();
         MailManager manager = MailManager.getInstance();
 
         switch (e.getRawSlot()) {
             case NOTIFY_SLOT -> {
-                boolean newState = MailDataManager.getInstance().toggleNotification(player.getUniqueId());
-                String messageKey = newState ? "gui.notify.enabled" : "gui.notify.disabled";
-                player.sendMessage(LangManager.get(player.getUniqueId(), messageKey));
-
-                ConfigManager.playSound(
-                        player,
-                        ConfigManager.SoundType.ACTION_SETTING_CHANGE
-                );
-
+                boolean newState = MailDataManager.getInstance().toggleNotification(uuid);
+                String key = newState ? "gui.notify.enabled" : "gui.notify.disabled";
+                player.sendMessage(LangManager.get(uuid, key));
+                ConfigManager.playSound(player, ConfigManager.SoundType.ACTION_SETTING_CHANGE);
                 open(player);
             }
             case BLACKLIST_SLOT -> {
@@ -109,6 +109,10 @@ public class MailSettingGUI implements Listener, InventoryHolder {
             case LANGUAGE_SLOT -> {
                 ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                 manager.languageSelectGUI.open(player);
+            }
+            case MULTI_SELECT_SLOT -> {
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
+                manager.mailSelectGUI.open(player);
             }
             case BACK_SLOT -> {
                 ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);

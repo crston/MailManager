@@ -29,14 +29,13 @@ public class LanguageSelectGUI implements Listener, InventoryHolder {
 
     @Override
     public @NotNull Inventory getInventory() {
-        return null;
+        return Bukkit.createInventory(this, GUI_SIZE);
     }
 
     public void open(Player player) {
         UUID uuid = player.getUniqueId();
         String currentLang = LangManager.getLanguage(uuid);
-        Set<String> availableLangs = LangManager.getAvailableLanguages();
-        List<String> sortedLangs = new ArrayList<>(availableLangs);
+        List<String> sortedLangs = new ArrayList<>(LangManager.getAvailableLanguages());
         sortedLangs.sort(String::compareToIgnoreCase);
 
         String guiTitle = LangManager.get(uuid, "gui.language.title");
@@ -46,11 +45,13 @@ public class LanguageSelectGUI implements Listener, InventoryHolder {
         for (String lang : sortedLangs) {
             if (slot >= GUI_SIZE) break;
             boolean selected = lang.equalsIgnoreCase(currentLang);
+
             String nameKey = selected ? "gui.language.selected" : "gui.language.unselected";
             String displayName = LangManager.get(lang, "language.name") + " [" + lang + "]";
-            inv.setItem(slot++, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.LANGUAGE_GUI_ITEM).clone())
+
+            inv.setItem(slot++, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.LANGUAGE_GUI_ITEM))
                     .name(LangManager.get(uuid, nameKey).replace("%lang%", displayName))
-                    .lore(LangManager.get(uuid, "gui.language.lore"))
+                    .lore(LangManager.getList(uuid, "gui.language.lore"))
                     .build());
         }
 
@@ -59,25 +60,21 @@ public class LanguageSelectGUI implements Listener, InventoryHolder {
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
-        if (!(e.getInventory().getHolder() instanceof LanguageSelectGUI) || !(e.getWhoClicked() instanceof Player player)) {
-            return;
-        }
+        if (!(e.getInventory().getHolder() instanceof LanguageSelectGUI) || !(e.getWhoClicked() instanceof Player player)) return;
 
         e.setCancelled(true);
         ItemStack clicked = e.getCurrentItem();
         if (clicked == null || !clicked.hasItemMeta()) return;
 
-        String displayName = Objects.requireNonNull(clicked.getItemMeta()).getDisplayName();
+        String displayName = clicked.getItemMeta().getDisplayName();
         if (displayName == null || displayName.isEmpty()) return;
 
         String strippedName = ChatColor.stripColor(displayName);
-        int startIndex = strippedName.lastIndexOf('[');
-        int endIndex = strippedName.lastIndexOf(']');
+        int start = strippedName.lastIndexOf('[');
+        int end = strippedName.lastIndexOf(']');
+        if (start == -1 || end == -1 || start >= end) return;
 
-        if (startIndex == -1 || endIndex == -1 || startIndex >= endIndex) return;
-
-        String selectedLang = strippedName.substring(startIndex + 1, endIndex);
-
+        String selectedLang = strippedName.substring(start + 1, end);
         if (!LangManager.getAvailableLanguages().contains(selectedLang)) return;
 
         LangManager.setLanguage(player.getUniqueId(), selectedLang);
