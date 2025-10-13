@@ -1,5 +1,6 @@
 package com.gmail.bobason01.gui;
 
+import com.gmail.bobason01.MailManager;
 import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.Mail;
@@ -17,10 +18,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 public class MailDeleteConfirmGUI implements Listener, InventoryHolder {
 
@@ -37,12 +35,6 @@ public class MailDeleteConfirmGUI implements Listener, InventoryHolder {
         this.plugin = plugin;
         this.player = null;
         this.mails = null;
-    }
-
-    public MailDeleteConfirmGUI(Player player, Plugin plugin, Mail mail) {
-        this.plugin = plugin;
-        this.player = player;
-        this.mails = Collections.singletonList(mail);
     }
 
     public MailDeleteConfirmGUI(Player player, Plugin plugin, List<Mail> mails) {
@@ -90,7 +82,7 @@ public class MailDeleteConfirmGUI implements Listener, InventoryHolder {
 
         if (slot == YES_SLOT) {
             for (Mail mail : gui.mails) {
-                MailDataManager.getInstance().removeMail(mail);
+                MailDataManager.getInstance().removeMail(mail); // 캐시+비동기 flush
             }
             if (gui.mails.size() > 1) {
                 p.sendMessage(LangManager.get(uuid, "mail.deleted_multi")
@@ -100,12 +92,16 @@ public class MailDeleteConfirmGUI implements Listener, InventoryHolder {
             }
             ConfigManager.playSound(p, ConfigManager.SoundType.MAIL_DELETE_SUCCESS);
             p.closeInventory();
-            Bukkit.getScheduler().runTaskLater(plugin, () -> new MailGUI(plugin).open(p), 2L);
+            Bukkit.getScheduler().runTaskLater(plugin, () ->
+                    MailManager.getInstance().mailGUI.open(p), 2L
+            );
         } else if (slot == NO_SLOT) {
             p.sendMessage(LangManager.get(uuid, "mail.delete_cancel"));
             ConfigManager.playSound(p, ConfigManager.SoundType.GUI_CLICK);
             p.closeInventory();
-            Bukkit.getScheduler().runTaskLater(plugin, () -> new MailGUI(plugin).open(p), 2L);
+            Bukkit.getScheduler().runTaskLater(plugin, () ->
+                    MailManager.getInstance().mailGUI.open(p), 2L
+            );
         }
     }
 

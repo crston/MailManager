@@ -30,6 +30,7 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
     private static final int CHAT_INPUT_SLOT = 27;
     private static final int CONFIRM_SLOT = 31;
     private static final int BACK_SLOT = 35;
+
     private static final Pattern TIME_PATTERN = Pattern.compile("(\\d+)([smhdMy])");
     private static final Map<Character, String> UNIT_MAP = Map.of(
             's', "second",
@@ -63,11 +64,13 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
         for (int i = 0; i < TIME_UNITS.size(); i++) {
             String unit = TIME_UNITS.get(i);
             int value = time.getOrDefault(unit, 0);
-
-            inv.setItem(UNIT_START_SLOT + i, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_UNIT))
-                    .name(LangManager.get(lang, "gui.time-unit." + unit + ".name").replace("%value%", String.valueOf(value)))
-                    .lore(LangManager.getList(lang, "gui.time-unit.lore"))
-                    .build());
+            inv.setItem(UNIT_START_SLOT + i,
+                    new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_UNIT))
+                            .name(LangManager.get(lang, "gui.time-unit." + unit + ".name")
+                                    .replace("%value%", String.valueOf(value)))
+                            .lore(LangManager.getList(lang, "gui.time-unit.lore"))
+                            .build()
+            );
         }
 
         inv.setItem(PERMANENT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_PERMANENT))
@@ -98,7 +101,8 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
         player.getOpenInventory().getTopInventory().setItem(
                 UNIT_START_SLOT + TIME_UNITS.indexOf(unit),
                 new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.TIME_GUI_UNIT))
-                        .name(LangManager.get(lang, "gui.time-unit." + unit + ".name").replace("%value%", String.valueOf(value)))
+                        .name(LangManager.get(lang, "gui.time-unit." + unit + ".name")
+                                .replace("%value%", String.valueOf(value)))
                         .lore(LangManager.getList(lang, "gui.time-unit.lore"))
                         .build()
         );
@@ -107,9 +111,7 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
-        if (!(e.getInventory().getHolder() instanceof MailTimeSelectGUI) || !(e.getWhoClicked() instanceof Player player)) {
-            return;
-        }
+        if (!(e.getInventory().getHolder() instanceof MailTimeSelectGUI) || !(e.getWhoClicked() instanceof Player player)) return;
 
         e.setCancelled(true);
         UUID uuid = player.getUniqueId();
@@ -121,13 +123,12 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
             int value = time.getOrDefault(unit, 0);
 
             ClickType click = e.getClick();
-            value += (click.isShiftClick() ? (click.isLeftClick() ? 10 : -10) : (click.isLeftClick() ? 1 : -1));
+            value += click.isShiftClick() ? (click.isLeftClick() ? 10 : -10) : (click.isLeftClick() ? 1 : -1);
             value = Math.max(0, value);
 
             time.put(unit, value);
             MailService.setTimeData(uuid, time);
             ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
-
             updateUnitSlot(player, unit, value);
             return;
         }
@@ -153,13 +154,9 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
         Class<?> parentClass = parentGuiMap.remove(player.getUniqueId());
         MailManager manager = MailManager.getInstance();
 
-        if (parentClass == MailSendGUI.class) {
-            manager.mailSendGUI.open(player);
-        } else if (parentClass == MailSendAllGUI.class) {
-            manager.mailSendAllGUI.open(player);
-        } else {
-            manager.mailGUI.open(player);
-        }
+        if (parentClass == MailSendGUI.class) manager.mailSendGUI.open(player);
+        else if (parentClass == MailSendAllGUI.class) manager.mailSendAllGUI.open(player);
+        else manager.mailGUI.open(player);
     }
 
     private Conversation buildConversation(Player player) {
@@ -208,3 +205,4 @@ public class MailTimeSelectGUI implements Listener, InventoryHolder {
         return result;
     }
 }
+

@@ -108,6 +108,7 @@ gui:
     delete_selected_lore:
       - "&7删除所有选中的邮件。"
       - "&c此操作不可撤销!"
+    selected: "&a已选择"
     no_selected: "&c未选择任何邮件。"
     lore:
       claim: "&e» 左键: 领取物品"

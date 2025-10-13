@@ -3,85 +3,102 @@ package com.gmail.bobason01.database.impl;
 import com.gmail.bobason01.database.MailStorage;
 import com.gmail.bobason01.mail.Mail;
 import com.gmail.bobason01.mail.MailSerializer;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.util.io.BukkitObjectInputStream;
+import org.bukkit.util.io.BukkitObjectOutputStream;
 
 import javax.sql.DataSource;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.sql.*;
 import java.util.*;
 
 public class JdbcStorage implements MailStorage {
     private final DataSource ds;
-    private final boolean mysql;
+    private final boolean isMySQL;
 
-    public JdbcStorage(DataSource ds, boolean mysql) {
+    public JdbcStorage(DataSource ds, boolean isMySQL) {
         this.ds = ds;
-        this.mysql = mysql;
+        this.isMySQL = isMySQL;
     }
 
-    @Override public void connect() {}
-    @Override public void disconnect() {}
+    @Override
+    public void connect() {}
+
+    @Override
+    public void disconnect() {}
 
     @Override
     public void ensureSchema() throws Exception {
-        try (Connection c = ds.getConnection(); Statement s = c.createStatement()) {
-            s.executeUpdate("CREATE TABLE IF NOT EXISTS mails (receiver VARCHAR(36), mail_id VARCHAR(36), data BLOB, PRIMARY KEY(receiver, mail_id))");
-            s.executeUpdate("CREATE TABLE IF NOT EXISTS notify (uuid VARCHAR(36) PRIMARY KEY, enabled TINYINT)");
-            s.executeUpdate("CREATE TABLE IF NOT EXISTS blacklist (owner VARCHAR(36), target VARCHAR(36), PRIMARY KEY(owner, target))");
-            s.executeUpdate("CREATE TABLE IF NOT EXISTS exclude (uuid VARCHAR(36), excluded VARCHAR(36), PRIMARY KEY(uuid, excluded))");
-            s.executeUpdate("CREATE TABLE IF NOT EXISTS player_settings (uuid VARCHAR(36) PRIMARY KEY, lang VARCHAR(32))");
+        try (Connection conn = ds.getConnection(); Statement st = conn.createStatement()) {
+            if (!isMySQL) {
+                st.execute("PRAGMA journal_mode=WAL");
+                st.execute("PRAGMA synchronous=NORMAL");
+                st.execute("PRAGMA temp_store=MEMORY");
+                st.execute("PRAGMA mmap_size=134217728");
+                st.execute("PRAGMA cache_size=-262144");
+                st.execute("PRAGMA busy_timeout=5000");
+            }
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS mails (" +
+                    "id VARCHAR(36) PRIMARY KEY," +
+                    "receiver VARCHAR(36) NOT NULL," +
+                    "data BLOB NOT NULL" +
+                    ")");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS inventories (" +
+                    "id INT PRIMARY KEY," +
+                    "data BLOB" +
+                    ")");
+            st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_mails_receiver ON mails(receiver)");
         }
     }
 
     @Override
     public void batchInsertMails(List<MailRecord> records) throws Exception {
         if (records.isEmpty()) return;
-        String sql = "INSERT INTO mails (receiver, mail_id, data) VALUES (?, ?, ?) " +
-                (mysql ? "ON DUPLICATE KEY UPDATE data=VALUES(data)"
-                        : "ON CONFLICT(receiver, mail_id) DO UPDATE SET data=excluded.data");
-        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
-            for (MailRecord r : records) {
-                ps.setString(1, r.receiver().toString());
-                ps.setString(2, r.mail().getMailId().toString());
-                ps.setBytes(3, MailSerializer.serialize(r.mail()));
-                ps.addBatch();
+        String sql = "REPLACE INTO mails(id, receiver, data) VALUES(?,?,?)";
+        try (Connection conn = ds.getConnection()) {
+            conn.setAutoCommit(false);
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                for (MailRecord rec : records) {
+                    ps.setString(1, rec.mail().getMailId().toString());
+                    ps.setString(2, rec.receiver().toString());
+                    ps.setBytes(3, MailSerializer.serialize(rec.mail()));
+                    ps.addBatch();
+                }
+                ps.executeBatch();
             }
-            ps.executeBatch();
+            conn.commit();
         }
     }
 
     @Override
     public void batchDeleteMails(List<MailRecord> records) throws Exception {
         if (records.isEmpty()) return;
-        String sql = "DELETE FROM mails WHERE receiver=? AND mail_id=?";
-        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
-            for (MailRecord r : records) {
-                ps.setString(1, r.receiver().toString());
-                ps.setString(2, r.mail().getMailId().toString());
-                ps.addBatch();
+        String sql = "DELETE FROM mails WHERE id=?";
+        try (Connection conn = ds.getConnection()) {
+            conn.setAutoCommit(false);
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                for (MailRecord rec : records) {
+                    ps.setString(1, rec.mail().getMailId().toString());
+                    ps.addBatch();
+                }
+                ps.executeBatch();
             }
-            ps.executeBatch();
-        }
-    }
-
-    @Override
-    public void updateMail(MailRecord record) throws Exception {
-        String sql = "UPDATE mails SET data=? WHERE receiver=? AND mail_id=?";
-        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setBytes(1, MailSerializer.serialize(record.mail()));
-            ps.setString(2, record.receiver().toString());
-            ps.setString(3, record.mail().getMailId().toString());
-            ps.executeUpdate();
+            conn.commit();
         }
     }
 
     @Override
     public List<Mail> loadMails(UUID receiver) throws Exception {
         List<Mail> list = new ArrayList<>();
-        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement("SELECT data FROM mails WHERE receiver=?")) {
+        String sql = "SELECT data FROM mails WHERE receiver=?";
+        try (Connection conn = ds.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, receiver.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    Mail m = MailSerializer.deserialize(rs.getBytes(1));
-                    if (m != null) list.add(m);
+                    Mail mail = MailSerializer.deserialize(rs.getBytes(1));
+                    if (mail != null) list.add(mail);
                 }
             }
         }
@@ -89,112 +106,65 @@ public class JdbcStorage implements MailStorage {
     }
 
     @Override
-    public void saveNotifySetting(UUID uuid, boolean enabled) throws Exception {
-        String sql = mysql
-                ? "INSERT INTO notify (uuid, enabled) VALUES (?, ?) ON DUPLICATE KEY UPDATE enabled=VALUES(enabled)"
-                : "INSERT INTO notify (uuid, enabled) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET enabled=excluded.enabled";
-        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, uuid.toString());
-            ps.setInt(2, enabled ? 1 : 0);
+    public void saveNotifySetting(UUID uuid, boolean enabled) throws Exception {}
+
+    @Override
+    public Boolean loadNotifySetting(UUID uuid) throws Exception { return true; }
+
+    @Override
+    public void saveBlacklist(UUID owner, Set<UUID> list) throws Exception {}
+
+    @Override
+    public Set<UUID> loadBlacklist(UUID owner) throws Exception { return new HashSet<>(); }
+
+    @Override
+    public void saveExclude(UUID uuid, Set<UUID> list) throws Exception {}
+
+    @Override
+    public Set<UUID> loadExclude(UUID uuid) throws Exception { return new HashSet<>(); }
+
+    @Override
+    public void savePlayerLanguage(UUID uuid, String lang) throws Exception {}
+
+    @Override
+    public String loadPlayerLanguage(UUID uuid) throws Exception { return null; }
+
+    @Override
+    public void saveInventory(int id, ItemStack[] contents) throws Exception {
+        String sql = "REPLACE INTO inventories(id, data) VALUES(?,?)";
+        try (Connection conn = ds.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            ps.setBytes(2, serializeItems(contents));
             ps.executeUpdate();
         }
     }
 
     @Override
-    public Boolean loadNotifySetting(UUID uuid) throws Exception {
-        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement("SELECT enabled FROM notify WHERE uuid=?")) {
-            ps.setString(1, uuid.toString());
+    public ItemStack[] loadInventory(int id) throws Exception {
+        String sql = "SELECT data FROM inventories WHERE id=?";
+        try (Connection conn = ds.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getInt(1) == 1;
+                if (rs.next()) return deserializeItems(rs.getBytes(1));
             }
         }
         return null;
     }
 
-    @Override
-    public void saveBlacklist(UUID owner, Set<UUID> list) throws Exception {
-        try (Connection c = ds.getConnection()) {
-            try (PreparedStatement del = c.prepareStatement("DELETE FROM blacklist WHERE owner=?")) {
-                del.setString(1, owner.toString());
-                del.executeUpdate();
-            }
-            if (!list.isEmpty()) {
-                try (PreparedStatement ins = c.prepareStatement("INSERT INTO blacklist (owner, target) VALUES (?, ?)")) {
-                    for (UUID t : list) {
-                        ins.setString(1, owner.toString());
-                        ins.setString(2, t.toString());
-                        ins.addBatch();
-                    }
-                    ins.executeBatch();
-                }
-            }
+    private byte[] serializeItems(Object obj) throws Exception {
+        try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+             BukkitObjectOutputStream oos = new BukkitObjectOutputStream(bos)) {
+            oos.writeObject(obj);
+            return bos.toByteArray();
         }
     }
 
-    @Override
-    public Set<UUID> loadBlacklist(UUID owner) throws Exception {
-        Set<UUID> set = new HashSet<>();
-        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement("SELECT target FROM blacklist WHERE owner=?")) {
-            ps.setString(1, owner.toString());
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) set.add(UUID.fromString(rs.getString(1)));
-            }
+    private ItemStack[] deserializeItems(byte[] data) throws Exception {
+        try (ByteArrayInputStream bis = new ByteArrayInputStream(data);
+             BukkitObjectInputStream ois = new BukkitObjectInputStream(bis)) {
+            return (ItemStack[]) ois.readObject();
         }
-        return set;
-    }
-
-    @Override
-    public void saveExclude(UUID uuid, Set<UUID> list) throws Exception {
-        try (Connection c = ds.getConnection()) {
-            try (PreparedStatement del = c.prepareStatement("DELETE FROM exclude WHERE uuid=?")) {
-                del.setString(1, uuid.toString());
-                del.executeUpdate();
-            }
-            if (!list.isEmpty()) {
-                try (PreparedStatement ins = c.prepareStatement("INSERT INTO exclude (uuid, excluded) VALUES (?, ?)")) {
-                    for (UUID t : list) {
-                        ins.setString(1, uuid.toString());
-                        ins.setString(2, t.toString());
-                        ins.addBatch();
-                    }
-                    ins.executeBatch();
-                }
-            }
-        }
-    }
-
-    @Override
-    public Set<UUID> loadExclude(UUID uuid) throws Exception {
-        Set<UUID> set = new HashSet<>();
-        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement("SELECT excluded FROM exclude WHERE uuid=?")) {
-            ps.setString(1, uuid.toString());
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) set.add(UUID.fromString(rs.getString(1)));
-            }
-        }
-        return set;
-    }
-
-    @Override
-    public void savePlayerLanguage(UUID uuid, String lang) throws Exception {
-        String sql = mysql
-                ? "INSERT INTO player_settings (uuid, lang) VALUES (?, ?) ON DUPLICATE KEY UPDATE lang=VALUES(lang)"
-                : "INSERT INTO player_settings (uuid, lang) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET lang=excluded.lang";
-        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, uuid.toString());
-            ps.setString(2, lang);
-            ps.executeUpdate();
-        }
-    }
-
-    @Override
-    public String loadPlayerLanguage(UUID uuid) throws Exception {
-        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement("SELECT lang FROM player_settings WHERE uuid=?")) {
-            ps.setString(1, uuid.toString());
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getString(1);
-            }
-        }
-        return null;
     }
 }

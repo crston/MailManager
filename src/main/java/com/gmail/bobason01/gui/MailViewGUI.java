@@ -45,36 +45,38 @@ public class MailViewGUI implements Listener, InventoryHolder {
     public void open(Player player, Mail mail) {
         this.mail = mail;
         this.owner = player.getUniqueId();
-        inv = Bukkit.createInventory(this, SIZE, LangManager.get(owner, "gui.mail.view.title"));
+        this.inv = Bukkit.createInventory(this, SIZE, LangManager.get(owner, "gui.mail.view.title"));
         refreshInventory();
         player.openInventory(inv);
     }
 
     private void refreshInventory() {
-        int i = 0;
-        while (i < MAX_ITEMS) {
+        for (int i = 0; i < MAX_ITEMS; i++) {
             inv.setItem(i, null);
-            i++;
         }
+
         List<ItemStack> items = mail.getItems();
         int max = Math.min(MAX_ITEMS, items.size());
         for (int j = 0; j < max; j++) {
             ItemStack item = items.get(j);
-            if (item != null && item.getType() != Material.AIR) inv.setItem(j, item.clone());
+            if (item != null && item.getType() != Material.AIR) {
+                inv.setItem(j, item.clone());
+            }
         }
+
         String lang = LangManager.getLanguage(owner);
-        inv.setItem(SLOT_CLAIM_ALL, new ItemBuilder(
-                ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_CLAIM_BUTTON))
+
+        inv.setItem(SLOT_CLAIM_ALL, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_CLAIM_BUTTON))
                 .name(LangManager.get(lang, "gui.mail.claim_all"))
                 .lore(LangManager.getList(lang, "gui.mail.claim_selected_lore"))
                 .build());
-        inv.setItem(SLOT_DELETE, new ItemBuilder(
-                ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_DELETE_BUTTON))
+
+        inv.setItem(SLOT_DELETE, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_DELETE_BUTTON))
                 .name(LangManager.get(lang, "gui.mail.delete"))
                 .lore(LangManager.getList(lang, "gui.mail.delete_selected_lore"))
                 .build());
-        inv.setItem(SLOT_BACK, new ItemBuilder(
-                ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
+
+        inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
                 .name("§c" + LangManager.get(lang, "gui.back.name"))
                 .lore(LangManager.getList(lang, "gui.back.lore"))
                 .build());
@@ -84,41 +86,60 @@ public class MailViewGUI implements Listener, InventoryHolder {
     public void onClick(InventoryClickEvent e) {
         if (!(e.getInventory().getHolder() instanceof MailViewGUI gui)) return;
         if (!(e.getWhoClicked() instanceof Player player)) return;
+
         int slot = e.getRawSlot();
         if (slot < 0 || slot >= SIZE) return;
+
         e.setCancelled(true);
+
         if (slot == SLOT_BACK) {
             ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
             new MailGUI(plugin).open(player);
             return;
         }
+
         if (slot == SLOT_DELETE) {
             ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
-            new MailDeleteConfirmGUI(player, plugin, gui.mail).open(player);
+            new MailDeleteConfirmGUI(player, plugin, Collections.singletonList(gui.mail)).open(player);
             return;
         }
+
         if (slot == SLOT_CLAIM_ALL) {
-            handleClaimAll(player);
+            gui.handleClaimAll(player);
             return;
         }
+
         if (slot < MAX_ITEMS) {
             ItemStack clicked = e.getCurrentItem();
-            if (clicked != null && clicked.getType() != Material.AIR) handleClaimSingle(player, clicked, slot);
+            if (clicked != null && clicked.getType() != Material.AIR) {
+                gui.handleClaimSingle(player, clicked, slot);
+            }
         }
     }
 
     private void handleClaimAll(Player player) {
         UUID uuid = player.getUniqueId();
-        List<ItemStack> remain = claimItems(player, mail.getItems());
         MailDataManager manager = MailDataManager.getInstance();
+
+        List<ItemStack> remain = claimItems(player, mail.getItems());
         if (remain.isEmpty()) {
+            // 모든 슬롯 null 처리
+            for (int i = 0; i < mail.getItems().size(); i++) {
+                mail.getItems().set(i, null);
+            }
             manager.removeMail(mail);
+        } else {
+            mail.setItems(remain);
+            manager.updateMail(mail);
+        }
+        manager.flushNow();
+        manager.forceReloadMails(uuid);
+
+        if (remain.isEmpty()) {
             player.sendMessage(LangManager.get(uuid, "mail.claim_success"));
             ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
             new MailGUI(plugin).open(player);
         } else {
-            mail.setItems(remain);
-            manager.updateMail(mail);
             player.sendMessage(LangManager.get(uuid, "mail.inventory_full"));
             ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_FAIL);
             refreshInventory();
@@ -127,19 +148,29 @@ public class MailViewGUI implements Listener, InventoryHolder {
 
     private void handleClaimSingle(Player player, ItemStack clicked, int slot) {
         UUID uuid = player.getUniqueId();
-        List<ItemStack> list = new ArrayList<>(1);
-        list.add(clicked);
-        List<ItemStack> remain = claimItems(player, list);
         MailDataManager manager = MailDataManager.getInstance();
+
+        List<ItemStack> remain = claimItems(player, Collections.singletonList(clicked));
         if (remain.isEmpty()) {
-            mail.getItems().remove(clicked);
-            if (mail.getItems().isEmpty()) {
+            // 클릭한 슬롯만 null 처리
+            if (slot < mail.getItems().size()) {
+                mail.getItems().set(slot, null);
+            }
+
+            if (mail.getItems().stream().allMatch(i -> i == null || i.getType() == Material.AIR)) {
                 manager.removeMail(mail);
-                ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
-                new MailGUI(plugin).open(player);
             } else {
                 manager.updateMail(mail);
-                ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
+            }
+        }
+        manager.flushNow();
+        manager.forceReloadMails(uuid);
+
+        if (remain.isEmpty()) {
+            ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
+            if (mail.getItems().stream().allMatch(i -> i == null || i.getType() == Material.AIR)) {
+                new MailGUI(plugin).open(player);
+            } else {
                 inv.setItem(slot, null);
             }
         } else {
@@ -151,11 +182,13 @@ public class MailViewGUI implements Listener, InventoryHolder {
     private List<ItemStack> claimItems(Player player, List<ItemStack> items) {
         if (items.isEmpty()) return Collections.emptyList();
         List<ItemStack> remainAll = new ArrayList<>();
-        for (int i = 0; i < items.size(); i++) {
-            ItemStack item = items.get(i);
+
+        for (ItemStack item : items) {
             if (item == null || item.getType() == Material.AIR) continue;
             Map<Integer, ItemStack> remain = player.getInventory().addItem(item.clone());
-            if (!remain.isEmpty()) remainAll.addAll(remain.values());
+            if (!remain.isEmpty()) {
+                remainAll.addAll(remain.values());
+            }
         }
         return remainAll;
     }
@@ -164,7 +197,15 @@ public class MailViewGUI implements Listener, InventoryHolder {
     public void onClose(InventoryCloseEvent e) {
         if (!(e.getInventory().getHolder() instanceof MailViewGUI gui)) return;
         MailDataManager manager = MailDataManager.getInstance();
-        if (gui.mail.getItems().isEmpty()) manager.removeMail(gui.mail);
-        else manager.updateMail(gui.mail);
+
+        if (gui.mail != null) {
+            if (gui.mail.getItems().stream().allMatch(i -> i == null || i.getType() == Material.AIR)) {
+                manager.removeMail(gui.mail);
+            } else {
+                manager.updateMail(gui.mail);
+            }
+            manager.flushNow();
+            manager.forceReloadMails(gui.owner);
+        }
     }
 }

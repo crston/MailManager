@@ -3,6 +3,7 @@ package com.gmail.bobason01.gui;
 import com.gmail.bobason01.MailManager;
 import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
+import com.gmail.bobason01.mail.MailDataManager;
 import com.gmail.bobason01.mail.MailService;
 import com.gmail.bobason01.utils.ItemBuilder;
 import com.gmail.bobason01.utils.TimeUtil;
@@ -50,12 +51,10 @@ public class MailSendGUI implements Listener, InventoryHolder {
 
     public void open(Player player) {
         UUID uuid = player.getUniqueId();
-
         if (!player.hasPermission("mail.send")) {
             player.sendMessage(LangManager.get(uuid, "mail.send.no_permission"));
             return;
         }
-
         String lang = LangManager.getLanguage(uuid);
         inv = Bukkit.createInventory(this, 27, LangManager.get(uuid, "gui.send.title"));
 
@@ -104,23 +103,18 @@ public class MailSendGUI implements Listener, InventoryHolder {
 
     public void refresh(Player player) {
         if (inv == null) return;
-
         UUID uuid = player.getUniqueId();
         List<ItemStack> items = MailService.getAttachedItems(uuid);
-
         if (items.isEmpty()) {
             inv.setItem(SLOT_ITEM, null);
             return;
         }
-
         ItemStack first = items.get(0);
         List<String> lore = new ArrayList<>();
         lore.add(LangManager.get(uuid, "gui.send.item.first"));
         if (items.size() > 1) {
-            lore.add(LangManager.get(uuid, "gui.send.item.more")
-                    .replace("%count%", String.valueOf(items.size() - 1)));
+            lore.add(LangManager.get(uuid, "gui.send.item.more").replace("%count%", String.valueOf(items.size() - 1)));
         }
-
         inv.setItem(SLOT_ITEM, new ItemBuilder(first).lore(lore).build());
     }
 
@@ -134,7 +128,7 @@ public class MailSendGUI implements Listener, InventoryHolder {
                 skull.setItemMeta(meta);
             }
             return skull;
-        });
+        }).clone();
     }
 
     @EventHandler
@@ -157,6 +151,11 @@ public class MailSendGUI implements Listener, InventoryHolder {
 
         if (slot == SLOT_BACK) {
             e.setCancelled(true);
+            // ★ 수정된 부분: 돌아가기 전에 DB/캐시 즉시 갱신
+            MailDataManager dataManager = MailDataManager.getInstance();
+            dataManager.flushNow();
+            dataManager.forceReloadMails(uuid);
+
             manager.mailGUI.open(player);
             return;
         }
@@ -186,6 +185,7 @@ public class MailSendGUI implements Listener, InventoryHolder {
                 MailService.send(player, plugin);
                 MailService.clearAttached(uuid);
                 ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_SEND_SUCCESS);
+                gui.sentSet.remove(uuid);
                 player.closeInventory();
             }
         }
@@ -201,10 +201,8 @@ public class MailSendGUI implements Listener, InventoryHolder {
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
         if (!(e.getInventory().getHolder() instanceof MailSendGUI) || !(e.getPlayer() instanceof Player player)) return;
-
         UUID uuid = player.getUniqueId();
         if (sentSet.contains(uuid)) return;
-
         ItemStack item = e.getInventory().getItem(SLOT_ITEM);
         if (item != null && !item.getType().isAir()) {
             player.getInventory().addItem(item);

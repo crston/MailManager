@@ -187,7 +187,7 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
                         player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked_msg").replace("%name%", name));
                     }
                     ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
-                    MailDataManager.getInstance().setBlacklist(uuid, blocked);
+                    MailDataManager.getInstance().setBlacklist(uuid, blocked); // 캐시+비동기 flush
                     open(player, page);
                 }
             }
@@ -231,7 +231,7 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
                 blocked.add(targetId);
                 player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked_msg").replace("%name%", target.getName()));
             }
-            MailDataManager.getInstance().setBlacklist(uuid, blocked);
+            MailDataManager.getInstance().setBlacklist(uuid, blocked); // 캐시+비동기 flush
             open(player, currentPage);
         });
     }

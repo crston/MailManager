@@ -1,20 +1,33 @@
 default-language: en_us
 
 database:
+  # USED DATABASE TYPE (SQLITE | MYSQL | YAML)
   type: SQLITE
-  host: localhost
-  port: 3306
-  name: maildb
-  user: root
-  pass: password
-  pool:
-    maximumPoolSize: 10
-    minimumIdle: 2
-    connectionTimeoutMs: 10000
-    idleTimeoutMs: 60000
-    maxLifetimeMs: 1800000
+
+  # --- SQLITE ---
+  sqlite:
+    file: plugins/MailManager/mail.db
+
+  # --- MYSQL ---
+  mysql:
+    host: localhost
+    port: 3306
+    name: maildb
+    user: root
+    pass: password
+    pool:
+      maximumPoolSize: 10
+      minimumIdle: 2
+      connectionTimeoutMs: 10000
+      idleTimeoutMs: 60000
+      maxLifetimeMs: 1800000
+
+  # --- YAML ---
+  yaml:
+    folder: plugins/MailManager/data/
+
 flush:
-  intervalTicks: 40
+  intervalTicks: 100   # DEFAULT: 100 TICKS (=5 SECONDS)
 
 items:
   mail:

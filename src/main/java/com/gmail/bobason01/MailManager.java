@@ -25,7 +25,6 @@ public final class MailManager extends JavaPlugin {
         return instance;
     }
 
-    // GUI 인스턴스들
     public MailGUI mailGUI;
     public MailSendGUI mailSendGUI;
     public MailSendAllGUI mailSendAllGUI;
@@ -36,16 +35,16 @@ public final class MailManager extends JavaPlugin {
     public SendAllExcludeGUI sendAllExcludeGUI;
     public LanguageSelectGUI languageSelectGUI;
     public MailAttachGUI mailAttachGUI;
-    public MailViewGUI mailViewGUI;
     public MailSelectGUI mailSelectGUI;
+    public MailViewGUI mailViewGUI;
     public MailDeleteConfirmGUI mailDeleteConfirmGUI;
 
     @Override
     public void onEnable() {
         instance = this;
-
-        // 설정 및 언어 로드
         ConfigManager.load(this);
+
+        // 언어 파일 복사 & 로드
         copyLangFile("en_us.yml");
         copyLangFile("ko_kr.yml");
         copyLangFile("ja_jp.yml");
@@ -53,72 +52,60 @@ public final class MailManager extends JavaPlugin {
         copyLangFile("zh_tw.yml");
         LangManager.loadAll(getDataFolder());
 
-        // 메일 데이터 및 서비스 초기화
+        // 데이터/서비스 초기화
         MailDataManager.getInstance().load(this);
         MailService.init(this);
 
-        // GUI 인스턴스 생성 (ConfigManager 로드 이후)
-        mailGUI = new MailGUI(this);
+        // GUI 초기화
+        mailGUI = new MailGUI(this); // ★ 추가
         mailSendGUI = new MailSendGUI(this);
         mailSendAllGUI = new MailSendAllGUI(this);
-        mailSettingGUI = new MailSettingGUI(this);
+        mailSettingGUI = new MailSettingGUI();
         mailTimeSelectGUI = new MailTimeSelectGUI(this);
         mailTargetSelectGUI = new MailTargetSelectGUI(this);
         blacklistSelectGUI = new BlacklistSelectGUI(this);
         sendAllExcludeGUI = new SendAllExcludeGUI(this);
         languageSelectGUI = new LanguageSelectGUI(this);
         mailAttachGUI = new MailAttachGUI(this);
-        mailViewGUI = new MailViewGUI(this);
         mailSelectGUI = new MailSelectGUI(this);
+        mailViewGUI = new MailViewGUI(this);
         mailDeleteConfirmGUI = new MailDeleteConfirmGUI(this);
 
-        // 플레이어 캐시 갱신 (5분 주기)
-        Bukkit.getScheduler().runTaskTimerAsynchronously(this,
-                () -> PlayerCache.refresh(this), 0L, 20L * 300);
+        // 캐시 갱신 태스크
+        Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> PlayerCache.refresh(this), 0L, 6000L);
 
-        // 명령어 등록
+        // 커맨드 등록
         MailCommand mailCommand = new MailCommand();
         PluginCommand command = Objects.requireNonNull(getCommand("mail"), "mail command not found");
         command.setExecutor(mailCommand);
         command.setTabCompleter(mailCommand);
 
-        // 이벤트 리스너 등록
+        // 리스너 등록
         registerListeners(
+                new MailLoginListener(this),
                 mailGUI, mailSendGUI, mailSendAllGUI,
                 mailSettingGUI, mailTimeSelectGUI, mailTargetSelectGUI,
                 blacklistSelectGUI, sendAllExcludeGUI, languageSelectGUI,
-                mailAttachGUI, mailViewGUI, mailSelectGUI,
-                new MailLoginListener(this),
+                mailAttachGUI, mailSelectGUI,
+                mailViewGUI,
                 mailDeleteConfirmGUI
         );
 
-        // 자동 저장
-        long autoSaveInterval = 20L * getConfig().getLong("auto-save-interval", 300);
-        Bukkit.getScheduler().runTaskTimerAsynchronously(this,
-                () -> MailDataManager.getInstance().flush(), autoSaveInterval, autoSaveInterval);
-
-        // 메일 리마인더 시작
         MailReminderTask.start(this);
-
         getLogger().info("[MailManager] Enabled successfully.");
     }
 
     private void registerListeners(Listener... listeners) {
-        for (Listener listener : listeners) {
-            Bukkit.getPluginManager().registerEvents(listener, this);
+        for (int i = 0; i < listeners.length; i++) {
+            Bukkit.getPluginManager().registerEvents(listeners[i], this);
         }
     }
 
     private void copyLangFile(String fileName) {
         File langFolder = new File(getDataFolder(), "lang");
-        if (!langFolder.exists() && !langFolder.mkdirs()) {
-            getLogger().warning("Could not create lang folder.");
-            return;
-        }
+        if (!langFolder.exists() && !langFolder.mkdirs()) return;
         File langFile = new File(langFolder, fileName);
-        if (!langFile.exists()) {
-            saveResource("lang/" + fileName, false);
-        }
+        if (!langFile.exists()) saveResource("lang/" + fileName, false);
     }
 
     @Override

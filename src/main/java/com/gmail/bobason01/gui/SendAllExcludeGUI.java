@@ -42,11 +42,12 @@ public class SendAllExcludeGUI implements Listener, InventoryHolder {
     private final Set<UUID> loadingSet = ConcurrentHashMap.newKeySet();
     private final Set<UUID> waitingForSearch = ConcurrentHashMap.newKeySet();
 
-    // 버튼은 미리 캐싱해둠
     private final ItemStack backButton;
     private final ItemStack prevButton;
     private final ItemStack nextButton;
     private final ItemStack searchButton;
+
+    private final Map<UUID, ItemStack> cachedHeads = new WeakHashMap<>();
 
     public SendAllExcludeGUI(Plugin plugin) {
         this.plugin = plugin;
@@ -81,6 +82,7 @@ public class SendAllExcludeGUI implements Listener, InventoryHolder {
             int start = safePage * PAGE_SIZE;
             int end = Math.min(start + PAGE_SIZE, players.size());
             List<OfflinePlayer> subList = players.subList(start, end);
+
             Set<UUID> excludedSet = MailDataManager.getInstance().getExclude(uuid);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -90,47 +92,37 @@ public class SendAllExcludeGUI implements Listener, InventoryHolder {
                     String lang = LangManager.getLanguage(uuid);
                     Inventory inv = Bukkit.createInventory(this, 54,
                             LangManager.get(lang, "gui.exclude.title")
-                                    .replace("%page%", Integer.toString(safePage + 1))
-                                    .replace("%maxpage%", Integer.toString(maxPage + 1)));
+                                    .replace("%page%", String.valueOf(safePage + 1))
+                                    .replace("%maxpage%", String.valueOf(maxPage + 1)));
 
                     for (int i = 0; i < subList.size(); i++) {
                         OfflinePlayer target = subList.get(i);
-                        boolean isExcluded = excludedSet.contains(target.getUniqueId());
-
-                        ItemStack head = new ItemStack(Material.PLAYER_HEAD);
-                        SkullMeta meta = (SkullMeta) head.getItemMeta();
-                        if (meta != null) {
-                            meta.setOwningPlayer(target);
-                            meta.setDisplayName((isExcluded ? "§c" : "§a") + target.getName());
-                            meta.setLore(LangManager.getList(lang,
-                                    isExcluded ? "gui.exclude.status.excluded" : "gui.exclude.status.included"));
-                            head.setItemMeta(meta);
-                            inv.setItem(i, head);
-                        }
+                        boolean excluded = excludedSet.contains(target.getUniqueId());
+                        inv.setItem(i, getCachedHead(target, excluded, lang));
                     }
 
                     if (safePage > 0) {
-                        ItemStack prev = prevButton.clone();
-                        prev.setItemMeta(new ItemBuilder(prev).name(LangManager.get(lang, "gui.previous")).build().getItemMeta());
-                        inv.setItem(SLOT_PREV, prev);
+                        inv.setItem(SLOT_PREV, new ItemBuilder(prevButton.clone())
+                                .name(LangManager.get(lang, "gui.previous"))
+                                .lore(LangManager.getList(lang, "gui.page.prev_lore"))
+                                .build());
                     }
                     if (safePage < maxPage) {
-                        ItemStack next = nextButton.clone();
-                        next.setItemMeta(new ItemBuilder(next).name(LangManager.get(lang, "gui.next")).build().getItemMeta());
-                        inv.setItem(SLOT_NEXT, next);
+                        inv.setItem(SLOT_NEXT, new ItemBuilder(nextButton.clone())
+                                .name(LangManager.get(lang, "gui.next"))
+                                .lore(LangManager.getList(lang, "gui.page.next_lore"))
+                                .build());
                     }
 
-                    ItemStack search = new ItemBuilder(searchButton.clone())
+                    inv.setItem(SLOT_SEARCH, new ItemBuilder(searchButton.clone())
                             .name(LangManager.get(lang, "gui.search.name"))
                             .lore(LangManager.getList(lang, "gui.exclude.search.prompt"))
-                            .build();
-                    inv.setItem(SLOT_SEARCH, search);
+                            .build());
 
-                    ItemStack back = new ItemBuilder(backButton.clone())
+                    inv.setItem(SLOT_BACK, new ItemBuilder(backButton.clone())
                             .name(LangManager.get(lang, "gui.back.name"))
                             .lore(LangManager.getList(lang, "gui.back.lore"))
-                            .build();
-                    inv.setItem(SLOT_BACK, back);
+                            .build());
 
                     player.openInventory(inv);
 
@@ -141,11 +133,24 @@ public class SendAllExcludeGUI implements Listener, InventoryHolder {
         });
     }
 
+    private ItemStack getCachedHead(OfflinePlayer target, boolean excluded, String lang) {
+        return cachedHeads.computeIfAbsent(target.getUniqueId(), id -> {
+            ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
+            SkullMeta meta = (SkullMeta) skull.getItemMeta();
+            if (meta != null) {
+                meta.setOwningPlayer(target);
+            }
+            skull.setItemMeta(meta);
+            return skull;
+        }).clone();
+    }
+
     private boolean hasCooldownPassed(Player player) {
         long now = System.currentTimeMillis();
         AtomicLong lastClick = lastClickMap.computeIfAbsent(player.getUniqueId(), k -> new AtomicLong(0));
         if (now - lastClick.get() < PAGE_COOLDOWN_MS) {
             ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK_FAIL);
+            player.sendMessage(LangManager.get(player.getUniqueId(), "gui.page.cooldown"));
             return false;
         }
         lastClick.set(now);
@@ -184,16 +189,13 @@ public class SendAllExcludeGUI implements Listener, InventoryHolder {
                     OfflinePlayer target = PlayerCache.getByName(name);
                     if (target == null) return;
 
-                    Set<UUID> excluded = new HashSet<>(MailDataManager.getInstance().getExclude(uuid));
-                    UUID targetId = target.getUniqueId();
-                    if (excluded.remove(targetId)) {
-                        player.sendMessage(LangManager.get(uuid, "gui.exclude.included").replace("%name%", name));
-                    } else {
-                        excluded.add(targetId);
+                    boolean excluded = MailDataManager.getInstance().toggleExclude(uuid, target.getUniqueId());
+                    if (excluded) {
                         player.sendMessage(LangManager.get(uuid, "gui.exclude.excluded").replace("%name%", name));
+                    } else {
+                        player.sendMessage(LangManager.get(uuid, "gui.exclude.included").replace("%name%", name));
                     }
                     ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
-                    MailDataManager.getInstance().setExclude(uuid, excluded);
                     open(player, page);
                 }
             }
@@ -227,15 +229,12 @@ public class SendAllExcludeGUI implements Listener, InventoryHolder {
                 return;
             }
 
-            Set<UUID> excluded = new HashSet<>(MailDataManager.getInstance().getExclude(uuid));
-            UUID targetId = target.getUniqueId();
-            if (excluded.remove(targetId)) {
-                player.sendMessage(LangManager.get(uuid, "gui.exclude.included").replace("%name%", target.getName()));
-            } else {
-                excluded.add(targetId);
+            boolean excluded = MailDataManager.getInstance().toggleExclude(uuid, target.getUniqueId());
+            if (excluded) {
                 player.sendMessage(LangManager.get(uuid, "gui.exclude.excluded").replace("%name%", target.getName()));
+            } else {
+                player.sendMessage(LangManager.get(uuid, "gui.exclude.included").replace("%name%", target.getName()));
             }
-            MailDataManager.getInstance().setExclude(uuid, excluded);
             open(player, currentPage);
         });
     }

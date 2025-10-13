@@ -42,34 +42,41 @@ public class MailGUI implements Listener, InventoryHolder {
     }
 
     public void open(Player player) {
-        open(player, 0);
+        int lastPage = pageMap.getOrDefault(player.getUniqueId(), 0);
+        open(player, lastPage);
     }
 
     public void open(Player player, int page) {
         UUID uuid = player.getUniqueId();
-        List<Mail> validMails = getValidMails(uuid);
 
-        int totalPages = Math.max(1, (validMails.size() + PAGE_SIZE - 1) / PAGE_SIZE);
-        int clampedPage = Math.max(0, Math.min(page, totalPages - 1));
+        MailDataManager manager = MailDataManager.getInstance();
+        manager.flushNow();
+        manager.forceReloadMails(uuid);
+
+        List<Mail> validMails = getValidMails(uuid);
+        int size = validMails.size();
+        int totalPages = size == 0 ? 1 : ((size - 1) / PAGE_SIZE + 1);
+        int clampedPage = page < 0 ? 0 : Math.min(page, totalPages - 1);
+
         pageMap.put(uuid, clampedPage);
 
         String title = LangManager.get(uuid, "gui.mail.title");
         Inventory inv = Bukkit.createInventory(this, 54, title);
 
         int start = clampedPage * PAGE_SIZE;
-        int end = Math.min(start + PAGE_SIZE, validMails.size());
+        int endExclusive = Math.min(start + PAGE_SIZE, size);
+        int base = size - 1 - start;
 
-        for (int slot = 0; slot < PAGE_SIZE && start + slot < end; slot++) {
-            Mail mail = validMails.get(validMails.size() - 1 - (start + slot));
+        for (int slot = 0; slot < PAGE_SIZE && start + slot < endExclusive; slot++) {
+            Mail mail = validMails.get(base - slot);
             ItemStack item = mail.toItemStack(player);
             if (item == null) continue;
 
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {
-                List<String> lore = meta.getLore();
-                if (lore == null) lore = new ArrayList<>();
+                List<String> lore = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>(8);
                 lore.add(" ");
-                lore.addAll(LangManager.getList(uuid, "gui.mail.lore.view"));
+                lore.addAll(LangManager.getList(uuid, "gui.mail.lore.claim"));
                 lore.addAll(LangManager.getList(uuid, "gui.mail.lore.delete"));
                 meta.setLore(lore);
                 item.setItemMeta(meta);
@@ -82,7 +89,8 @@ public class MailGUI implements Listener, InventoryHolder {
                     ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON),
                     LangManager.get(uuid, "gui.previous")));
         }
-        if (end < validMails.size()) {
+
+        if (endExclusive < size) {
             inv.setItem(NEXT_BTN_SLOT, createButton(
                     ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON),
                     LangManager.get(uuid, "gui.next")));
@@ -102,10 +110,20 @@ public class MailGUI implements Listener, InventoryHolder {
     }
 
     private List<Mail> getValidMails(UUID uuid) {
-        List<Mail> mails = MailDataManager.getInstance().getMails(uuid);
+        MailDataManager manager = MailDataManager.getInstance();
+        manager.flushNow();
+        manager.forceReloadMails(uuid);
+
+        List<Mail> mails = manager.getMails(uuid);
+        if (mails.isEmpty()) return Collections.emptyList();
+
         List<Mail> result = new ArrayList<>(mails.size());
         for (Mail m : mails) {
-            if (!m.isExpired()) result.add(m);
+            if (m != null && !m.isExpired() && !m.getItems().isEmpty()) {
+                result.add(m);
+            } else if (m != null) {
+                manager.removeMail(m);
+            }
         }
         return result;
     }
@@ -158,10 +176,11 @@ public class MailGUI implements Listener, InventoryHolder {
             default -> {
                 if (slot < PAGE_SIZE) {
                     List<Mail> validMails = getValidMails(uuid);
+                    int size = validMails.size();
                     int mailIndex = currentPage * PAGE_SIZE + slot;
-                    if (mailIndex >= validMails.size()) return;
+                    if (mailIndex >= size) return;
 
-                    int reversedIndex = validMails.size() - 1 - mailIndex;
+                    int reversedIndex = size - 1 - mailIndex;
                     Mail mail = validMails.get(reversedIndex);
 
                     if (e.getClick() == ClickType.RIGHT) {
@@ -169,7 +188,7 @@ public class MailGUI implements Listener, InventoryHolder {
                         new MailDeleteConfirmGUI(player, plugin, Collections.singletonList(mail)).open(player);
                     } else if (e.getClick() == ClickType.LEFT) {
                         ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
-                        manager.mailViewGUI.open(player, mail);
+                        new MailViewGUI(plugin).open(player, mail);
                     }
                 }
             }

@@ -16,7 +16,7 @@ import java.util.*;
 public class Mail implements Serializable {
 
     @Serial
-    private static final long serialVersionUID = 3L;
+    private static final long serialVersionUID = 4L;
 
     private static final transient DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final transient Map<UUID, String> nameCache = new HashMap<>();
@@ -43,7 +43,7 @@ public class Mail implements Serializable {
                 if (item != null) this.items.add(item.clone());
             }
         }
-        this.sentAt = sentAt;
+        this.sentAt = sentAt != null ? sentAt : LocalDateTime.now();
         this.expireAt = expireAt;
     }
 
@@ -63,6 +63,11 @@ public class Mail implements Serializable {
 
     public LocalDateTime getSentAt() { return sentAt; }
     public LocalDateTime getExpireAt() { return expireAt; }
+
+    // 호환성을 위해 추가 (GUI 정렬에서 사용)
+    public long getCreatedAt() {
+        return sentAt.atZone(java.time.ZoneOffset.UTC).toEpochSecond();
+    }
 
     public boolean isExpired() {
         return expireAt != null && LocalDateTime.now().isAfter(expireAt);

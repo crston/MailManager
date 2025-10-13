@@ -108,10 +108,11 @@ gui:
     delete_selected_lore:
       - "&7선택한 모든 우편을 삭제합니다."
       - "&c이 작업은 되돌릴 수 없습니다!"
+    selected: "&a선택됨"
     no_selected: "&c선택된 메일이 없습니다."
     lore:
-      claim: "&e» 좌클릭: 아이템 수령"
-      delete: "&c» 우클릭: 우편 삭제"
+      claim: "&e» 좌 클릭: 아이템 수령"
+      delete: "&c» 우 클릭: 우편 삭제"
   attach:
     title: "&a아이템 첨부"
   delete:

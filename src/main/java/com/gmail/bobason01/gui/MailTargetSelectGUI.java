@@ -29,15 +29,15 @@ import java.util.concurrent.atomic.AtomicLong;
 public class MailTargetSelectGUI implements Listener, InventoryHolder {
 
     private static final int PAGE_SIZE = 45;
-    private static final int SLOT_NEXT = 50;
     private static final int SLOT_PREV = 48;
+    private static final int SLOT_NEXT = 50;
     private static final int SLOT_BACK = 53;
     private static final long PAGE_COOLDOWN_MS = 1000L;
 
     private final Plugin plugin;
-    private final Map<UUID, Integer> playerPageMap = new ConcurrentHashMap<>();
-    private final Map<UUID, AtomicLong> lastPageClickMap = new ConcurrentHashMap<>();
-    private final Set<UUID> loadingSet = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Integer> pageMap = new ConcurrentHashMap<>();
+    private final Map<UUID, AtomicLong> cooldownMap = new ConcurrentHashMap<>();
+    private final Set<UUID> loading = ConcurrentHashMap.newKeySet();
     private final Map<UUID, ItemStack> cachedHeads = new WeakHashMap<>();
 
     public MailTargetSelectGUI(Plugin plugin) {
@@ -55,20 +55,20 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
 
     public void open(Player player, int page) {
         UUID uuid = player.getUniqueId();
-        if (!loadingSet.add(uuid)) return;
-        playerPageMap.put(uuid, page);
+        if (!loading.add(uuid)) return;
+        pageMap.put(uuid, page);
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            List<OfflinePlayer> allPlayers = PlayerCache.getCachedPlayers().stream()
+            List<OfflinePlayer> players = PlayerCache.getCachedPlayers().stream()
                     .filter(p -> p.getName() != null && !p.getUniqueId().equals(uuid))
                     .sorted(Comparator.comparing(OfflinePlayer::getName, String.CASE_INSENSITIVE_ORDER))
                     .toList();
 
-            int maxPage = Math.max(0, (allPlayers.size() - 1) / PAGE_SIZE);
+            int maxPage = Math.max(0, (players.size() - 1) / PAGE_SIZE);
             int safePage = Math.min(Math.max(page, 0), maxPage);
             int start = safePage * PAGE_SIZE;
-            int end = Math.min(start + PAGE_SIZE, allPlayers.size());
-            List<OfflinePlayer> pagePlayers = allPlayers.subList(start, end);
+            int end = Math.min(start + PAGE_SIZE, players.size());
+            List<OfflinePlayer> pagePlayers = players.subList(start, end);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 try {
@@ -81,22 +81,20 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
 
                     Inventory inv = Bukkit.createInventory(this, 54, title);
 
-                    // 플레이어 목록 채우기
                     for (int i = 0; i < pagePlayers.size(); i++) {
                         inv.setItem(i, getCachedHead(pagePlayers.get(i)));
                     }
 
-                    // 버튼
-                    if (safePage < maxPage) {
-                        inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON))
-                                .name("§a" + LangManager.get(lang, "gui.next"))
-                                .lore(LangManager.getList(lang, "gui.page.next_lore"))
-                                .build());
-                    }
                     if (safePage > 0) {
                         inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON))
                                 .name("§a" + LangManager.get(lang, "gui.previous"))
                                 .lore(LangManager.getList(lang, "gui.page.prev_lore"))
+                                .build());
+                    }
+                    if (safePage < maxPage) {
+                        inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON))
+                                .name("§a" + LangManager.get(lang, "gui.next"))
+                                .lore(LangManager.getList(lang, "gui.page.next_lore"))
                                 .build());
                     }
                     inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
@@ -106,7 +104,7 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
 
                     player.openInventory(inv);
                 } finally {
-                    loadingSet.remove(uuid);
+                    loading.remove(uuid);
                 }
             });
         });
@@ -125,54 +123,55 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
         }).clone();
     }
 
-    private boolean hasCooldownPassed(Player player) {
+    private boolean checkCooldown(Player player) {
         long now = System.currentTimeMillis();
-        AtomicLong lastClick = lastPageClickMap.computeIfAbsent(player.getUniqueId(), k -> new AtomicLong(0));
-        if (now - lastClick.get() < PAGE_COOLDOWN_MS) {
+        AtomicLong last = cooldownMap.computeIfAbsent(player.getUniqueId(), k -> new AtomicLong(0));
+        if (now - last.get() < PAGE_COOLDOWN_MS) {
             ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK_FAIL);
             return false;
         }
-        lastClick.set(now);
+        last.set(now);
         return true;
     }
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
-        if (!(e.getInventory().getHolder() instanceof MailTargetSelectGUI) || !(e.getWhoClicked() instanceof Player player)) {
-            return;
-        }
+        if (!(e.getInventory().getHolder() instanceof MailTargetSelectGUI) || !(e.getWhoClicked() instanceof Player player)) return;
 
         e.setCancelled(true);
         ItemStack clicked = e.getCurrentItem();
-        if (clicked == null || clicked.getType() != Material.PLAYER_HEAD) return;
+        if (clicked == null) return;
 
         UUID uuid = player.getUniqueId();
         int slot = e.getRawSlot();
-        int currentPage = playerPageMap.getOrDefault(uuid, 0);
+        int page = pageMap.getOrDefault(uuid, 0);
 
-        if (!hasCooldownPassed(player)) return;
+        if (!checkCooldown(player)) return;
 
         switch (slot) {
-            case SLOT_NEXT -> {
-                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_PAGE_TURN);
-                open(player, currentPage + 1);
-            }
             case SLOT_PREV -> {
                 ConfigManager.playSound(player, ConfigManager.SoundType.GUI_PAGE_TURN);
-                open(player, currentPage - 1);
+                open(player, page - 1);
+            }
+            case SLOT_NEXT -> {
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_PAGE_TURN);
+                open(player, page + 1);
             }
             case SLOT_BACK -> {
                 ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                 MailManager.getInstance().mailSendGUI.open(player);
             }
             default -> {
+                if (clicked.getType() != Material.PLAYER_HEAD) return;
                 String name = ChatColor.stripColor(Objects.requireNonNull(clicked.getItemMeta()).getDisplayName());
                 OfflinePlayer target = PlayerCache.getByName(name);
+
                 if (target == null || target.getUniqueId().equals(uuid)) {
                     player.sendMessage(LangManager.get(uuid, "gui.target.invalid"));
                     ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK_FAIL);
                     return;
                 }
+
                 MailService.setTarget(uuid, target);
                 player.sendMessage(LangManager.get(uuid, "gui.target.selected").replace("%target%", name));
                 ConfigManager.playSound(player, ConfigManager.SoundType.ACTION_SETTING_CHANGE);
@@ -185,8 +184,8 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
     public void onClose(InventoryCloseEvent e) {
         if (e.getInventory().getHolder() instanceof MailTargetSelectGUI) {
             UUID uuid = e.getPlayer().getUniqueId();
-            playerPageMap.remove(uuid);
-            loadingSet.remove(uuid);
+            pageMap.remove(uuid);
+            loading.remove(uuid);
         }
     }
 }

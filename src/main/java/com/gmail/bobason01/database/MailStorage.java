@@ -1,6 +1,7 @@
 package com.gmail.bobason01.database;
 
 import com.gmail.bobason01.mail.Mail;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.List;
 import java.util.Set;
@@ -13,9 +14,6 @@ public interface MailStorage {
 
     void batchInsertMails(List<MailRecord> records) throws Exception;
     void batchDeleteMails(List<MailRecord> records) throws Exception;
-
-    void updateMail(MailRecord record) throws Exception;
-
     List<Mail> loadMails(UUID receiver) throws Exception;
 
     void saveNotifySetting(UUID uuid, boolean enabled) throws Exception;
@@ -29,6 +27,9 @@ public interface MailStorage {
 
     void savePlayerLanguage(UUID uuid, String lang) throws Exception;
     String loadPlayerLanguage(UUID uuid) throws Exception;
+
+    void saveInventory(int id, ItemStack[] contents) throws Exception;
+    ItemStack[] loadInventory(int id) throws Exception;
 
     record MailRecord(UUID receiver, Mail mail) {}
 }

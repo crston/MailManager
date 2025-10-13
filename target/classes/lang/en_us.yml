@@ -108,6 +108,7 @@ gui:
     delete_selected_lore:
       - "&7Deletes all selected mail."
       - "&cThis action cannot be undone!"
+    selected: "&aSelected"
     no_selected: "&cNo mail selected."
     lore:
       claim: "&e» Left-Click: Claim Items"

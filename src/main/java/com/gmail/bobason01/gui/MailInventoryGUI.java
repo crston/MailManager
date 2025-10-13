@@ -1,8 +1,8 @@
 package com.gmail.bobason01.gui;
 
 import com.gmail.bobason01.MailManager;
-import com.gmail.bobason01.commands.MailCommand;
 import com.gmail.bobason01.lang.LangManager;
+import com.gmail.bobason01.mail.MailDataManager;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -42,14 +42,14 @@ public class MailInventoryGUI implements Listener, InventoryHolder {
         String title = LangManager.get(viewer, titleKey).replace("%id%", String.valueOf(invId));
 
         inv = Bukkit.createInventory(this, SIZE, title);
-        ItemStack[] contents = MailCommand.getInventory(invId);
+        ItemStack[] contents = MailDataManager.getInstance().getInventory(invId);
         if (contents != null) inv.setContents(contents);
         player.openInventory(inv);
     }
 
     private void save() {
         if (editable && inv != null) {
-            MailCommand.saveInventory(invId, inv.getContents());
+            MailDataManager.getInstance().saveInventory(invId, inv.getContents());
         }
     }
 
@@ -62,7 +62,6 @@ public class MailInventoryGUI implements Listener, InventoryHolder {
             return;
         }
 
-        // 편집 모드에서는 클릭 후 1틱 뒤 저장
         Bukkit.getScheduler().runTaskLater(MailManager.getInstance(), gui::save, 1L);
     }
 
