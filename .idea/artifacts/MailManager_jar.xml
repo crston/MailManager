@@ -3,6 +3,8 @@
     <output-path>$PROJECT_DIR$/out/artifacts/MailManager_jar</output-path>
     <root id="archive" name="MailManager.jar">
       <element id="module-output" name="MailManager" />
+      <element id="library" level="project" name="Maven: com.zaxxer:HikariCP:5.1.0" />
+      <element id="library" level="project" name="Maven: org.xerial:sqlite-jdbc:3.45.1.0" />
     </root>
   </artifact>
 </component>
