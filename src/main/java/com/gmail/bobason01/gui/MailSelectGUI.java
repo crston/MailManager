@@ -10,6 +10,7 @@ import com.gmail.bobason01.utils.ItemBuilder;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -95,7 +96,7 @@ public class MailSelectGUI implements Listener, InventoryHolder {
             if (item == null) continue;
 
             if (selectedMails.get(uuid).contains(mail.getMailId())) {
-                item.addUnsafeEnchantment(org.bukkit.enchantments.Enchantment.UNBREAKING, 1);
+                item.addUnsafeEnchantment(Enchantment.DURABILITY, 1);
                 ItemMeta meta = item.getItemMeta();
                 if (meta != null) {
                     meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
