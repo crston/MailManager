@@ -151,7 +151,6 @@ public class MailSendGUI implements Listener, InventoryHolder {
 
         if (slot == SLOT_BACK) {
             e.setCancelled(true);
-            // ★ 수정된 부분: 돌아가기 전에 DB/캐시 즉시 갱신
             MailDataManager dataManager = MailDataManager.getInstance();
             dataManager.flushNow();
             dataManager.forceReloadMails(uuid);
@@ -182,11 +181,21 @@ public class MailSendGUI implements Listener, InventoryHolder {
                     gui.sentSet.remove(uuid);
                     return;
                 }
+
+                // 메일 전송 로직 수행
                 MailService.send(player, plugin);
                 MailService.clearAttached(uuid);
+
+                // GUI 슬롯을 비워서 onClose가 아이템을 감지하지 못하게 함
+                e.getInventory().setItem(SLOT_ITEM, null);
+
                 ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_SEND_SUCCESS);
-                gui.sentSet.remove(uuid);
+
+                // sentSet.remove(uuid)를 closeInventory() 뒤로 미룸
+                // 이렇게 해야 onClose에서 sentSet.contains(uuid)가 true가 되어 아이템 반환을 건너뜀
                 player.closeInventory();
+
+                gui.sentSet.remove(uuid);
             }
         }
     }
@@ -202,7 +211,10 @@ public class MailSendGUI implements Listener, InventoryHolder {
     public void onClose(InventoryCloseEvent e) {
         if (!(e.getInventory().getHolder() instanceof MailSendGUI) || !(e.getPlayer() instanceof Player player)) return;
         UUID uuid = player.getUniqueId();
+
+        // onClick에서 remove를 나중에 하므로, 전송 성공 시 여기서 return됨
         if (sentSet.contains(uuid)) return;
+
         ItemStack item = e.getInventory().getItem(SLOT_ITEM);
         if (item != null && !item.getType().isAir()) {
             player.getInventory().addItem(item);
