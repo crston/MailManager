@@ -136,7 +136,6 @@ public class JdbcStorage implements MailStorage {
         }
     }
 
-    // [추가됨] 플레이어 메일 전체 삭제
     @Override
     public void deletePlayerMails(UUID receiver) throws Exception {
         String sql = "DELETE FROM mails WHERE receiver=?";
@@ -347,6 +346,23 @@ public class JdbcStorage implements MailStorage {
             }
         }
         return null;
+    }
+
+    // [추가된 메서드]
+    @Override
+    public Set<UUID> getAllGlobalUUIDs() throws Exception {
+        Set<UUID> uuids = new HashSet<>();
+        String sql = "SELECT uuid FROM global_players";
+        try (Connection conn = ds.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                try {
+                    uuids.add(UUID.fromString(rs.getString(1)));
+                } catch (IllegalArgumentException ignored) {}
+            }
+        }
+        return uuids;
     }
 
     private byte[] serialize(Object obj) throws Exception {

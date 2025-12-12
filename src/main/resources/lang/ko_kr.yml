@@ -38,7 +38,8 @@ cmd:
     not-found: "&c'%lang%' 언어를 찾을 수 없습니다. 사용 가능한 언어: %langs%"
     success: "&a언어가 %lang%(으)로 설정되었습니다."
     no-permission: "&c언어 설정 권한이 없습니다."
-
+  reset:
+    success: "성공적으로 %name% 님의 데이터가 초기화 되었습니다"
 mail:
   attach:
     success: "&a아이템 %count% 개를 첨부했습니다."

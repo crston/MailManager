@@ -38,7 +38,8 @@ cmd:
     not-found: "&cLanguage '%lang%' not found. Available: %langs%"
     success: "&aLanguage set to %lang%."
     no-permission: "&cYou do not have permission to set language."
-
+  reset:
+    success: "%name%'s data has been successfully initialized."
 mail:
   attach:
     success: "&aAttached %count% items."

@@ -38,7 +38,8 @@ cmd:
     not-found: "&c言語 '%lang%' が見つかりません。利用可能: %langs%"
     success: "&a言語を %lang% に設定しました。"
     no-permission: "&c言語を設定する権限がありません。"
-
+  reset:
+    success: "%name% 様のデータが正常に初期化されました。"
 mail:
   attach:
     success: "&aアイテムを %count% 個添付しました。"

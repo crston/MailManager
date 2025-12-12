@@ -38,6 +38,8 @@ cmd:
     not-found: "&c找不到语言 '%lang%'。可用语言: %langs%"
     success: "&a语言已设置为 %lang%。"
     no-permission: "&c你没有权限设置语言。"
+  reset:
+    success: "%name% 的数据已成功初始化。"
 
 mail:
   attach:
