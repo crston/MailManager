@@ -42,8 +42,12 @@ public class MailSelectGUI implements Listener, InventoryHolder {
     private final Plugin plugin;
     private final Map<UUID, Integer> pageMap = new ConcurrentHashMap<>();
     private final Map<UUID, Set<UUID>> selectedMails = new ConcurrentHashMap<>();
+
+    // 채팅 검색을 대기 중인 플레이어 목록
     private final Set<UUID> waitingForSearch = ConcurrentHashMap.newKeySet();
-    private final Map<UUID, UUID> searchTarget = new ConcurrentHashMap<>();
+
+    // 현재 필터링 중인 발신자 UUID (null이면 전체 보기)
+    private final Map<UUID, UUID> senderFilterMap = new ConcurrentHashMap<>();
 
     public MailSelectGUI(Plugin plugin) {
         this.plugin = plugin;
@@ -51,7 +55,7 @@ public class MailSelectGUI implements Listener, InventoryHolder {
 
     @Override
     public @NotNull Inventory getInventory() {
-        return null;
+        return Bukkit.createInventory(this, 54);
     }
 
     public void open(Player player) {
@@ -59,20 +63,21 @@ public class MailSelectGUI implements Listener, InventoryHolder {
     }
 
     public void open(Player player, int page) {
-        open(player, page, searchTarget.get(player.getUniqueId()));
-    }
-
-    public void open(Player player, int page, UUID filterTarget) {
         UUID uuid = player.getUniqueId();
+        UUID filterSender = senderFilterMap.get(uuid); // 현재 필터링 중인 발신자
 
         MailDataManager manager = MailDataManager.getInstance();
-        manager.flushNow();
-        manager.forceReloadMails(filterTarget != null ? filterTarget : uuid);
 
-        List<Mail> mails = manager.getMails(filterTarget != null ? filterTarget : uuid)
+        // 데이터 최신화 (멀티 서버 싱크)
+        manager.flushNow();
+        manager.forceReloadMails(uuid);
+
+        // 내 메일 목록 가져오기 및 필터링
+        List<Mail> mails = manager.getMails(uuid)
                 .stream()
-                .filter(mail -> !mail.isExpired())
-                .sorted(Comparator.comparingLong(Mail::getCreatedAt).reversed())
+                .filter(mail -> !mail.isExpired()) // 만료된 메일 제외
+                .filter(mail -> filterSender == null || mail.getSender().equals(filterSender)) // 발신자 필터 적용
+                .sorted(Comparator.comparingLong(Mail::getCreatedAt).reversed()) // 최신순 정렬
                 .collect(Collectors.toList());
 
         int totalPages = Math.max(1, (int) Math.ceil((double) mails.size() / PAGE_SIZE));
@@ -82,9 +87,23 @@ public class MailSelectGUI implements Listener, InventoryHolder {
         selectedMails.putIfAbsent(uuid, new HashSet<>());
 
         String lang = LangManager.getLanguage(uuid);
-        String title = LangManager.get(lang, "gui.mail.select_title")
-                .replace("%page%", String.valueOf(safePage + 1))
-                .replace("%maxpage%", String.valueOf(totalPages));
+        String title;
+
+        // 타이틀 설정 (필터링 여부에 따라 다르게 표시)
+        if (filterSender != null) {
+            String senderName = manager.getGlobalName(filterSender);
+            title = LangManager.get(lang, "gui.mail.select_title_filtered") // lang 파일에 추가 필요 (예: "&8선택 모드 (보낸이: %sender%)")
+                    .replace("%sender%", senderName)
+                    .replace("%page%", String.valueOf(safePage + 1));
+        } else {
+            title = LangManager.get(lang, "gui.mail.select_title")
+                    .replace("%page%", String.valueOf(safePage + 1))
+                    .replace("%maxpage%", String.valueOf(totalPages));
+        }
+
+        // 타이틀 길이 제한 안전 장치
+        if (title.length() > 32) title = title.substring(0, 32);
+
         Inventory inv = Bukkit.createInventory(this, 54, title);
 
         int start = safePage * PAGE_SIZE;
@@ -95,13 +114,14 @@ public class MailSelectGUI implements Listener, InventoryHolder {
             ItemStack item = mail.toItemStack(player);
             if (item == null) continue;
 
+            // 선택된 메일이면 인챈트 효과(반짝임) 추가
             if (selectedMails.get(uuid).contains(mail.getMailId())) {
                 item.addUnsafeEnchantment(Enchantment.DURABILITY, 1);
                 ItemMeta meta = item.getItemMeta();
                 if (meta != null) {
                     meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
                     List<String> lore = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
-                    lore.add(LangManager.get(lang, "gui.mail.selected"));
+                    lore.add(LangManager.get(lang, "gui.mail.selected")); // (예: "&a✔ 선택됨")
                     meta.setLore(lore);
                     item.setItemMeta(meta);
                 }
@@ -109,11 +129,16 @@ public class MailSelectGUI implements Listener, InventoryHolder {
             inv.setItem(i - start, item);
         }
 
-        inv.setItem(SLOT_SEARCH, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BLACKLIST_EXCLUDE_SEARCH).clone())
-                .name("§b" + LangManager.get(lang, "gui.search.name"))
-                .lore(LangManager.get(lang, "gui.exclude.search.prompt"))
+        // 검색 버튼
+        ItemStack searchIcon = ConfigManager.getItem(ConfigManager.ItemType.BLACKLIST_EXCLUDE_SEARCH);
+        if (searchIcon.getType() == Material.AIR) searchIcon = new ItemStack(Material.COMPASS);
+
+        inv.setItem(SLOT_SEARCH, new ItemBuilder(searchIcon.clone())
+                .name(LangManager.get(lang, "gui.search.name")) // (예: "&e보낸 사람 검색")
+                .lore(LangManager.getList(lang, "gui.mail.search_lore")) // (예: "&7특정 플레이어가 보낸 메일만 봅니다.")
                 .build());
 
+        // 페이지 이동 버튼
         if (safePage > 0) {
             inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON).clone())
                     .name(LangManager.get(lang, "gui.previous"))
@@ -125,6 +150,7 @@ public class MailSelectGUI implements Listener, InventoryHolder {
                     .build());
         }
 
+        // 기능 버튼들
         inv.setItem(SLOT_CLAIM_ALL, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_CLAIM_SELECTED_BUTTON).clone())
                 .name(LangManager.get(lang, "gui.mail.claim_selected"))
                 .lore(LangManager.getList(lang, "gui.mail.claim_selected_lore"))
@@ -161,31 +187,49 @@ public class MailSelectGUI implements Listener, InventoryHolder {
             case SLOT_SEARCH -> {
                 player.closeInventory();
                 waitingForSearch.add(uuid);
-                player.sendMessage(LangManager.get(uuid, "gui.exclude.search.prompt"));
+                String lang = LangManager.getLanguage(uuid);
+                player.sendMessage(LangManager.get(lang, "gui.mail.search_prompt")); // (예: "&a검색할 발신자 이름을 입력하세요. (초기화하려면 'reset')")
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
             }
-            case SLOT_PREV -> open(player, currentPage - 1, searchTarget.get(uuid));
-            case SLOT_NEXT -> open(player, currentPage + 1, searchTarget.get(uuid));
+            case SLOT_PREV -> {
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_PAGE_TURN);
+                open(player, currentPage - 1);
+            }
+            case SLOT_NEXT -> {
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_PAGE_TURN);
+                open(player, currentPage + 1);
+            }
             case SLOT_CLAIM_ALL -> {
                 ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                 Set<UUID> mails = selectedMails.getOrDefault(uuid, Collections.emptySet());
                 if (mails.isEmpty()) {
                     player.sendMessage(LangManager.get(uuid, "gui.mail.no_selected"));
+                    ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK_FAIL);
                 } else {
+                    // 선택된 메일 수령 처리
+                    int successCount = 0;
                     for (UUID mailId : new HashSet<>(mails)) {
                         Mail mail = manager.getMailById(mailId);
                         if (mail == null) continue;
+
+                        // 인벤토리 공간 확인 및 지급
                         List<ItemStack> remain = claimItems(player, mail.getItems());
+
                         if (remain.isEmpty()) {
+                            // 모두 받음 -> 메일 삭제
                             manager.removeMail(mail);
                         } else {
+                            // 일부만 받음 -> 남은 아이템 업데이트
                             mail.setItems(remain);
                             manager.updateMail(mail);
                         }
+                        successCount++;
                     }
                     manager.flushNow();
                     selectedMails.get(uuid).clear();
-                    player.sendMessage(LangManager.get(uuid, "gui.mail.claim_success"));
-                    open(player, currentPage, searchTarget.get(uuid));
+                    player.sendMessage(LangManager.get(uuid, "gui.mail.claim_success_count").replace("%count%", String.valueOf(successCount)));
+                    ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
+                    open(player, currentPage);
                 }
             }
             case SLOT_DELETE_ALL -> {
@@ -193,22 +237,29 @@ public class MailSelectGUI implements Listener, InventoryHolder {
                 Set<UUID> mails = selectedMails.getOrDefault(uuid, Collections.emptySet());
                 if (mails.isEmpty()) {
                     player.sendMessage(LangManager.get(uuid, "gui.mail.no_selected"));
+                    ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK_FAIL);
                 } else {
                     List<Mail> mailObjs = mails.stream()
                             .map(manager::getMailById)
                             .filter(Objects::nonNull)
                             .toList();
+                    // 삭제 확인 GUI 열기
                     new MailDeleteConfirmGUI(player, plugin, mailObjs).open(player);
                 }
             }
             case SLOT_BACK -> {
                 ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
-                MailManager.getInstance().mailSettingGUI.open(player);
+                // 뒤로가기 시 필터 초기화 여부는 기획에 따라 결정 (여기서는 유지)
+                MailManager.getInstance().mailGUI.open(player);
             }
             default -> {
+                // 메일 아이템 클릭 (선택/해제)
                 if (slot < PAGE_SIZE) {
-                    List<Mail> mails = manager.getMails(searchTarget.getOrDefault(uuid, uuid))
-                            .stream().filter(mail -> !mail.isExpired())
+                    UUID filterSender = senderFilterMap.get(uuid);
+                    List<Mail> mails = manager.getMails(uuid)
+                            .stream()
+                            .filter(mail -> !mail.isExpired())
+                            .filter(mail -> filterSender == null || mail.getSender().equals(filterSender))
                             .sorted(Comparator.comparingLong(Mail::getCreatedAt).reversed())
                             .toList();
 
@@ -222,7 +273,7 @@ public class MailSelectGUI implements Listener, InventoryHolder {
                         selectedMails.get(uuid).add(mail.getMailId());
                     }
                     ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
-                    open(player, currentPage, searchTarget.get(uuid));
+                    open(player, currentPage); // 화면 갱신
                 }
             }
         }
@@ -243,9 +294,12 @@ public class MailSelectGUI implements Listener, InventoryHolder {
     public void onClose(InventoryCloseEvent e) {
         if (e.getInventory().getHolder() instanceof MailSelectGUI) {
             UUID uuid = e.getPlayer().getUniqueId();
-            pageMap.remove(uuid);
-            waitingForSearch.remove(uuid);
-            searchTarget.remove(uuid);
+            // 검색 중일 때는 상태 유지, 그 외에는 정리
+            if (!waitingForSearch.contains(uuid)) {
+                pageMap.remove(uuid);
+                selectedMails.remove(uuid);
+                senderFilterMap.remove(uuid);
+            }
         }
     }
 
@@ -256,18 +310,42 @@ public class MailSelectGUI implements Listener, InventoryHolder {
         if (!waitingForSearch.remove(uuid)) return;
 
         e.setCancelled(true);
-        String input = e.getMessage();
-        OfflinePlayer target = PlayerCache.getByName(input);
+        String input = e.getMessage().trim();
+        String lang = LangManager.getLanguage(uuid);
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            int currentPage = pageMap.getOrDefault(uuid, 0);
-            if (target == null || target.getName() == null) {
-                player.sendMessage(LangManager.get(uuid, "gui.exclude.notfound").replace("%input%", input));
-                open(player, currentPage, null);
-                return;
-            }
-            searchTarget.put(uuid, target.getUniqueId());
-            open(player, 0, target.getUniqueId());
+        // 검색 초기화 명령
+        if (input.equalsIgnoreCase("reset") || input.equalsIgnoreCase("초기화") || input.equalsIgnoreCase("cancel")) {
+            senderFilterMap.remove(uuid);
+            player.sendMessage(LangManager.get(lang, "gui.mail.search_reset"));
+            Bukkit.getScheduler().runTask(plugin, () -> open(player, 0));
+            return;
+        }
+
+        player.sendMessage(LangManager.get(lang, "gui.search.searching").replace("%name%", input));
+
+        // 글로벌 닉네임 검색 (비동기)
+        MailDataManager.getInstance().getGlobalUUID(input).thenAccept(targetUUID -> {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (targetUUID == null) {
+                    player.sendMessage(LangManager.get(lang, "cmd.player.notfound").replace("%name%", input));
+                    ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK_FAIL);
+                    open(player, 0); // 실패 시 원래 화면 복귀
+                    return;
+                }
+
+                // 필터 적용
+                senderFilterMap.put(uuid, targetUUID);
+
+                // 검색 결과가 있는지 미리 확인 (선택 사항)
+                long count = MailDataManager.getInstance().getMails(uuid).stream()
+                        .filter(m -> m.getSender().equals(targetUUID) && !m.isExpired())
+                        .count();
+
+                player.sendMessage(LangManager.get(lang, "gui.mail.search_result").replace("%count%", String.valueOf(count)));
+                ConfigManager.playSound(player, ConfigManager.SoundType.ACTION_SELECTION_COMPLETE);
+
+                open(player, 0);
+            });
         });
     }
 }

@@ -39,11 +39,12 @@ public class MailCommand implements CommandExecutor, TabCompleter {
     private static final String ITEMSADDER_PREFIX = "itemsadder:";
     private static final String MODEL_PREFIX = "model:";
 
-    private static final List<String> SUB_COMMANDS = Arrays.asList("send", "sendall", "reload", "setlang", "inv");
+    // [수정됨] reset 명령어 추가
+    private static final List<String> SUB_COMMANDS = Arrays.asList("send", "sendall", "reload", "setlang", "inv", "reset");
     private static final List<String> TIME_SUGGESTIONS = Arrays.asList("7d", "12h", "30m", "15s", "1h", "5m");
 
     private static final Map<Integer, ItemStack[]> invMap = new HashMap<>(32);
-    private static final File invFile = new File(MailManager.getInstance().getDataFolder(), "inventories.yml");
+    private static final File invFile = new File(MailManager.getInstance().getDataFolder(), "data/inventories.yml"); // 경로 data/로 변경 권장
     private static final FileConfiguration invConfig = YamlConfiguration.loadConfiguration(invFile);
 
     static { loadInventories(); }
@@ -76,45 +77,59 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
 
-            OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
-            if (target == null || (!target.isOnline() && !target.hasPlayedBefore())) {
-                sender.sendMessage(LangManager.get(lang, "cmd.player.notfound").replace("%name%", args[1]));
-                return true;
-            }
+            String targetName = args[1];
 
-            List<ItemStack> items = parseItems(args[2], lang);
-            if (items.isEmpty()) {
-                sender.sendMessage(LangManager.get(lang, "cmd.item.invalid").replace("%id%", args[2]));
-                return true;
-            }
+            // [수정] 멀티 서버 지원: 비동기로 글로벌 UUID 조회 후 처리
+            MailDataManager.getInstance().getGlobalUUID(targetName).thenAccept(targetUUID -> {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (targetUUID == null) {
+                        sender.sendMessage(LangManager.get(lang, "cmd.player.notfound").replace("%name%", targetName));
+                        return;
+                    }
 
-            LocalDateTime now = LocalDateTime.now();
-            LocalDateTime expire = (args.length >= 4 && !args[args.length - 1].startsWith("-"))
-                    ? parseExpireTime(args[3], now) : now.plusDays(30);
-            if (expire == null) {
-                sender.sendMessage(LangManager.get(lang, "cmd.expire.invalid"));
-                return true;
-            }
+                    List<ItemStack> items = parseItems(args[2], lang);
+                    if (items.isEmpty()) {
+                        sender.sendMessage(LangManager.get(lang, "cmd.item.invalid").replace("%id%", args[2]));
+                        return;
+                    }
 
-            boolean onlineOnly = args.length >= 4 && args[args.length - 1].equalsIgnoreCase("-online");
-            boolean offlineOnly = args.length >= 4 && args[args.length - 1].equalsIgnoreCase("-offline");
+                    LocalDateTime now = LocalDateTime.now();
+                    LocalDateTime expire = (args.length >= 4 && !args[args.length - 1].startsWith("-"))
+                            ? parseExpireTime(args[3], now) : now.plusDays(30);
+                    if (expire == null) {
+                        sender.sendMessage(LangManager.get(lang, "cmd.expire.invalid"));
+                        return;
+                    }
 
-            if (onlineOnly && !target.isOnline()) {
-                sender.sendMessage(LangManager.get(lang, "cmd.send.target-offline"));
-                return true;
-            }
-            if (offlineOnly && target.isOnline()) {
-                sender.sendMessage(LangManager.get(lang, "cmd.send.target-online"));
-                return true;
-            }
+                    OfflinePlayer localTarget = Bukkit.getOfflinePlayer(targetUUID);
+                    boolean onlineOnly = args.length >= 4 && args[args.length - 1].equalsIgnoreCase("-online");
+                    boolean offlineOnly = args.length >= 4 && args[args.length - 1].equalsIgnoreCase("-offline");
 
-            Mail mail = new Mail(senderId, target.getUniqueId(), items, now, expire);
-            MailDataManager manager = MailDataManager.getInstance();
-            manager.addMail(mail);
-            manager.flushNow();  // DB 즉시 반영
-            manager.forceReloadMails(target.getUniqueId()); // 대상 플레이어 캐시 최신화
+                    // 타 서버 접속자는 이 서버 입장에서는 offline임.
+                    if (onlineOnly && !localTarget.isOnline()) {
+                        sender.sendMessage(LangManager.get(lang, "cmd.send.target-offline"));
+                        return;
+                    }
+                    if (offlineOnly && localTarget.isOnline()) {
+                        sender.sendMessage(LangManager.get(lang, "cmd.send.target-online"));
+                        return;
+                    }
 
-            sender.sendMessage(LangManager.get(lang, "cmd.send.success").replace("%name%", Objects.requireNonNull(target.getName())));
+                    Mail mail = new Mail(senderId, targetUUID, items, now, expire);
+                    MailDataManager manager = MailDataManager.getInstance();
+                    manager.addMail(mail);
+                    manager.flushNow();  // DB 즉시 반영
+
+                    // 받는 사람이 현재 이 서버에 있다면 캐시 즉시 갱신
+                    if (localTarget.isOnline()) {
+                        manager.forceReloadMails(targetUUID);
+                    }
+
+                    String realName = localTarget.getName() != null ? localTarget.getName() : targetName;
+                    sender.sendMessage(LangManager.get(lang, "cmd.send.success").replace("%name%", realName));
+                });
+            });
+
             return true;
         }
 
@@ -158,7 +173,9 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
                 Mail mail = new Mail(senderId, target.getUniqueId(), items, now, expire);
                 manager.addMail(mail);
-                manager.forceReloadMails(target.getUniqueId()); // 플레이어별 즉시 최신화
+                if (target.isOnline()) {
+                    manager.forceReloadMails(target.getUniqueId());
+                }
                 count++;
             }
 
@@ -167,11 +184,47 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        // ---------------- reset (NEW) ----------------
+        if (sub.equals("reset")) {
+            if (!sender.hasPermission("mail.admin")) {
+                sender.sendMessage(LangManager.get(lang, "cmd.reset.no-permission")); // lang 추가 필요
+                return true;
+            }
+
+            if (args.length < 2) {
+                sender.sendMessage(LangManager.get(lang, "cmd.reset.usage")); // lang 추가 필요
+                return true;
+            }
+
+            String targetName = args[1];
+
+            // 비동기 UUID 조회
+            MailDataManager.getInstance().getGlobalUUID(targetName).thenAccept(targetUUID -> {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (targetUUID == null) {
+                        sender.sendMessage(LangManager.get(lang, "cmd.player.notfound").replace("%name%", targetName));
+                        return;
+                    }
+
+                    // 메일 데이터 초기화 실행
+                    MailDataManager.getInstance().resetPlayerMails(targetUUID);
+
+                    OfflinePlayer target = Bukkit.getOfflinePlayer(targetUUID);
+                    String realName = target.getName() != null ? target.getName() : targetName;
+
+                    sender.sendMessage(LangManager.get(lang, "cmd.reset.success").replace("%name%", realName)); // lang 추가 필요
+                });
+            });
+
+            return true;
+        }
+
         // ---------------- reload ----------------
         if (sub.equals("reload")) {
             plugin.reloadConfig();
             ConfigManager.reload();
-            LangManager.loadAll(plugin.getDataFolder());
+            // [수정] LangManager 업데이트 방식 변경에 맞춰 인스턴스 전달
+            LangManager.loadAll(MailManager.getInstance());
             sender.sendMessage(LangManager.get(lang, "cmd.reload"));
             return true;
         }
@@ -417,7 +470,8 @@ public class MailCommand implements CommandExecutor, TabCompleter {
         if (len == 2 && sub.equals("setlang"))
             return filterPrefix(LangManager.getAvailableLanguages(), prefix);
 
-        if (len == 2 && sub.equals("send")) {
+        // send 또는 reset: 플레이어 이름 자동완성
+        if (len == 2 && (sub.equals("send") || sub.equals("reset"))) {
             List<String> players = new ArrayList<>();
             for (OfflinePlayer p : PlayerCache.getCachedPlayers()) {
                 if (p.hasPlayedBefore()) {

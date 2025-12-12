@@ -19,6 +19,9 @@ public interface MailStorage {
     void batchInsertMails(List<MailRecord> list) throws Exception;
     void batchDeleteMails(List<MailRecord> list) throws Exception;
 
+    // 특정 플레이어의 모든 메일 삭제 (초기화)
+    void deletePlayerMails(UUID receiver) throws Exception;
+
     void saveNotifySetting(UUID uuid, boolean enabled) throws Exception;
     Boolean loadNotifySetting(UUID uuid) throws Exception;
 
@@ -33,4 +36,9 @@ public interface MailStorage {
 
     void saveInventory(int id, ItemStack[] contents) throws Exception;
     ItemStack[] loadInventory(int id) throws Exception;
+
+    // 멀티 서버 지원 (글로벌 플레이어 정보)
+    void updateGlobalPlayer(UUID uuid, String name) throws Exception;
+    UUID lookupGlobalUUID(String name) throws Exception;
+    String lookupGlobalName(UUID uuid) throws Exception;
 }

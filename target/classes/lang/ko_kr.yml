@@ -1,8 +1,6 @@
-# 언어 정보
 language:
   name: "한국어"
 
-# 명령어 관련 메시지
 cmd:
   inv:
     usage: "&c사용법: /mail inv <create|edit|open|delete> <id>"
@@ -20,9 +18,11 @@ cmd:
     target-online: "&a대상 플레이어가 온라인입니다."
     usage: "&e사용법: /mail send <플레이어> <아이템ID> [만료시간]"
     success: "&a%name% 님에게 우편을 성공적으로 보냈습니다."
+    no-permission: "&c메일을 보낼 권한이 없습니다."
   sendall:
     usage: "&e사용법: /mail sendall <아이템ID> [만료시간]"
     success: "&a총 %count%명의 플레이어에게 전체 우편을 발송했습니다."
+    no-permission: "&c전체 메일을 발송할 권한이 없습니다."
   reload: "&a설정을 리로드했습니다."
   player-only: "&c이 명령어는 플레이어만 사용할 수 있습니다."
   player:
@@ -37,8 +37,8 @@ cmd:
     usage: "&e사용법: /mail setlang <언어코드>"
     not-found: "&c'%lang%' 언어를 찾을 수 없습니다. 사용 가능한 언어: %langs%"
     success: "&a언어가 %lang%(으)로 설정되었습니다."
+    no-permission: "&c언어 설정 권한이 없습니다."
 
-# 우편 시스템 관련 메시지
 mail:
   attach:
     success: "&a아이템 %count% 개를 첨부했습니다."
@@ -64,6 +64,9 @@ mail:
   sendall:
     invalid: "&c보낼 아이템이 지정되지 않았습니다."
     success: "&a전체 우편을 발송했습니다. 발송은 순차적으로 진행됩니다."
+    start: "&a전체 메일 발송을 시작합니다..."
+    processing: "&c현재 메일 발송 중입니다. 잠시만 기다려주세요."
+    fail: "&c전체 메일 발송에 실패했습니다."
     cooldown: "&c너무 빨리 보낼 수 없습니다. 잠시 후 다시 시도해주세요."
     no_item: "&c보낼 아이템을 등록해주세요."
     select_first: "&c먼저 만료 시간을 설정하고, (필요하면) 제외 대상을 선택해주세요."
@@ -73,15 +76,19 @@ mail:
       main: "&6[!] 새로운 우편 도착"
       sub: "&f/mail 명령어로 확인하세요."
 
-# 접속 시 알림 메시지
 login:
   title:
     main: "&6읽지 않은 우편이 있습니다."
     sub: "&f총 %count% 개의 우편이 당신을 기다립니다."
   message: "&e읽지 않은 우편이 %count% 개 있습니다. &7(/mail)"
 
-# GUI 관련 텍스트
 gui:
+  page:
+    cooldown: "&c페이지를 너무 빨리 넘기지 마세요."
+    prev_lore:
+      - "&7이전 페이지로 이동합니다."
+    next_lore:
+      - "&7다음 페이지로 이동합니다."
   mailinv:
     edit:
       title: "&b메일 인벤토리 %id% &7[편집]"
@@ -98,6 +105,7 @@ gui:
     claim_success: "&a우편 아이템을 수령했습니다."
     deleted: "&c우편을 삭제했습니다."
     select_title: "&6다중 우편 선택 (%page%/%maxpage%)"
+    select_title_filtered: "&8선택 모드 (보낸이: %sender%)"
     select_name: "&6다중 우편 선택"
     select_lore: "&e다중으로 우편을 수령받거나 삭제합니다."
     claim_selected: "&a선택 수령"
@@ -110,6 +118,12 @@ gui:
       - "&c이 작업은 되돌릴 수 없습니다!"
     selected: "&a선택됨"
     no_selected: "&c선택된 메일이 없습니다."
+    search_lore:
+      - "&7특정 플레이어가 보낸 메일만 검색하여 봅니다."
+    search_prompt: "&e검색할 발신자 이름을 입력하세요. (초기화하려면 'reset' 입력)"
+    search_reset: "&a검색 필터를 초기화했습니다."
+    search_result: "&a조건에 맞는 메일 %count%개를 찾았습니다."
+    claim_success_count: "&a총 %count%개의 메일을 수령했습니다."
     lore:
       claim: "&e» 좌 클릭: 아이템 수령"
       delete: "&c» 우 클릭: 우편 삭제"
@@ -134,6 +148,9 @@ gui:
     item:
       first: "&7보낼 아이템 (&f첫 번째 아이템 표시)"
       more: "&7외 %count% 개의 아이템이 더 첨부되었습니다."
+      empty: "&c아이템 없음"
+      empty_lore:
+        - "&7아이템을 첨부하려면 여기에 넣으세요."
     attach:
       name: "&e아이템 첨부"
       lore: "&7보낼 아이템을 등록합니다."
@@ -149,7 +166,9 @@ gui:
       lore: "&7모든 우편의 만료 시간을 설정합니다."
     exclude:
       name: "&c제외 대상 설정"
-      lore: "&7전체 우편에서 제외할 플레이어를 선택합니다."
+      lore:
+        - "&7현재 제외된 플레이어: &c%count%명"
+        - "&e클릭하여 제외할 대상을 설정합니다."
     attach:
       name: "&e아이템 첨부"
       lore: "&7전체 우편에 포함할 아이템을 등록합니다."
@@ -167,23 +186,41 @@ gui:
     title: "&8차단 목록"
     name: "&8차단 목록"
     lore: "&7차단할 플레이어를 선택합니다."
-    search_prompt: "&7특정 플레이어로부터 오는 우편을 차단합니다."
-    allowed: "&a차단되지 않음"
-    blocked: "&c차단됨"
+    search_prompt:
+      - "&7클릭하여 플레이어를 검색합니다."
+    search_prompt_single: "&e채팅창에 차단할 플레이어의 이름을 입력하세요."
+    allowed:
+      - "&a상태: 허용됨"
+      - "&e클릭하여 차단"
+    blocked:
+      - "&c상태: 차단됨"
+      - "&e클릭하여 허용"
     unblocked: "&a%name% 님을 차단 해제했습니다."
     blocked_msg: "&c%name% 님을 차단했습니다."
     not_found: "&c'%input%' 플레이어를 찾을 수 없습니다."
+    self_error: "&c자기 자신은 차단할 수 없습니다."
   exclude:
-    title: "&8발송 제외 목록"
-    search: "&b플레이어 검색"
-    search.lore: "&7이름으로 플레이어를 검색하여 토글합니다."
-    search.prompt: "&e검색할 플레이어 이름을 채팅에 입력하세요."
+    title: "&8발송 제외 목록 (%page%/%maxpage%)"
+    search:
+      name: "&b플레이어 검색"
+      lore: "&7이름으로 플레이어를 검색하여 토글합니다."
+      prompt:
+        - "&e채팅창에 검색할 플레이어 이름을 입력하세요."
+      start: "&e채팅창에 검색할 플레이어의 이름을 입력하세요."
+      not_found: "&c'%input%' 플레이어를 찾을 수 없습니다."
+      self: "&c자기 자신은 제외할 수 없습니다."
     status:
-      excluded: "&c제외됨"
-      included: "&a포함됨"
-    excluded: "&c%name% 님을 제외 목록에 추가했습니다."
-    included: "&a%name% 님을 제외 목록에서 제거했습니다."
-    notfound: "&c'%input%' 플레이어를 찾을 수 없습니다."
+      excluded:
+        - "&c[제외됨]"
+        - "&7이 플레이어는 우편을 받지 않습니다."
+        - "&e클릭하여 다시 포함시킵니다."
+      included:
+        - "&a[포함됨]"
+        - "&7이 플레이어는 우편을 받습니다."
+        - "&e클릭하여 제외 목록에 추가합니다."
+    msg:
+      excluded: "&c%name% 님을 제외 목록에 추가했습니다."
+      included: "&a%name% 님을 제외 목록에서 제거했습니다."
   language:
     title: "&b언어 설정"
     name: "&b언어 설정"
@@ -216,18 +253,23 @@ gui:
     title: "&d받는 사람 선택 &7(%page%/%maxpage%)"
     invalid: "&c잘못된 대상입니다."
     selected: "&a대상을 '%target%' 님으로 설정했습니다."
+    self: "&c자기 자신에게는 메일을 보낼 수 없습니다."
   select-complete:
     name: "&a선택 완료"
     lore: "&7이 시간으로 설정하고 돌아갑니다."
   search:
     name: "&b플레이어 검색"
+    lore:
+      - "&7클릭하여 플레이어 이름을 검색합니다."
+    start: "&e채팅창에 검색할 플레이어의 이름을 입력하세요."
+    searching: "&e'%name%' 플레이어를 검색 중입니다..."
+    cancelled: "&c검색을 취소했습니다."
   previous: "&a이전 페이지"
   next: "&a다음 페이지"
   back:
     name: "&c뒤로가기"
     lore: "&7이전 메뉴로 돌아갑니다."
 
-# 시간 관련
 time:
   permanent: "&a영구"
   unit:

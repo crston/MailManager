@@ -56,11 +56,15 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
 
     public void open(Player player, int page) {
         UUID uuid = player.getUniqueId();
+        // 검색 대기 중이면 GUI 열지 않음
+        if (waitingForSearch.contains(uuid)) return;
+
         if (!loadingSet.add(uuid)) return;
         pageMap.put(uuid, page);
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
+                // 로컬 캐시 목록 (GUI 표시용)
                 List<OfflinePlayer> players = new ArrayList<>(PlayerCache.getCachedPlayers().size());
                 for (OfflinePlayer p : PlayerCache.getCachedPlayers()) {
                     if (p.getName() != null && !p.getUniqueId().equals(uuid)) {
@@ -92,10 +96,12 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
                             boolean isBlocked = blocked.contains(target.getUniqueId());
                             ItemStack head = new ItemStack(Material.PLAYER_HEAD);
                             SkullMeta meta = (SkullMeta) head.getItemMeta();
-                            meta.setDisplayName((isBlocked ? "§c" : "§a") + target.getName());
-                            meta.setOwningPlayer(target);
-                            meta.setLore(LangManager.getList(lang, isBlocked ? "gui.blacklist.blocked" : "gui.blacklist.allowed"));
-                            head.setItemMeta(meta);
+                            if (meta != null) {
+                                meta.setDisplayName((isBlocked ? "§c" : "§a") + target.getName());
+                                meta.setOwningPlayer(target);
+                                meta.setLore(LangManager.getList(lang, isBlocked ? "gui.blacklist.blocked" : "gui.blacklist.allowed"));
+                                head.setItemMeta(meta);
+                            }
                             inv.setItem(i, head);
                         }
 
@@ -160,6 +166,7 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
                 player.closeInventory();
                 waitingForSearch.add(uuid);
                 player.sendMessage(LangManager.get(uuid, "gui.blacklist.search_prompt_single"));
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
             }
             case SLOT_PREV -> open(player, page - 1);
             case SLOT_NEXT -> open(player, page + 1);
@@ -187,7 +194,7 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
                         player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked_msg").replace("%name%", name));
                     }
                     ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
-                    MailDataManager.getInstance().setBlacklist(uuid, blocked); // 캐시+비동기 flush
+                    MailDataManager.getInstance().setBlacklist(uuid, blocked);
                     open(player, page);
                 }
             }
@@ -198,9 +205,11 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
     public void onClose(InventoryCloseEvent e) {
         if (e.getInventory().getHolder() instanceof BlacklistSelectGUI) {
             UUID uuid = e.getPlayer().getUniqueId();
-            pageMap.remove(uuid);
+            // 검색 모드가 아닐 때만 페이지 정보 삭제
+            if (!waitingForSearch.contains(uuid)) {
+                pageMap.remove(uuid);
+            }
             loadingSet.remove(uuid);
-            waitingForSearch.remove(uuid);
         }
     }
 
@@ -211,28 +220,47 @@ public class BlacklistSelectGUI implements Listener, InventoryHolder {
         if (!waitingForSearch.remove(uuid)) return;
 
         e.setCancelled(true);
-        String input = e.getMessage();
-        OfflinePlayer target = PlayerCache.getByName(input);
+        String input = e.getMessage().trim();
+        int currentPage = pageMap.getOrDefault(uuid, 0);
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            int currentPage = pageMap.getOrDefault(uuid, 0);
-            if (target == null || target.getName() == null) {
-                player.sendMessage(LangManager.get(uuid, "gui.blacklist.not_found").replace("%input%", input));
+        // 취소 명령어 처리
+        if (input.equalsIgnoreCase("cancel") || input.equalsIgnoreCase("취소")) {
+            player.sendMessage(LangManager.get(uuid, "gui.search.cancelled"));
+            Bukkit.getScheduler().runTask(plugin, () -> open(player, currentPage));
+            return;
+        }
+
+        // [수정됨] 글로벌 플레이어 검색
+        MailDataManager.getInstance().getGlobalUUID(input).thenAccept(targetUUID -> {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (targetUUID == null) {
+                    player.sendMessage(LangManager.get(uuid, "gui.blacklist.not_found").replace("%input%", input));
+                    open(player, currentPage);
+                    return;
+                }
+
+                if (targetUUID.equals(uuid)) {
+                    player.sendMessage(LangManager.get(uuid, "gui.blacklist.self_error")); // lang 추가 필요
+                    open(player, currentPage);
+                    return;
+                }
+
+                OfflinePlayer target = Bukkit.getOfflinePlayer(targetUUID);
+                String name = target.getName() != null ? target.getName() : input;
+
+                Set<UUID> blocked = new HashSet<>(MailDataManager.getInstance().getBlacklist(uuid));
+                if (blocked.contains(targetUUID)) {
+                    blocked.remove(targetUUID);
+                    player.sendMessage(LangManager.get(uuid, "gui.blacklist.unblocked").replace("%name%", name));
+                } else {
+                    blocked.add(targetUUID);
+                    player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked_msg").replace("%name%", name));
+                }
+                MailDataManager.getInstance().setBlacklist(uuid, blocked);
+
+                // 작업 완료 후 GUI 다시 열기
                 open(player, currentPage);
-                return;
-            }
-
-            Set<UUID> blocked = new HashSet<>(MailDataManager.getInstance().getBlacklist(uuid));
-            UUID targetId = target.getUniqueId();
-            if (blocked.contains(targetId)) {
-                blocked.remove(targetId);
-                player.sendMessage(LangManager.get(uuid, "gui.blacklist.unblocked").replace("%name%", target.getName()));
-            } else {
-                blocked.add(targetId);
-                player.sendMessage(LangManager.get(uuid, "gui.blacklist.blocked_msg").replace("%name%", target.getName()));
-            }
-            MailDataManager.getInstance().setBlacklist(uuid, blocked); // 캐시+비동기 flush
-            open(player, currentPage);
+            });
         });
     }
 }

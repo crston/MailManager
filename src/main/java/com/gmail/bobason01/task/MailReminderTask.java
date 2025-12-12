@@ -7,6 +7,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
+import java.util.UUID;
+
 public class MailReminderTask {
 
     public static void start(Plugin plugin) {
@@ -14,14 +16,19 @@ public class MailReminderTask {
 
         Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
             for (Player player : Bukkit.getOnlinePlayers()) {
-                if (!MailDataManager.getInstance().isNotify(player.getUniqueId())) continue;
+                UUID uuid = player.getUniqueId();
 
-                int unreadCount = MailDataManager.getInstance().getUnreadMails(player.getUniqueId()).size();
+                // [중요] 타 서버에서 온 메일을 감지하기 위해 주기적으로 DB 리로드
+                MailDataManager.getInstance().forceReloadMails(uuid);
+
+                if (!MailDataManager.getInstance().isNotify(uuid)) continue;
+
+                int unreadCount = MailDataManager.getInstance().getUnreadMails(uuid).size();
                 if (unreadCount > 0) {
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         if (!player.isOnline()) return;
 
-                        String lang = LangManager.getLanguage(player.getUniqueId());
+                        String lang = LangManager.getLanguage(uuid);
 
                         player.sendMessage(LangManager.get(lang, "mail.notify.message")
                                 .replace("%count%", String.valueOf(unreadCount)));

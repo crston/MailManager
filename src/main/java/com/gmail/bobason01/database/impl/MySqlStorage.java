@@ -78,6 +78,15 @@ public class MySqlStorage implements MailStorage {
                             "lang VARCHAR(16)" +
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
+
+            st.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS global_players (" +
+                            "uuid VARCHAR(36) PRIMARY KEY," +
+                            "name VARCHAR(16) NOT NULL," +
+                            "last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP," +
+                            "INDEX idx_global_name (name)" +
+                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+            );
         }
     }
 
@@ -85,10 +94,8 @@ public class MySqlStorage implements MailStorage {
     public List<Mail> loadMails(UUID receiver) throws Exception {
         List<Mail> list = new ArrayList<>();
         String sql = "SELECT data FROM mails WHERE receiver=?";
-
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-
             ps.setString(1, receiver.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -103,10 +110,8 @@ public class MySqlStorage implements MailStorage {
     @Override
     public void batchInsertMails(List<MailRecord> list) throws Exception {
         if (list.isEmpty()) return;
-
         String sql = "INSERT INTO mails(id, receiver, data) VALUES(?,?,?) " +
                 "ON DUPLICATE KEY UPDATE receiver=VALUES(receiver), data=VALUES(data)";
-
         try (Connection conn = ds.getConnection()) {
             conn.setAutoCommit(false);
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -125,9 +130,7 @@ public class MySqlStorage implements MailStorage {
     @Override
     public void batchDeleteMails(List<MailRecord> list) throws Exception {
         if (list.isEmpty()) return;
-
         String sql = "DELETE FROM mails WHERE id=?";
-
         try (Connection conn = ds.getConnection()) {
             conn.setAutoCommit(false);
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -141,14 +144,23 @@ public class MySqlStorage implements MailStorage {
         }
     }
 
+    // [추가됨] 플레이어 메일 전체 삭제
+    @Override
+    public void deletePlayerMails(UUID receiver) throws Exception {
+        String sql = "DELETE FROM mails WHERE receiver=?";
+        try (Connection conn = ds.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, receiver.toString());
+            ps.executeUpdate();
+        }
+    }
+
     @Override
     public void saveNotifySetting(UUID uuid, boolean enabled) throws Exception {
         String sql = "INSERT INTO notify_settings(uuid, enabled) VALUES(?,?) " +
                 "ON DUPLICATE KEY UPDATE enabled=VALUES(enabled)";
-
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-
             ps.setString(1, uuid.toString());
             ps.setBoolean(2, enabled);
             ps.executeUpdate();
@@ -160,7 +172,6 @@ public class MySqlStorage implements MailStorage {
         String sql = "SELECT enabled FROM notify_settings WHERE uuid=?";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-
             ps.setString(1, uuid.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) return rs.getBoolean(1);
@@ -173,15 +184,12 @@ public class MySqlStorage implements MailStorage {
     public void saveBlacklist(UUID owner, Set<UUID> list) throws Exception {
         String del = "DELETE FROM blacklist WHERE owner=?";
         String ins = "INSERT INTO blacklist(owner, target) VALUES(?,?)";
-
         try (Connection conn = ds.getConnection()) {
             conn.setAutoCommit(false);
-
             try (PreparedStatement ps = conn.prepareStatement(del)) {
                 ps.setString(1, owner.toString());
                 ps.executeUpdate();
             }
-
             if (!list.isEmpty()) {
                 try (PreparedStatement ps = conn.prepareStatement(ins)) {
                     for (UUID t : list) {
@@ -192,7 +200,6 @@ public class MySqlStorage implements MailStorage {
                     ps.executeBatch();
                 }
             }
-
             conn.commit();
         }
     }
@@ -201,10 +208,8 @@ public class MySqlStorage implements MailStorage {
     public Set<UUID> loadBlacklist(UUID owner) throws Exception {
         Set<UUID> out = new HashSet<>();
         String sql = "SELECT target FROM blacklist WHERE owner=?";
-
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-
             ps.setString(1, owner.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) out.add(UUID.fromString(rs.getString(1)));
@@ -217,15 +222,12 @@ public class MySqlStorage implements MailStorage {
     public void saveExclude(UUID owner, Set<UUID> list) throws Exception {
         String del = "DELETE FROM exclude_list WHERE owner=?";
         String ins = "INSERT INTO exclude_list(owner, target) VALUES(?,?)";
-
         try (Connection conn = ds.getConnection()) {
             conn.setAutoCommit(false);
-
             try (PreparedStatement ps = conn.prepareStatement(del)) {
                 ps.setString(1, owner.toString());
                 ps.executeUpdate();
             }
-
             if (!list.isEmpty()) {
                 try (PreparedStatement ps = conn.prepareStatement(ins)) {
                     for (UUID t : list) {
@@ -236,7 +238,6 @@ public class MySqlStorage implements MailStorage {
                     ps.executeBatch();
                 }
             }
-
             conn.commit();
         }
     }
@@ -245,10 +246,8 @@ public class MySqlStorage implements MailStorage {
     public Set<UUID> loadExclude(UUID owner) throws Exception {
         Set<UUID> out = new HashSet<>();
         String sql = "SELECT target FROM exclude_list WHERE owner=?";
-
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-
             ps.setString(1, owner.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) out.add(UUID.fromString(rs.getString(1)));
@@ -261,10 +260,8 @@ public class MySqlStorage implements MailStorage {
     public void savePlayerLanguage(UUID uuid, String lang) throws Exception {
         String sql = "INSERT INTO player_lang(uuid, lang) VALUES(?,?) " +
                 "ON DUPLICATE KEY UPDATE lang=VALUES(lang)";
-
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-
             ps.setString(1, uuid.toString());
             ps.setString(2, lang);
             ps.executeUpdate();
@@ -274,10 +271,8 @@ public class MySqlStorage implements MailStorage {
     @Override
     public String loadPlayerLanguage(UUID uuid) throws Exception {
         String sql = "SELECT lang FROM player_lang WHERE uuid=?";
-
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-
             ps.setString(1, uuid.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) return rs.getString(1);
@@ -291,7 +286,6 @@ public class MySqlStorage implements MailStorage {
         String sql = "REPLACE INTO inventories(id, data) VALUES(?,?)";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-
             ps.setInt(1, id);
             ps.setBytes(2, serialize(contents));
             ps.executeUpdate();
@@ -303,7 +297,6 @@ public class MySqlStorage implements MailStorage {
         String sql = "SELECT data FROM inventories WHERE id=?";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) return deserialize(rs.getBytes(1));
@@ -312,10 +305,47 @@ public class MySqlStorage implements MailStorage {
         return null;
     }
 
+    @Override
+    public void updateGlobalPlayer(UUID uuid, String name) throws Exception {
+        String sql = "INSERT INTO global_players(uuid, name) VALUES(?,?) " +
+                "ON DUPLICATE KEY UPDATE name=VALUES(name), last_seen=CURRENT_TIMESTAMP";
+        try (Connection conn = ds.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, name);
+            ps.executeUpdate();
+        }
+    }
+
+    @Override
+    public UUID lookupGlobalUUID(String name) throws Exception {
+        String sql = "SELECT uuid FROM global_players WHERE name = ?";
+        try (Connection conn = ds.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, name);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return UUID.fromString(rs.getString(1));
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public String lookupGlobalName(UUID uuid) throws Exception {
+        String sql = "SELECT name FROM global_players WHERE uuid = ?";
+        try (Connection conn = ds.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, uuid.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getString(1);
+            }
+        }
+        return null;
+    }
+
     private byte[] serialize(Object obj) throws Exception {
         try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
              BukkitObjectOutputStream oos = new BukkitObjectOutputStream(bos)) {
-
             oos.writeObject(obj);
             return bos.toByteArray();
         }
@@ -324,7 +354,6 @@ public class MySqlStorage implements MailStorage {
     private ItemStack[] deserialize(byte[] data) throws Exception {
         try (ByteArrayInputStream bis = new ByteArrayInputStream(data);
              BukkitObjectInputStream ois = new BukkitObjectInputStream(bis)) {
-
             return (ItemStack[]) ois.readObject();
         }
     }

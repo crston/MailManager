@@ -9,6 +9,7 @@ import com.gmail.bobason01.database.impl.MySqlStorage;
 import com.gmail.bobason01.database.impl.YamlStorage;
 import com.gmail.bobason01.lang.LangManager;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -82,6 +83,8 @@ public class MailDataManager {
             for (Player p : Bukkit.getOnlinePlayers()) {
                 UUID u = p.getUniqueId();
                 try {
+                    updateGlobalPlayerInfo(u, p.getName()); // 접속 중인 플레이어 정보 갱신
+
                     List<Mail> mails = storage.loadMails(u);
                     mailCache.put(u, new CopyOnWriteArrayList<>(mails));
                     for (Mail m : mails) {
@@ -168,6 +171,76 @@ public class MailDataManager {
             excludeCache.clear();
             languageCache.clear();
             inventoryCache.clear();
+        }
+    }
+
+    // --- Global Player Info Methods ---
+
+    public void updateGlobalPlayerInfo(UUID uuid, String name) {
+        if (storage == null) return;
+        dbExecutor.submit(() -> {
+            try {
+                storage.updateGlobalPlayer(uuid, name);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    public CompletableFuture<UUID> getGlobalUUID(String name) {
+        if (storage == null) return CompletableFuture.completedFuture(null);
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return storage.lookupGlobalUUID(name);
+            } catch (Exception e) {
+                e.printStackTrace();
+                return null;
+            }
+        }, dbExecutor);
+    }
+
+    public String getGlobalName(UUID uuid) {
+        if (uuid == null) return "Unknown";
+
+        // 1. 로컬 캐시/Bukkit 확인 (가장 빠름)
+        OfflinePlayer op = Bukkit.getOfflinePlayer(uuid);
+        if (op.getName() != null) return op.getName();
+
+        // 2. DB 조회 (GUI 타이틀 등에서 필요 시 동기 호출)
+        if (storage != null) {
+            try {
+                String name = storage.lookupGlobalName(uuid);
+                if (name != null) return name;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return "Unknown";
+    }
+
+    // --- End Global Player Info Methods ---
+
+    // [추가됨] 플레이어 메일 초기화
+    public void resetPlayerMails(UUID receiver) {
+        // 1. 캐시 정리
+        List<Mail> removedMails = mailCache.remove(receiver);
+        if (removedMails != null) {
+            for (Mail mail : removedMails) {
+                if (mail != null) {
+                    mailIdCache.remove(mail.getMailId());
+                }
+            }
+        }
+
+        // 2. DB 삭제 (비동기)
+        if (storage != null) {
+            dbExecutor.submit(() -> {
+                try {
+                    storage.deletePlayerMails(receiver);
+                } catch (Exception e) {
+                    Bukkit.getLogger().log(Level.SEVERE, "[MailManager] Failed to reset mails for " + receiver, e);
+                }
+            });
         }
     }
 
@@ -477,7 +550,6 @@ public class MailDataManager {
 
     public void forceReloadMails(UUID id) {
         if (storage == null) {
-            Bukkit.getLogger().warning("[MailManager] Force reload requested but storage is null for " + id);
             return;
         }
         try {

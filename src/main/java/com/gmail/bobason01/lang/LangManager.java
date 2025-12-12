@@ -5,9 +5,11 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -21,9 +23,12 @@ public class LangManager {
     private static final Map<String, YamlConfiguration> langConfigs = new HashMap<>();
     private static final Map<UUID, String> userLang = new ConcurrentHashMap<>();
 
-    public static void loadAll(File dataFolder) {
+    // JavaPlugin 인스턴스를 받도록 수정 (getResource 사용을 위해)
+    public static void loadAll(JavaPlugin plugin) {
         langConfigs.clear();
+        File dataFolder = plugin.getDataFolder();
 
+        // config.yml에서 기본 언어 설정 로드
         File configFile = new File(dataFolder, "config.yml");
         if (configFile.exists()) {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
@@ -38,13 +43,40 @@ public class LangManager {
         File[] files = langFolder.listFiles((dir, name) -> name.endsWith(".yml"));
         if (files != null) {
             for (File file : files) {
-                String lang = file.getName().replace(".yml", "");
+                String fileName = file.getName();
+                String lang = fileName.replace(".yml", "");
                 YamlConfiguration config = new YamlConfiguration();
+
                 try (InputStreamReader reader = new InputStreamReader(Files.newInputStream(file.toPath()), StandardCharsets.UTF_8)) {
                     config.load(reader);
+
+                    // [추가된 로직] JAR 내부의 원본 파일과 비교하여 누락된 키 추가
+                    InputStream internalStream = plugin.getResource("lang/" + fileName);
+                    if (internalStream != null) {
+                        try (InputStreamReader internalReader = new InputStreamReader(internalStream, StandardCharsets.UTF_8)) {
+                            YamlConfiguration internalConfig = YamlConfiguration.loadConfiguration(internalReader);
+                            boolean changed = false;
+
+                            // 내부 파일의 모든 키를 순회하며 디스크 파일에 없는 경우 추가
+                            for (String key : internalConfig.getKeys(true)) {
+                                if (!config.contains(key)) {
+                                    config.set(key, internalConfig.get(key));
+                                    changed = true;
+                                }
+                            }
+
+                            // 변경 사항이 있으면 파일 저장
+                            if (changed) {
+                                config.save(file);
+                                Bukkit.getLogger().info("[MailManager] Updated language file: " + fileName);
+                            }
+                        }
+                    }
+
                     langConfigs.put(lang, config);
+
                 } catch (IOException | InvalidConfigurationException e) {
-                    Bukkit.getLogger().log(Level.WARNING, "[MailManager] Failed to load language file: " + file.getName(), e);
+                    Bukkit.getLogger().log(Level.WARNING, "[MailManager] Failed to load language file: " + fileName, e);
                 }
             }
         }

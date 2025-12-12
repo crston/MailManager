@@ -2,18 +2,24 @@ name: MailManager
 version: 21.0
 main: com.gmail.bobason01.MailManager
 api-version: 1.16
-author: bobason01
+author: crston
 commands:
   mail:
-    description: Mail System Command
-    usage: /mail [send | sendall | reload | setlang]
+    description: Opens the mail GUI or manages mail commands.
+    usage: /mail [subcommand]
 permissions:
   mail.use:
-    description: Allows players to use the mail system
+    description: Allows opening the mailbox.
     default: true
   mail.send:
-    description: Allows send mail to other players
+    description: Allows sending mail to other players.
+    default: true
+  mail.sendall:
+    description: Allows sending global mail to all players.
     default: op
   mail.admin:
-    description: Allows access to administrative mail features
+    description: Admin permissions (reload, setlang, reset).
+    default: op
+  mail.inv.manage:
+    description: Allows creating/editing virtual inventories.
     default: op

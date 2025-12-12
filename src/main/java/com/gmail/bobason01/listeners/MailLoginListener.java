@@ -25,8 +25,15 @@ public class MailLoginListener implements Listener {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
 
+        // [중요] 접속 시 글로벌 플레이어 정보 업데이트 (멀티 서버 지원)
+        MailDataManager.getInstance().updateGlobalPlayerInfo(uuid, player.getName());
+
         Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
             if (!player.isOnline()) return;
+
+            // [중요] 로그인 시 DB에서 최신 메일 목록 강제 로드 (다른 서버에서 보낸 메일 확인)
+            MailDataManager.getInstance().forceReloadMails(uuid);
+
             if (MailDataManager.getInstance().isNotify(uuid)
                     && !MailDataManager.getInstance().getUnreadMails(uuid).isEmpty()) {
                 Bukkit.getScheduler().runTask(plugin, () -> sendMailNotification(player));
