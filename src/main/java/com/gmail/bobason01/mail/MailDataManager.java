@@ -81,34 +81,8 @@ public class MailDataManager {
             storage.ensureSchema();
 
             for (Player p : Bukkit.getOnlinePlayers()) {
-                UUID u = p.getUniqueId();
-                try {
-                    updateGlobalPlayerInfo(u, p.getName());
-
-                    List<Mail> mails = storage.loadMails(u);
-                    mailCache.put(u, new CopyOnWriteArrayList<>(mails));
-                    for (Mail m : mails) {
-                        if (m != null) mailIdCache.put(m.getMailId(), m);
-                    }
-
-                    Boolean notify = storage.loadNotifySetting(u);
-                    notifyCache.put(u, notify == null || notify);
-
-                    Set<UUID> bl = storage.loadBlacklist(u);
-                    blacklistCache.put(u, new HashSet<>(bl));
-
-                    Set<UUID> ex = storage.loadExclude(u);
-                    excludeCache.put(u, new HashSet<>(ex));
-
-                    String lang = storage.loadPlayerLanguage(u);
-                    if (lang != null) {
-                        languageCache.put(u, lang);
-                        LangManager.loadUserLanguage(u, lang);
-                    }
-
-                } catch (Exception e) {
-                    Bukkit.getLogger().log(Level.WARNING, "[MailManager] Load failed for " + u, e);
-                }
+                // 리로드 시 온라인 유저 데이터 로드
+                loadPlayerData(p.getUniqueId(), p.getName());
             }
 
         } catch (Exception e) {
@@ -119,6 +93,44 @@ public class MailDataManager {
         if (storage == null) {
             plugin.getLogger().severe("[MailManager] Storage not available. Disabling plugin.");
             Bukkit.getPluginManager().disablePlugin(plugin);
+        }
+    }
+
+    // 플레이어 개인 데이터 로드
+    public void loadPlayerData(UUID uuid, String name) {
+        if (storage == null) return;
+
+        // 글로벌 정보 업데이트 (비동기)
+        updateGlobalPlayerInfo(uuid, name);
+
+        try {
+            // 메일 로드
+            List<Mail> mails = storage.loadMails(uuid);
+            mailCache.put(uuid, new CopyOnWriteArrayList<>(mails));
+            for (Mail m : mails) {
+                if (m != null) mailIdCache.put(m.getMailId(), m);
+            }
+
+            // 알림 설정 로드
+            Boolean notify = storage.loadNotifySetting(uuid);
+            notifyCache.put(uuid, notify != null ? notify : true);
+
+            // 차단/제외 목록 로드
+            Set<UUID> bl = storage.loadBlacklist(uuid);
+            blacklistCache.put(uuid, new HashSet<>(bl));
+
+            Set<UUID> ex = storage.loadExclude(uuid);
+            excludeCache.put(uuid, new HashSet<>(ex));
+
+            // 언어 설정 로드
+            String lang = storage.loadPlayerLanguage(uuid);
+            if (lang != null) {
+                languageCache.put(uuid, lang);
+                LangManager.loadUserLanguage(uuid, lang);
+            }
+
+        } catch (Exception e) {
+            Bukkit.getLogger().log(Level.WARNING, "[MailManager] Failed to load data for " + uuid, e);
         }
     }
 
@@ -208,17 +220,11 @@ public class MailDataManager {
         return "Unknown";
     }
 
-    // sendall을 위한 모든 글로벌 유저 UUID 가져오기
     public CompletableFuture<Set<UUID>> getAllGlobalUUIDsAsync() {
         if (storage == null) return CompletableFuture.completedFuture(Collections.emptySet());
         return CompletableFuture.supplyAsync(() -> {
             try {
-                // 주의: MailStorage 인터페이스에 getAllGlobalUUIDs 메서드가 있어야 합니다.
-                // 인터페이스에 없다면 형변환을 통해 호출합니다.
-                if (storage instanceof MySqlStorage s) return s.getAllGlobalUUIDs();
-                if (storage instanceof JdbcStorage s) return s.getAllGlobalUUIDs();
-                if (storage instanceof YamlStorage s) return s.getAllGlobalUUIDs();
-                return Collections.emptySet();
+                return storage.getAllGlobalUUIDs();
             } catch (Exception e) {
                 e.printStackTrace();
                 return Collections.emptySet();
@@ -226,7 +232,6 @@ public class MailDataManager {
         }, dbExecutor);
     }
 
-    // [추가] 플레이어 메일 전체 초기화
     public void resetPlayerMails(UUID receiver) {
         List<Mail> removedMails = mailCache.remove(receiver);
         if (removedMails != null) {

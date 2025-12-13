@@ -25,20 +25,20 @@ public class MailLoginListener implements Listener {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
 
-        // [중요] 접속 시 글로벌 플레이어 정보 업데이트 (멀티 서버 지원)
-        MailDataManager.getInstance().updateGlobalPlayerInfo(uuid, player.getName());
+        // [중요] 비동기로 플레이어 데이터(알림 설정 등)를 DB에서 로드
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            MailDataManager.getInstance().loadPlayerData(uuid, player.getName());
 
-        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-            if (!player.isOnline()) return;
+            // 로드 후 알림 체크 (메인 스레드에서 UI 처리)
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!player.isOnline()) return;
 
-            // [중요] 로그인 시 DB에서 최신 메일 목록 강제 로드 (다른 서버에서 보낸 메일 확인)
-            MailDataManager.getInstance().forceReloadMails(uuid);
-
-            if (MailDataManager.getInstance().isNotify(uuid)
-                    && !MailDataManager.getInstance().getUnreadMails(uuid).isEmpty()) {
-                Bukkit.getScheduler().runTask(plugin, () -> sendMailNotification(player));
-            }
-        }, 60L);
+                if (MailDataManager.getInstance().isNotify(uuid)
+                        && !MailDataManager.getInstance().getUnreadMails(uuid).isEmpty()) {
+                    sendMailNotification(player);
+                }
+            });
+        });
     }
 
     private void sendMailNotification(Player player) {
@@ -53,8 +53,7 @@ public class MailLoginListener implements Listener {
                 10, 60, 10
         );
 
-        player.sendMessage(LangManager.get(lang, "login.message"));
-
+        player.sendMessage(LangManager.get(lang, "login.message").replace("%count%", String.valueOf(unreadCount)));
         ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_RECEIVE_NOTIFICATION);
     }
 }

@@ -82,8 +82,10 @@ public class MailDeleteConfirmGUI implements Listener, InventoryHolder {
 
         if (slot == YES_SLOT) {
             for (Mail mail : gui.mails) {
-                MailDataManager.getInstance().removeMail(mail); // 캐시+비동기 flush
+                MailDataManager.getInstance().removeMail(mail);
             }
+            MailDataManager.getInstance().flushNow();
+
             if (gui.mails.size() > 1) {
                 p.sendMessage(LangManager.get(uuid, "mail.deleted_multi")
                         .replace("{count}", String.valueOf(gui.mails.size())));
@@ -91,14 +93,18 @@ public class MailDeleteConfirmGUI implements Listener, InventoryHolder {
                 p.sendMessage(LangManager.get(uuid, "mail.deleted"));
             }
             ConfigManager.playSound(p, ConfigManager.SoundType.MAIL_DELETE_SUCCESS);
+
             p.closeInventory();
+            // 싱글톤 인스턴스로 메일 목록 열기
             Bukkit.getScheduler().runTaskLater(plugin, () ->
                     MailManager.getInstance().mailGUI.open(p), 2L
             );
         } else if (slot == NO_SLOT) {
             p.sendMessage(LangManager.get(uuid, "mail.delete_cancel"));
             ConfigManager.playSound(p, ConfigManager.SoundType.GUI_CLICK);
+
             p.closeInventory();
+            // 싱글톤 인스턴스로 메일 목록 열기
             Bukkit.getScheduler().runTaskLater(plugin, () ->
                     MailManager.getInstance().mailGUI.open(p), 2L
             );
