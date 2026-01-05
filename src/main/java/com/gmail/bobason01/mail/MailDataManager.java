@@ -425,8 +425,14 @@ public class MailDataManager {
         return now;
     }
 
+    // null 값 안전하게 처리 (NullPointerException 방지)
     public void savePlayerLanguage(UUID u, String lang) {
-        languageCache.put(u, lang);
+        if (lang == null) {
+            languageCache.remove(u);
+        } else {
+            languageCache.put(u, lang);
+        }
+
         if (storage == null) return;
         submitMeta(() -> {
             try {
