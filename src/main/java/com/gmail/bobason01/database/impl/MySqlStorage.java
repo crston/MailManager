@@ -23,16 +23,21 @@ public class MySqlStorage implements MailStorage {
 
     @Override
     public void connect() throws Exception {
+        // 데이터소스가 이미 연결 풀을 관리하므로 별도 동작 없음
     }
 
     @Override
     public void disconnect() throws Exception {
+        if (ds instanceof com.zaxxer.hikari.HikariDataSource) {
+            ((com.zaxxer.hikari.HikariDataSource) ds).close();
+        }
     }
 
     @Override
     public void ensureSchema() throws Exception {
         try (Connection conn = ds.getConnection(); Statement st = conn.createStatement()) {
 
+            // 메일 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS mails (" +
                             "id VARCHAR(36) PRIMARY KEY," +
@@ -42,6 +47,7 @@ public class MySqlStorage implements MailStorage {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
 
+            // 인벤토리 백업 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS inventories (" +
                             "id INT PRIMARY KEY," +
@@ -49,6 +55,7 @@ public class MySqlStorage implements MailStorage {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
 
+            // 알림 설정 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS notify_settings (" +
                             "uuid VARCHAR(36) PRIMARY KEY," +
@@ -56,6 +63,7 @@ public class MySqlStorage implements MailStorage {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
 
+            // 차단 목록 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS blacklist (" +
                             "owner VARCHAR(36) NOT NULL," +
@@ -64,6 +72,7 @@ public class MySqlStorage implements MailStorage {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
 
+            // 전체 발송 제외 목록 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS exclude_list (" +
                             "owner VARCHAR(36) NOT NULL," +
@@ -72,6 +81,7 @@ public class MySqlStorage implements MailStorage {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
 
+            // 언어 설정 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS player_lang (" +
                             "uuid VARCHAR(36) PRIMARY KEY," +
@@ -79,6 +89,7 @@ public class MySqlStorage implements MailStorage {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
 
+            // 글로벌 플레이어 정보 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS global_players (" +
                             "uuid VARCHAR(36) PRIMARY KEY," +
@@ -110,9 +121,12 @@ public class MySqlStorage implements MailStorage {
     @Override
     public void batchInsertMails(List<MailRecord> list) throws Exception {
         if (list.isEmpty()) return;
+        // MySQL 전용 문법 사용
         String sql = "INSERT INTO mails(id, receiver, data) VALUES(?,?,?) " +
                 "ON DUPLICATE KEY UPDATE receiver=VALUES(receiver), data=VALUES(data)";
+
         try (Connection conn = ds.getConnection()) {
+            boolean autoCommit = conn.getAutoCommit();
             conn.setAutoCommit(false);
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 for (MailRecord rec : list) {
@@ -122,8 +136,13 @@ public class MySqlStorage implements MailStorage {
                     ps.addBatch();
                 }
                 ps.executeBatch();
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(autoCommit);
             }
-            conn.commit();
         }
     }
 
@@ -132,6 +151,7 @@ public class MySqlStorage implements MailStorage {
         if (list.isEmpty()) return;
         String sql = "DELETE FROM mails WHERE id=?";
         try (Connection conn = ds.getConnection()) {
+            boolean autoCommit = conn.getAutoCommit();
             conn.setAutoCommit(false);
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 for (MailRecord rec : list) {
@@ -139,8 +159,13 @@ public class MySqlStorage implements MailStorage {
                     ps.addBatch();
                 }
                 ps.executeBatch();
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(autoCommit);
             }
-            conn.commit();
         }
     }
 
@@ -176,30 +201,38 @@ public class MySqlStorage implements MailStorage {
                 if (rs.next()) return rs.getBoolean(1);
             }
         }
-        return true;
+        return null;
     }
 
     @Override
     public void saveBlacklist(UUID owner, Set<UUID> list) throws Exception {
         String del = "DELETE FROM blacklist WHERE owner=?";
-        String ins = "INSERT INTO blacklist(owner, target) VALUES(?,?)";
+        String ins = "INSERT IGNORE INTO blacklist(owner, target) VALUES(?,?)";
         try (Connection conn = ds.getConnection()) {
+            boolean autoCommit = conn.getAutoCommit();
             conn.setAutoCommit(false);
-            try (PreparedStatement ps = conn.prepareStatement(del)) {
-                ps.setString(1, owner.toString());
-                ps.executeUpdate();
-            }
-            if (!list.isEmpty()) {
-                try (PreparedStatement ps = conn.prepareStatement(ins)) {
-                    for (UUID t : list) {
-                        ps.setString(1, owner.toString());
-                        ps.setString(2, t.toString());
-                        ps.addBatch();
-                    }
-                    ps.executeBatch();
+            try {
+                try (PreparedStatement ps = conn.prepareStatement(del)) {
+                    ps.setString(1, owner.toString());
+                    ps.executeUpdate();
                 }
+                if (!list.isEmpty()) {
+                    try (PreparedStatement ps = conn.prepareStatement(ins)) {
+                        for (UUID t : list) {
+                            ps.setString(1, owner.toString());
+                            ps.setString(2, t.toString());
+                            ps.addBatch();
+                        }
+                        ps.executeBatch();
+                    }
+                }
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(autoCommit);
             }
-            conn.commit();
         }
     }
 
@@ -220,24 +253,32 @@ public class MySqlStorage implements MailStorage {
     @Override
     public void saveExclude(UUID owner, Set<UUID> list) throws Exception {
         String del = "DELETE FROM exclude_list WHERE owner=?";
-        String ins = "INSERT INTO exclude_list(owner, target) VALUES(?,?)";
+        String ins = "INSERT IGNORE INTO exclude_list(owner, target) VALUES(?,?)";
         try (Connection conn = ds.getConnection()) {
+            boolean autoCommit = conn.getAutoCommit();
             conn.setAutoCommit(false);
-            try (PreparedStatement ps = conn.prepareStatement(del)) {
-                ps.setString(1, owner.toString());
-                ps.executeUpdate();
-            }
-            if (!list.isEmpty()) {
-                try (PreparedStatement ps = conn.prepareStatement(ins)) {
-                    for (UUID t : list) {
-                        ps.setString(1, owner.toString());
-                        ps.setString(2, t.toString());
-                        ps.addBatch();
-                    }
-                    ps.executeBatch();
+            try {
+                try (PreparedStatement ps = conn.prepareStatement(del)) {
+                    ps.setString(1, owner.toString());
+                    ps.executeUpdate();
                 }
+                if (!list.isEmpty()) {
+                    try (PreparedStatement ps = conn.prepareStatement(ins)) {
+                        for (UUID t : list) {
+                            ps.setString(1, owner.toString());
+                            ps.setString(2, t.toString());
+                            ps.addBatch();
+                        }
+                        ps.executeBatch();
+                    }
+                }
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(autoCommit);
             }
-            conn.commit();
         }
     }
 
@@ -282,7 +323,8 @@ public class MySqlStorage implements MailStorage {
 
     @Override
     public void saveInventory(int id, ItemStack[] contents) throws Exception {
-        String sql = "REPLACE INTO inventories(id, data) VALUES(?,?)";
+        String sql = "INSERT INTO inventories(id, data) VALUES(?,?) " +
+                "ON DUPLICATE KEY UPDATE data=VALUES(data)";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
@@ -342,7 +384,6 @@ public class MySqlStorage implements MailStorage {
         return null;
     }
 
-    // [추가된 메서드]
     @Override
     public Set<UUID> getAllGlobalUUIDs() throws Exception {
         Set<UUID> uuids = new HashSet<>();

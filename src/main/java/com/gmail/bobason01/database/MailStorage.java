@@ -9,23 +9,24 @@ import java.util.UUID;
 
 public interface MailStorage {
 
-    // 배치 처리를 위한 레코드 클래스
-    record MailRecord(UUID receiver, Mail mail) {}
-
-    // 연결 및 종료
+    // 데이터베이스 연결 및 종료
     void connect() throws Exception;
     void disconnect() throws Exception;
+
+    // 테이블 생성 등 스키마 초기화
     void ensureSchema() throws Exception;
 
-    // 메일 로직
+    // 메일 관련 메서드
     List<Mail> loadMails(UUID receiver) throws Exception;
-    void batchInsertMails(List<MailRecord> list) throws Exception;
-    void batchDeleteMails(List<MailRecord> list) throws Exception;
 
-    // [초기화] 특정 플레이어의 모든 메일 삭제
+    // 배치 처리를 위한 삽입/삭제
+    void batchInsertMails(List<MailRecord> records) throws Exception;
+    void batchDeleteMails(List<MailRecord> records) throws Exception;
+
+    // 특정 플레이어의 모든 메일 삭제 (초기화용)
     void deletePlayerMails(UUID receiver) throws Exception;
 
-    // 설정 로직
+    // 설정 관련 메서드
     void saveNotifySetting(UUID uuid, boolean enabled) throws Exception;
     Boolean loadNotifySetting(UUID uuid) throws Exception;
 
@@ -38,15 +39,17 @@ public interface MailStorage {
     void savePlayerLanguage(UUID uuid, String lang) throws Exception;
     String loadPlayerLanguage(UUID uuid) throws Exception;
 
-    // 가상 인벤토리
+    // 인벤토리 백업/복구 (GUI 임시 저장 등)
     void saveInventory(int id, ItemStack[] contents) throws Exception;
     ItemStack[] loadInventory(int id) throws Exception;
 
-    // 멀티 서버 지원 (글로벌 플레이어 정보)
+    // 글로벌 플레이어 데이터 (닉네임/UUID 매핑)
     void updateGlobalPlayer(UUID uuid, String name) throws Exception;
     UUID lookupGlobalUUID(String name) throws Exception;
     String lookupGlobalName(UUID uuid) throws Exception;
-
-    // [전체 발송용] 모든 글로벌 유저 UUID 가져오기
     Set<UUID> getAllGlobalUUIDs() throws Exception;
+
+    // 데이터 전송을 위한 레코드 (Java 16+ Record 사용)
+    // 만약 Java 14 미만 버전을 사용 중이라면 일반 static class로 변경해야 합니다.
+    record MailRecord(UUID receiver, Mail mail) {}
 }

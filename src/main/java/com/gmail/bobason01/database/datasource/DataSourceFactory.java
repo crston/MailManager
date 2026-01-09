@@ -19,17 +19,23 @@ public class DataSourceFactory {
                     MailManager.getInstance().getDataFolder(),
                     c.getString("database.sqlite.file", "mail_data.db")
             );
-            // 데이터 폴더가 없으면 생성
-            dbFile.getParentFile().mkdirs();
+
+            File parent = dbFile.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
 
             HikariConfig hc = new HikariConfig();
+            hc.setDriverClassName("org.sqlite.JDBC");
             hc.setJdbcUrl("jdbc:sqlite:" + dbFile.getAbsolutePath());
             hc.setPoolName("MailManager-SQLite");
-            hc.setMaximumPoolSize(c.getInt("database.sqlite.pool.maximumPoolSize", 10));
-            hc.setMinimumIdle(c.getInt("database.sqlite.pool.minimumIdle", 2));
+
+            // SQLite는 파일 락 문제 방지를 위해 연결 풀 크기를 1로 제한하는 것을 권장함
+            hc.setMaximumPoolSize(1);
             hc.setConnectionTimeout(c.getLong("database.sqlite.pool.connectionTimeoutMs", 10000));
             hc.setIdleTimeout(c.getLong("database.sqlite.pool.idleTimeoutMs", 60000));
             hc.setMaxLifetime(c.getLong("database.sqlite.pool.maxLifetimeMs", 1800000));
+
             return new HikariDataSource(hc);
         }
 
@@ -41,6 +47,7 @@ public class DataSourceFactory {
             String pass = c.getString("database.mysql.pass", "");
 
             HikariConfig hc = new HikariConfig();
+            hc.setDriverClassName("com.mysql.cj.jdbc.Driver");
             hc.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + name
                     + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC");
             hc.setUsername(user);

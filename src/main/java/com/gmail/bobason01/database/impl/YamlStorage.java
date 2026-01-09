@@ -22,7 +22,6 @@ public class YamlStorage implements MailStorage {
 
     private final MailManager plugin = MailManager.getInstance();
 
-    // 파일 객체들
     private File mailsFile;
     private FileConfiguration mailsConfig;
 
@@ -34,7 +33,6 @@ public class YamlStorage implements MailStorage {
 
     @Override
     public void connect() throws Exception {
-        // 메일 데이터
         mailsFile = new File(plugin.getDataFolder(), "data/mails.yml");
         if (!mailsFile.exists()) {
             mailsFile.getParentFile().mkdirs();
@@ -42,7 +40,6 @@ public class YamlStorage implements MailStorage {
         }
         mailsConfig = YamlConfiguration.loadConfiguration(mailsFile);
 
-        // 플레이어 설정 및 글로벌 데이터
         playersFile = new File(plugin.getDataFolder(), "data/players.yml");
         if (!playersFile.exists()) {
             playersFile.getParentFile().mkdirs();
@@ -50,7 +47,6 @@ public class YamlStorage implements MailStorage {
         }
         playersConfig = YamlConfiguration.loadConfiguration(playersFile);
 
-        // 인벤토리 데이터
         inventoriesFile = new File(plugin.getDataFolder(), "data/inventories.yml");
         if (!inventoriesFile.exists()) {
             inventoriesFile.getParentFile().mkdirs();
@@ -68,10 +64,9 @@ public class YamlStorage implements MailStorage {
 
     @Override
     public void ensureSchema() {
-        // YAML은 스키마 생성 불필요
+        // YAML 파일 방식은 스키마 생성이 필요 없음
     }
 
-    // --- 저장 헬퍼 메서드 ---
     private void saveMails() {
         try { mailsConfig.save(mailsFile); } catch (IOException e) { e.printStackTrace(); }
     }
@@ -81,8 +76,6 @@ public class YamlStorage implements MailStorage {
     private void saveInventories() {
         try { inventoriesConfig.save(inventoriesFile); } catch (IOException e) { e.printStackTrace(); }
     }
-
-    // --- 메일 로직 ---
 
     @Override
     public List<Mail> loadMails(UUID receiver) {
@@ -133,14 +126,11 @@ public class YamlStorage implements MailStorage {
         saveMails();
     }
 
-    // [구현됨] 플레이어 메일 전체 삭제
     @Override
     public void deletePlayerMails(UUID receiver) throws Exception {
         mailsConfig.set("mails." + receiver.toString(), null);
         saveMails();
     }
-
-    // --- 설정 로직 ---
 
     @Override
     public void saveNotifySetting(UUID uuid, boolean enabled) throws Exception {
@@ -150,12 +140,18 @@ public class YamlStorage implements MailStorage {
 
     @Override
     public Boolean loadNotifySetting(UUID uuid) {
-        return playersConfig.getBoolean("notify." + uuid.toString(), true);
+        if (playersConfig.contains("notify." + uuid.toString())) {
+            return playersConfig.getBoolean("notify." + uuid.toString());
+        }
+        return null;
     }
 
     @Override
     public void saveBlacklist(UUID owner, Set<UUID> list) throws Exception {
-        List<String> strList = list.stream().map(UUID::toString).toList();
+        List<String> strList = new ArrayList<>();
+        for (UUID uuid : list) {
+            strList.add(uuid.toString());
+        }
         playersConfig.set("blacklist." + owner.toString(), strList);
         savePlayers();
     }
@@ -174,7 +170,10 @@ public class YamlStorage implements MailStorage {
 
     @Override
     public void saveExclude(UUID owner, Set<UUID> list) throws Exception {
-        List<String> strList = list.stream().map(UUID::toString).toList();
+        List<String> strList = new ArrayList<>();
+        for (UUID uuid : list) {
+            strList.add(uuid.toString());
+        }
         playersConfig.set("exclude." + owner.toString(), strList);
         savePlayers();
     }
@@ -202,8 +201,6 @@ public class YamlStorage implements MailStorage {
         return playersConfig.getString("lang." + uuid.toString());
     }
 
-    // --- 인벤토리 로직 ---
-
     @Override
     public void saveInventory(int id, ItemStack[] contents) throws Exception {
         byte[] data = serializeItems(contents);
@@ -221,14 +218,12 @@ public class YamlStorage implements MailStorage {
         return deserializeItems(data);
     }
 
-    // --- 글로벌 플레이어 로직 ---
-
     @Override
     public void updateGlobalPlayer(UUID uuid, String name) throws Exception {
         if (name == null) return;
-        // UUID -> Name
+        // UUID로 이름 찾기용
         playersConfig.set("global.uuid2name." + uuid.toString(), name);
-        // Name -> UUID (소문자로 저장하여 대소문자 무시 검색 지원)
+        // 이름으로 UUID 찾기용
         playersConfig.set("global.name2uuid." + name.toLowerCase(Locale.ROOT), uuid.toString());
         savePlayers();
     }
@@ -251,7 +246,6 @@ public class YamlStorage implements MailStorage {
         return playersConfig.getString("global.uuid2name." + uuid.toString());
     }
 
-    // [구현됨] 전체 글로벌 UUID 조회
     @Override
     public Set<UUID> getAllGlobalUUIDs() {
         Set<UUID> uuids = new HashSet<>();
@@ -266,8 +260,7 @@ public class YamlStorage implements MailStorage {
         return uuids;
     }
 
-    // --- 직렬화 헬퍼 ---
-
+    // 아이템 직렬화 헬퍼
     private byte[] serializeItems(ItemStack[] items) throws IOException {
         try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
              BukkitObjectOutputStream oos = new BukkitObjectOutputStream(bos)) {
@@ -276,6 +269,7 @@ public class YamlStorage implements MailStorage {
         }
     }
 
+    // 아이템 역직렬화 헬퍼
     private ItemStack[] deserializeItems(byte[] data) throws IOException, ClassNotFoundException {
         try (ByteArrayInputStream bis = new ByteArrayInputStream(data);
              BukkitObjectInputStream ois = new BukkitObjectInputStream(bis)) {
