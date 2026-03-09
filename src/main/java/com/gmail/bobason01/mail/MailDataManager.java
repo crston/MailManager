@@ -15,15 +15,33 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import javax.sql.DataSource;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
 public class MailDataManager {
 
     private static final MailDataManager INSTANCE = new MailDataManager();
-    public static MailDataManager getInstance() { return INSTANCE; }
+
+    public static MailDataManager getInstance() {
+        return INSTANCE;
+    }
 
     private MailStorage storage;
 
@@ -58,7 +76,8 @@ public class MailDataManager {
         try {
             DatabaseType type = DatabaseType.valueOf(
                     MailManager.getInstance().getConfig()
-                            .getString("database.type", "SQLITE").toUpperCase()
+                            .getString("database.type", "SQLITE")
+                            .toUpperCase()
             );
 
             switch (type) {
@@ -73,16 +92,13 @@ public class MailDataManager {
                 case YAML -> storage = new YamlStorage();
             }
 
-            if (storage == null) {
-                throw new IllegalStateException("MailStorage implementation is null");
-            }
+            if (storage == null) throw new IllegalStateException("MailStorage is null");
 
             storage.connect();
             storage.ensureSchema();
 
             for (Player p : Bukkit.getOnlinePlayers()) {
-                // 리로드 시 온라인 유저 데이터 로드
-                loadPlayerData(p.getUniqueId(), p.getName());
+                loadPlayerDataAsync(p.getUniqueId(), p.getName());
             }
 
         } catch (Exception e) {
@@ -93,44 +109,6 @@ public class MailDataManager {
         if (storage == null) {
             plugin.getLogger().severe("[MailManager] Storage not available. Disabling plugin.");
             Bukkit.getPluginManager().disablePlugin(plugin);
-        }
-    }
-
-    // 플레이어 개인 데이터 로드
-    public void loadPlayerData(UUID uuid, String name) {
-        if (storage == null) return;
-
-        // 글로벌 정보 업데이트 (비동기)
-        updateGlobalPlayerInfo(uuid, name);
-
-        try {
-            // 메일 로드
-            List<Mail> mails = storage.loadMails(uuid);
-            mailCache.put(uuid, new CopyOnWriteArrayList<>(mails));
-            for (Mail m : mails) {
-                if (m != null) mailIdCache.put(m.getMailId(), m);
-            }
-
-            // 알림 설정 로드
-            Boolean notify = storage.loadNotifySetting(uuid);
-            notifyCache.put(uuid, notify != null ? notify : true);
-
-            // 차단/제외 목록 로드
-            Set<UUID> bl = storage.loadBlacklist(uuid);
-            blacklistCache.put(uuid, new HashSet<>(bl));
-
-            Set<UUID> ex = storage.loadExclude(uuid);
-            excludeCache.put(uuid, new HashSet<>(ex));
-
-            // 언어 설정 로드
-            String lang = storage.loadPlayerLanguage(uuid);
-            if (lang != null) {
-                languageCache.put(uuid, lang);
-                LangManager.loadUserLanguage(uuid, lang);
-            }
-
-        } catch (Exception e) {
-            Bukkit.getLogger().log(Level.WARNING, "[MailManager] Failed to load data for " + uuid, e);
         }
     }
 
@@ -176,10 +154,53 @@ public class MailDataManager {
             excludeCache.clear();
             languageCache.clear();
             inventoryCache.clear();
+            pendingUpserts.clear();
+            pendingDeletes.clear();
+            pendingMetaWrites.clear();
         }
     }
 
-    // --- Global Player Methods ---
+    public void loadPlayerData(UUID uuid, String name) {
+        loadPlayerDataAsync(uuid, name);
+    }
+
+    public CompletableFuture<Void> loadPlayerDataAsync(UUID uuid, String name) {
+        if (storage == null) return CompletableFuture.completedFuture(null);
+
+        UUID safeUuid = uuid;
+        String safeName = name;
+
+        return CompletableFuture.runAsync(() -> {
+            try {
+                storage.updateGlobalPlayer(safeUuid, safeName);
+
+                List<Mail> mails = storage.loadMails(safeUuid);
+                Boolean notify = storage.loadNotifySetting(safeUuid);
+                Set<UUID> bl = storage.loadBlacklist(safeUuid);
+                Set<UUID> ex = storage.loadExclude(safeUuid);
+                String lang = storage.loadPlayerLanguage(safeUuid);
+
+                mailCache.put(safeUuid, new CopyOnWriteArrayList<>(mails));
+                for (Mail m : mails) {
+                    if (m != null) mailIdCache.put(m.getMailId(), m);
+                }
+
+                notifyCache.put(safeUuid, notify != null ? notify : true);
+                blacklistCache.put(safeUuid, new HashSet<>(bl));
+                excludeCache.put(safeUuid, new HashSet<>(ex));
+
+                if (lang != null) {
+                    languageCache.put(safeUuid, lang);
+                    LangManager.loadUserLanguage(safeUuid, lang);
+                } else {
+                    languageCache.remove(safeUuid);
+                }
+
+            } catch (Exception e) {
+                Bukkit.getLogger().log(Level.WARNING, "[MailManager] Failed to async load data for " + safeUuid, e);
+            }
+        }, dbExecutor);
+    }
 
     public void updateGlobalPlayerInfo(UUID uuid, String name) {
         if (storage == null) return;
@@ -187,7 +208,7 @@ public class MailDataManager {
             try {
                 storage.updateGlobalPlayer(uuid, name);
             } catch (Exception e) {
-                e.printStackTrace();
+                Bukkit.getLogger().log(Level.WARNING, "[MailManager] updateGlobalPlayerInfo failed", e);
             }
         });
     }
@@ -198,7 +219,7 @@ public class MailDataManager {
             try {
                 return storage.lookupGlobalUUID(name);
             } catch (Exception e) {
-                e.printStackTrace();
+                Bukkit.getLogger().log(Level.WARNING, "[MailManager] lookupGlobalUUID failed", e);
                 return null;
             }
         }, dbExecutor);
@@ -206,6 +227,7 @@ public class MailDataManager {
 
     public String getGlobalName(UUID uuid) {
         if (uuid == null) return "Unknown";
+
         OfflinePlayer op = Bukkit.getOfflinePlayer(uuid);
         if (op.getName() != null) return op.getName();
 
@@ -214,7 +236,7 @@ public class MailDataManager {
                 String name = storage.lookupGlobalName(uuid);
                 if (name != null) return name;
             } catch (Exception e) {
-                e.printStackTrace();
+                Bukkit.getLogger().log(Level.WARNING, "[MailManager] lookupGlobalName failed", e);
             }
         }
         return "Unknown";
@@ -226,7 +248,7 @@ public class MailDataManager {
             try {
                 return storage.getAllGlobalUUIDs();
             } catch (Exception e) {
-                e.printStackTrace();
+                Bukkit.getLogger().log(Level.WARNING, "[MailManager] getAllGlobalUUIDs failed", e);
                 return Collections.emptySet();
             }
         }, dbExecutor);
@@ -278,20 +300,23 @@ public class MailDataManager {
     }
 
     public void addMail(Mail mail) {
+        if (mail == null) return;
         mailCache.computeIfAbsent(mail.getReceiver(), k -> new CopyOnWriteArrayList<>()).add(mail);
         mailIdCache.put(mail.getMailId(), mail);
         queueUpsert(mail.getReceiver(), mail);
     }
 
     public void removeMail(Mail mail) {
+        if (mail == null) return;
         mailCache.computeIfAbsent(mail.getReceiver(), k -> new CopyOnWriteArrayList<>()).remove(mail);
         mailIdCache.remove(mail.getMailId());
         queueDelete(mail.getReceiver(), mail);
     }
 
     public void updateMail(Mail mail) {
+        if (mail == null) return;
         mailCache.computeIfAbsent(mail.getReceiver(), k -> new CopyOnWriteArrayList<>())
-                .removeIf(m -> m.getMailId().equals(mail.getMailId()));
+                .removeIf(m -> m != null && m.getMailId().equals(mail.getMailId()));
         mailCache.get(mail.getReceiver()).add(mail);
         mailIdCache.put(mail.getMailId(), mail);
         queueUpsert(mail.getReceiver(), mail);
@@ -339,9 +364,11 @@ public class MailDataManager {
 
     private void flushMails(UUID uuid, List<Mail> mails) throws Exception {
         if (storage == null) return;
+
         for (Mail m : mails) {
             if (m != null) mailIdCache.put(m.getMailId(), m);
         }
+
         storage.batchInsertMails(
                 mails.stream()
                         .filter(Objects::nonNull)
@@ -414,10 +441,13 @@ public class MailDataManager {
             set.add(target);
             now = true;
         }
+
         if (storage == null) return now;
+
+        Set<UUID> copy = new HashSet<>(set);
         submitMeta(() -> {
             try {
-                storage.saveExclude(owner, set);
+                storage.saveExclude(owner, copy);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -425,7 +455,6 @@ public class MailDataManager {
         return now;
     }
 
-    // null 값 안전하게 처리 (NullPointerException 방지)
     public void savePlayerLanguage(UUID u, String lang) {
         if (lang == null) {
             languageCache.remove(u);
@@ -434,6 +463,7 @@ public class MailDataManager {
         }
 
         if (storage == null) return;
+
         submitMeta(() -> {
             try {
                 storage.savePlayerLanguage(u, lang);
@@ -468,9 +498,11 @@ public class MailDataManager {
     private void scheduleFlush(boolean fast) {
         if (storage == null) return;
         if (!flushScheduled.compareAndSet(false, true)) return;
+
         long delay = fast ? 10 : 40;
         long since = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastFlushNanos);
         if (since > 100) delay = 5;
+
         scheduler.schedule(this::drainAndFlushSafe, delay, TimeUnit.MILLISECONDS);
     }
 
@@ -490,12 +522,15 @@ public class MailDataManager {
             pendingDeletes.clear();
             return;
         }
+
         List<MailStorage.MailRecord> ups = new ArrayList<>();
         List<MailStorage.MailRecord> dels = new ArrayList<>();
+
         Runnable r;
         while ((r = pendingMetaWrites.poll()) != null) {
             dbExecutor.submit(r);
         }
+
         MailStorage.MailRecord rec;
         while ((rec = pendingUpserts.poll()) != null) ups.add(rec);
         while ((rec = pendingDeletes.poll()) != null) dels.add(rec);
@@ -510,6 +545,7 @@ public class MailDataManager {
             });
             if (blocking) waitFuture(f);
         }
+
         if (!dels.isEmpty()) {
             Future<?> f = dbExecutor.submit(() -> {
                 try {
@@ -534,23 +570,26 @@ public class MailDataManager {
     }
 
     public void forceReloadMails(UUID id) {
-        if (storage == null) {
-            return;
-        }
-        try {
-            List<Mail> old = mailCache.get(id);
-            if (old != null) {
-                for (Mail m : old) {
-                    if (m != null) mailIdCache.remove(m.getMailId());
+        if (storage == null) return;
+
+        dbExecutor.submit(() -> {
+            try {
+                List<Mail> old = mailCache.get(id);
+                if (old != null) {
+                    for (Mail m : old) {
+                        if (m != null) mailIdCache.remove(m.getMailId());
+                    }
                 }
+
+                List<Mail> mails = storage.loadMails(id);
+                mailCache.put(id, new CopyOnWriteArrayList<>(mails));
+                for (Mail m : mails) {
+                    if (m != null) mailIdCache.put(m.getMailId(), m);
+                }
+
+            } catch (Exception e) {
+                Bukkit.getLogger().log(Level.WARNING, "[MailManager] Force reload failed for " + id, e);
             }
-            List<Mail> mails = storage.loadMails(id);
-            mailCache.put(id, new CopyOnWriteArrayList<>(mails));
-            for (Mail m : mails) {
-                if (m != null) mailIdCache.put(m.getMailId(), m);
-            }
-        } catch (Exception e) {
-            Bukkit.getLogger().log(Level.WARNING, "[MailManager] Force reload failed for " + id, e);
-        }
+        });
     }
 }

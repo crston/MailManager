@@ -1,5 +1,6 @@
 package com.gmail.bobason01.listeners;
 
+import com.gmail.bobason01.cache.PlayerCache;
 import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.MailDataManager;
@@ -25,11 +26,9 @@ public class MailLoginListener implements Listener {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
 
-        // [중요] 비동기로 플레이어 데이터(알림 설정 등)를 DB에서 로드
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            MailDataManager.getInstance().loadPlayerData(uuid, player.getName());
+        PlayerCache.add(player);
 
-            // 로드 후 알림 체크 (메인 스레드에서 UI 처리)
+        MailDataManager.getInstance().loadPlayerDataAsync(uuid, player.getName()).thenRun(() -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!player.isOnline()) return;
 

@@ -1,73 +1,129 @@
 package com.gmail.bobason01.cache;
 
+import com.gmail.bobason01.mail.MailDataManager;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
+import java.util.concurrent.CopyOnWriteArrayList;
 
-public class PlayerCache {
+public final class PlayerCache {
 
-    private static volatile List<OfflinePlayer> cachedPlayers = List.of();
-    private static final Map<String, OfflinePlayer> nameMap = new ConcurrentHashMap<>();
-    private static final Map<UUID, OfflinePlayer> uuidMap = new ConcurrentHashMap<>();
+    private static final Set<UUID> knownUuids = ConcurrentHashMap.newKeySet();
+    private static final CopyOnWriteArrayList<OfflinePlayer> cachedPlayers = new CopyOnWriteArrayList<>();
 
-    private static final AtomicBoolean isRefreshing = new AtomicBoolean(false);
-
-    public static void refresh(JavaPlugin plugin) {
-        if (!isRefreshing.compareAndSet(false, true)) {
-            return;
-        }
-
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                List<OfflinePlayer> players = Arrays.stream(Bukkit.getOfflinePlayers())
-                        .filter(p -> {
-                            String name = p.getName();
-                            return name != null && !name.isEmpty() && name.length() <= 16;
-                        })
-                        .collect(Collectors.toList());
-
-                Map<String, OfflinePlayer> newNameMap = new ConcurrentHashMap<>(players.size());
-                Map<UUID, OfflinePlayer> newUuidMap = new ConcurrentHashMap<>(players.size());
-
-                for (OfflinePlayer p : players) {
-                    String name = p.getName();
-                    if (name != null) {
-                        newNameMap.put(name.toLowerCase(Locale.ROOT), p);
-                        newUuidMap.put(p.getUniqueId(), p);
-                    }
-                }
-
-                nameMap.clear();
-                nameMap.putAll(newNameMap);
-                uuidMap.clear();
-                uuidMap.putAll(newUuidMap);
-                cachedPlayers = players;
-            } finally {
-                isRefreshing.set(false);
-            }
-        });
+    private PlayerCache() {
     }
 
     public static List<OfflinePlayer> getCachedPlayers() {
-        return cachedPlayers;
+        return new ArrayList<>(cachedPlayers);
     }
 
     public static OfflinePlayer getByUUID(UUID uuid) {
         if (uuid == null) return null;
-        return uuidMap.get(uuid);
+        return Bukkit.getOfflinePlayer(uuid);
     }
 
     public static OfflinePlayer getByName(String name) {
-        if (name == null) return null;
-        return nameMap.get(name.toLowerCase(Locale.ROOT));
+        if (name == null || name.isBlank()) return null;
+        String target = name.trim();
+
+        for (OfflinePlayer p : cachedPlayers) {
+            if (p == null) continue;
+            String n = p.getName();
+            if (n != null && n.equalsIgnoreCase(target)) return p;
+        }
+
+        Player online = Bukkit.getPlayerExact(target);
+        if (online != null) return online;
+
+        return null;
     }
 
-    public static boolean isRefreshing() {
-        return isRefreshing.get();
+    public static void add(Player player) {
+        if (player == null) return;
+        UUID uuid = player.getUniqueId();
+        if (uuid == null) return;
+
+        if (knownUuids.add(uuid)) {
+            cachedPlayers.add(player);
+            sortCached();
+        } else {
+            boolean exists = false;
+            for (OfflinePlayer p : cachedPlayers) {
+                if (p != null && uuid.equals(p.getUniqueId())) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                cachedPlayers.add(player);
+                sortCached();
+            }
+        }
+    }
+
+    public static void remove(UUID uuid) {
+        if (uuid == null) return;
+        knownUuids.remove(uuid);
+        cachedPlayers.removeIf(p -> p != null && uuid.equals(p.getUniqueId()));
+    }
+
+    public static void refresh(Plugin plugin) {
+        MailDataManager.getInstance().getAllGlobalUUIDsAsync().thenAccept(globalSet -> {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                applyRefresh(globalSet);
+            });
+        });
+    }
+
+    private static void applyRefresh(Set<UUID> globalSet) {
+        if (globalSet == null) globalSet = Collections.emptySet();
+
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (p == null) continue;
+            UUID id = p.getUniqueId();
+            if (id != null) globalSet = unionAdd(globalSet, id);
+        }
+
+        knownUuids.clear();
+        knownUuids.addAll(globalSet);
+
+        List<OfflinePlayer> newList = new ArrayList<>(knownUuids.size());
+        for (UUID id : knownUuids) {
+            if (id == null) continue;
+            newList.add(Bukkit.getOfflinePlayer(id));
+        }
+
+        newList.removeIf(p -> p == null || p.getName() == null);
+
+        newList.sort(Comparator.comparing(OfflinePlayer::getName, String.CASE_INSENSITIVE_ORDER));
+
+        cachedPlayers.clear();
+        cachedPlayers.addAll(newList);
+    }
+
+    private static Set<UUID> unionAdd(Set<UUID> base, UUID add) {
+        if (base.contains(add)) return base;
+        Set<UUID> copy = ConcurrentHashMap.newKeySet();
+        copy.addAll(base);
+        copy.add(add);
+        return copy;
+    }
+
+    private static void sortCached() {
+        List<OfflinePlayer> list = new ArrayList<>(cachedPlayers);
+        list.removeIf(p -> p == null || p.getName() == null);
+        list.sort(Comparator.comparing(OfflinePlayer::getName, String.CASE_INSENSITIVE_ORDER));
+        cachedPlayers.clear();
+        cachedPlayers.addAll(list);
     }
 }

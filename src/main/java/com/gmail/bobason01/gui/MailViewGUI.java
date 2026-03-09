@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
@@ -28,7 +29,7 @@ public class MailViewGUI implements Listener, InventoryHolder {
     private static final int SLOT_BACK = 53;
 
     private final Plugin plugin;
-    // 시청 중인 메일 정보 (동시성 문제 방지용 ConcurrentHashMap)
+    // 시청 중인 메일 정보 동시성 문제 방지용
     private final Map<UUID, UUID> viewingMail = new ConcurrentHashMap<>();
 
     public MailViewGUI(Plugin plugin) {
@@ -74,6 +75,14 @@ public class MailViewGUI implements Listener, InventoryHolder {
         player.openInventory(inv);
     }
 
+    // 인벤토리를 닫을 때 맵에서 제거하여 메모리 누수 방지
+    @EventHandler
+    public void onClose(InventoryCloseEvent e) {
+        if (e.getInventory().getHolder() instanceof MailViewGUI) {
+            viewingMail.remove(e.getPlayer().getUniqueId());
+        }
+    }
+
     @EventHandler
     public void onClick(InventoryClickEvent e) {
         if (!(e.getInventory().getHolder() instanceof MailViewGUI)) return;
@@ -86,7 +95,7 @@ public class MailViewGUI implements Listener, InventoryHolder {
         // 보고 있는 메일 정보 확인
         UUID mailId = viewingMail.get(player.getUniqueId());
         if (mailId == null) {
-            // 정보가 없으면 목록으로 돌아감 (오류 방지)
+            // 정보가 없으면 목록으로 돌아감
             MailManager.getInstance().mailGUI.open(player);
             return;
         }
@@ -95,16 +104,15 @@ public class MailViewGUI implements Listener, InventoryHolder {
         Mail mail = manager.getMailById(mailId);
 
         if (mail == null || mail.isExpired()) {
-            player.sendMessage(LangManager.get(player.getUniqueId(), "mail.expired")); // 없는 키면 기본값 출력됨
+            player.sendMessage(LangManager.get(player.getUniqueId(), "mail.expired"));
             MailManager.getInstance().mailGUI.open(player);
             return;
         }
 
         UUID uuid = player.getUniqueId();
 
-        // 1. 아이템 개별 수령
+        // 첫번째 아이템 개별 수령
         if (slot < 45) {
-            // [중요] 원본 리스트 복사본 생성 (ConcurrentModificationException 방지)
             List<ItemStack> currentItems = new ArrayList<>(mail.getItems());
 
             if (slot >= currentItems.size()) return;
@@ -112,46 +120,65 @@ public class MailViewGUI implements Listener, InventoryHolder {
             ItemStack clickedItem = currentItems.get(slot);
             if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
 
+            int originalAmount = clickedItem.getAmount();
             Map<Integer, ItemStack> left = player.getInventory().addItem(clickedItem.clone());
 
             if (left.isEmpty()) {
-                // 성공적으로 수령 -> 리스트에서 제거
+                // 전부 수령 성공
                 currentItems.remove(slot);
-                mail.setItems(currentItems);
-                manager.updateMail(mail);
-                manager.flushNow();
-
-                player.updateInventory(); // 인벤토리 동기화
-                ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
-
-                if (currentItems.isEmpty()) {
-                    manager.removeMail(mail);
-                    player.sendMessage(LangManager.get(uuid, "mail.claim_success"));
-                    MailManager.getInstance().mailGUI.open(player);
-                } else {
-                    // GUI 새로고침 (당겨진 아이템 반영)
-                    open(player, mail);
-                }
             } else {
-                player.sendMessage(LangManager.get(uuid, "mail.receive.failed"));
-                ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_FAIL);
+                ItemStack remainingItem = left.get(0);
+                if (remainingItem.getAmount() == originalAmount) {
+                    // 인벤토리가 꽉 차서 하나도 받지 못함
+                    player.sendMessage(LangManager.get(uuid, "mail.receive.failed"));
+                    ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_FAIL);
+                    return;
+                } else {
+                    // 공간이 부족하여 일부만 수령함 남은 개수 업데이트
+                    clickedItem.setAmount(remainingItem.getAmount());
+                }
+            }
+
+            mail.setItems(currentItems);
+            manager.updateMail(mail);
+            manager.flushNow();
+
+            player.updateInventory();
+
+            if (currentItems.isEmpty()) {
+                manager.removeMail(mail);
+                player.sendMessage(LangManager.get(uuid, "mail.claim_success"));
+                ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
+                MailManager.getInstance().mailGUI.open(player);
+            } else {
+                // 아이템을 성공적으로 받았거나 일부만 받았을 때 성공 소리 재생 후 새로고침
+                ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
+                open(player, mail);
             }
             return;
         }
 
-        // 2. 전체 수령
+        // 두번째 전체 수령
         if (slot == SLOT_CLAIM_ALL) {
-            List<ItemStack> items = new ArrayList<>(mail.getItems());
+            List<ItemStack> items = mail.getItems();
             List<ItemStack> remaining = new ArrayList<>();
             boolean claimedAny = false;
 
             for (ItemStack item : items) {
-                if (item == null) continue;
+                if (item == null || item.getType() == Material.AIR) continue;
+
+                int originalAmount = item.getAmount();
                 Map<Integer, ItemStack> left = player.getInventory().addItem(item.clone());
+
                 if (left.isEmpty()) {
                     claimedAny = true;
                 } else {
-                    remaining.addAll(left.values());
+                    ItemStack leftItem = left.get(0);
+                    if (leftItem.getAmount() < originalAmount) {
+                        // 일부라도 들어갔다면 수령한 것으로 판정
+                        claimedAny = true;
+                    }
+                    remaining.add(leftItem);
                 }
             }
 
@@ -178,11 +205,11 @@ public class MailViewGUI implements Listener, InventoryHolder {
                 open(player, mail);
             }
         }
-        // 3. 삭제
+        // 세번째 삭제
         else if (slot == SLOT_DELETE) {
-            new MailDeleteConfirmGUI(player, plugin, Collections.singletonList(mail)).open(player);
+            new MailDeleteConfirmGUI(plugin).open(player, Collections.singletonList(mail));
         }
-        // 4. 뒤로가기
+        // 네번째 뒤로가기
         else if (slot == SLOT_BACK) {
             MailManager.getInstance().mailGUI.open(player);
         }

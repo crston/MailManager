@@ -37,6 +37,7 @@ public class MailSendGUI implements Listener, InventoryHolder {
 
     private final Plugin plugin;
     private final Set<UUID> sentSet = Collections.synchronizedSet(new HashSet<>());
+    private final Set<UUID> navigatingSet = ConcurrentHashMap.newKeySet();
     private final Map<UUID, ItemStack> cachedHeads = new ConcurrentHashMap<>();
     private Inventory inv;
 
@@ -144,13 +145,23 @@ public class MailSendGUI implements Listener, InventoryHolder {
             return;
         }
 
+        // 클릭한 곳이 플레이어의 하단 인벤토리일 경우 쉬프트 클릭 차단
+        if (e.getClickedInventory() != null && e.getClickedInventory().equals(e.getView().getBottomInventory())) {
+            if (e.isShiftClick()) {
+                e.setCancelled(true);
+            }
+            return;
+        }
+
+        // 상단 인벤토리를 클릭한 경우 무조건 취소하여 아이템 이동 방지
+        e.setCancelled(true);
+
         int slot = e.getRawSlot();
         if (slot < 0 || slot >= e.getInventory().getSize()) return;
 
         MailManager manager = MailManager.getInstance();
 
         if (slot == SLOT_BACK) {
-            e.setCancelled(true);
             MailDataManager dataManager = MailDataManager.getInstance();
             dataManager.flushNow();
             dataManager.forceReloadMails(uuid);
@@ -160,16 +171,22 @@ public class MailSendGUI implements Listener, InventoryHolder {
         }
 
         if (e.getClick() == ClickType.NUMBER_KEY || e.getClick() == ClickType.DOUBLE_CLICK || e.getClick() == ClickType.MIDDLE) {
-            e.setCancelled(true);
             return;
         }
 
-        e.setCancelled(true);
-
         switch (slot) {
-            case SLOT_TIME -> manager.mailTimeSelectGUI.open(player, MailSendGUI.class);
-            case SLOT_TARGET -> manager.mailTargetSelectGUI.open(player);
-            case SLOT_ITEM -> manager.mailAttachGUI.open(player, MailSendGUI.class);
+            case SLOT_TIME -> {
+                gui.navigatingSet.add(uuid);
+                manager.mailTimeSelectGUI.open(player, MailSendGUI.class);
+            }
+            case SLOT_TARGET -> {
+                gui.navigatingSet.add(uuid);
+                manager.mailTargetSelectGUI.open(player);
+            }
+            case SLOT_ITEM -> {
+                gui.navigatingSet.add(uuid);
+                manager.mailAttachGUI.open(player, MailSendGUI.class);
+            }
             case SLOT_CONFIRM -> {
                 if (!gui.sentSet.add(uuid)) {
                     player.sendMessage(LangManager.get(uuid, "mail.send.cooldown"));
@@ -186,13 +203,13 @@ public class MailSendGUI implements Listener, InventoryHolder {
                 MailService.send(player, plugin);
                 MailService.clearAttached(uuid);
 
-                // GUI 슬롯을 비워서 onClose가 아이템을 감지하지 못하게 함
+                // 상단 슬롯을 비워서 인벤토리 닫기 이벤트가 아이템을 감지하지 못하게 함
                 e.getInventory().setItem(SLOT_ITEM, null);
 
                 ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_SEND_SUCCESS);
 
-                // sentSet.remove(uuid)를 closeInventory() 뒤로 미룸
-                // 이렇게 해야 onClose에서 sentSet.contains(uuid)가 true가 되어 아이템 반환을 건너뜀
+                // 변수 제거를 인벤토리 닫기 뒤로 미룸
+                // 이렇게 해야 닫을 때 변수 검사가 참이 되어 아이템 반환을 건너뜀
                 player.closeInventory();
 
                 gui.sentSet.remove(uuid);
@@ -202,22 +219,35 @@ public class MailSendGUI implements Listener, InventoryHolder {
 
     @EventHandler
     public void onDrag(InventoryDragEvent e) {
-        if (e.getInventory().getHolder() instanceof MailSendGUI && e.getRawSlots().contains(SLOT_BACK)) {
-            e.setCancelled(true);
+        if (e.getInventory().getHolder() instanceof MailSendGUI) {
+            for (int slot : e.getRawSlots()) {
+                if (slot < e.getInventory().getSize()) {
+                    e.setCancelled(true);
+                    return;
+                }
+            }
         }
     }
 
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
-        if (!(e.getInventory().getHolder() instanceof MailSendGUI) || !(e.getPlayer() instanceof Player player)) return;
+        if (!(e.getInventory().getHolder() instanceof MailSendGUI gui) || !(e.getPlayer() instanceof Player player)) return;
         UUID uuid = player.getUniqueId();
 
-        // onClick에서 remove를 나중에 하므로, 전송 성공 시 여기서 return됨
-        if (sentSet.contains(uuid)) return;
+        // 클릭에서 제거를 나중에 하므로 전송 성공 시 여기서 반환됨
+        if (gui.sentSet.contains(uuid)) return;
 
-        ItemStack item = e.getInventory().getItem(SLOT_ITEM);
-        if (item != null && !item.getType().isAir()) {
-            player.getInventory().addItem(item);
+        // 다른 메뉴로 이동 중이면 아이템 반환 생략
+        if (gui.navigatingSet.remove(uuid)) return;
+
+        // 실제 첨부되어 있던 아이템들을 플레이어에게 안전하게 반환
+        List<ItemStack> attached = MailService.getAttachedItems(uuid);
+        if (attached != null && !attached.isEmpty()) {
+            for (ItemStack item : attached) {
+                if (item != null && !item.getType().isAir()) {
+                    player.getInventory().addItem(item);
+                }
+            }
             MailService.clearAttached(uuid);
         }
     }

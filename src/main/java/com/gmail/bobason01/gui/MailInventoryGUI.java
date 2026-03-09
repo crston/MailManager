@@ -58,6 +58,12 @@ public class MailInventoryGUI implements Listener, InventoryHolder {
         if (!(e.getInventory().getHolder() instanceof MailInventoryGUI gui)) return;
 
         if (!gui.editable) {
+            if (e.getClickedInventory() != null && e.getClickedInventory().equals(e.getView().getBottomInventory())) {
+                if (e.isShiftClick()) {
+                    e.setCancelled(true);
+                }
+                return;
+            }
             e.setCancelled(true);
             return;
         }
@@ -70,7 +76,12 @@ public class MailInventoryGUI implements Listener, InventoryHolder {
         if (!(e.getInventory().getHolder() instanceof MailInventoryGUI gui)) return;
 
         if (!gui.editable) {
-            e.setCancelled(true);
+            for (int slot : e.getRawSlots()) {
+                if (slot < e.getInventory().getSize()) {
+                    e.setCancelled(true);
+                    return;
+                }
+            }
             return;
         }
 

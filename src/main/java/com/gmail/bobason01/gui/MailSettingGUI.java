@@ -37,55 +37,37 @@ public class MailSettingGUI implements Listener, InventoryHolder {
 
         boolean notifyEnabled = MailDataManager.getInstance().isNotify(uuid);
 
-        inv.setItem(NOTIFY_SLOT, new ItemBuilder(
-                notifyEnabled ? ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_ON)
-                        : ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_OFF))
-                .name(LangManager.get(uuid, "gui.notify.name"))
-                .lore(LangManager.getList(uuid, "gui.notify.lore"))
-                .build());
+        inv.setItem(NOTIFY_SLOT, new ItemBuilder(notifyEnabled ? ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_ON) : ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_NOTIFY_OFF))
+                .name(LangManager.get(uuid, "gui.notify.name")).lore(LangManager.getList(uuid, "gui.notify.lore")).build());
 
         inv.setItem(BLACKLIST_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_BLACKLIST))
-                .name(LangManager.get(uuid, "gui.blacklist.title"))
-                .lore(LangManager.getList(uuid, "gui.blacklist.lore"))
-                .build());
+                .name(LangManager.get(uuid, "gui.blacklist.title")).lore(LangManager.getList(uuid, "gui.blacklist.lore")).build());
 
         inv.setItem(LANGUAGE_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.SETTING_GUI_LANGUAGE))
-                .name(LangManager.get(uuid, "gui.language.name"))
-                .lore(LangManager.getList(uuid, "gui.language.lore"))
-                .build());
+                .name(LangManager.get(uuid, "gui.language.name")).lore(LangManager.getList(uuid, "gui.language.lore")).build());
 
         inv.setItem(MULTI_SELECT_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SELECT_BUTTON))
-                .name(LangManager.get(uuid, "gui.mail.select_name"))
-                .lore(LangManager.getList(uuid, "gui.mail.select_lore"))
-                .build());
+                .name(LangManager.get(uuid, "gui.mail.select_name")).lore(LangManager.getList(uuid, "gui.mail.select_lore")).build());
 
         inv.setItem(BACK_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
-                .name("§c" + LangManager.get(uuid, "gui.back.name"))
-                .lore(LangManager.getList(uuid, "gui.back.lore"))
-                .build());
+                .name(LangManager.get(uuid, "gui.back.name")).build());
 
         player.openInventory(inv);
     }
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
-        if (!(e.getInventory().getHolder() instanceof MailSettingGUI) || !(e.getWhoClicked() instanceof Player player)) {
-            return;
-        }
-
+        if (!(e.getInventory().getHolder() instanceof MailSettingGUI) || !(e.getWhoClicked() instanceof Player player)) return;
         e.setCancelled(true);
 
-        ItemStack clicked = e.getCurrentItem();
-        if (clicked == null || clicked.getType().isAir()) return;
-
+        int slot = e.getRawSlot();
         UUID uuid = player.getUniqueId();
         MailManager manager = MailManager.getInstance();
 
-        switch (e.getRawSlot()) {
+        switch (slot) {
             case NOTIFY_SLOT -> {
                 boolean newState = MailDataManager.getInstance().toggleNotification(uuid);
-                String key = newState ? "gui.notify.enabled" : "gui.notify.disabled";
-                player.sendMessage(LangManager.get(uuid, key));
+                player.sendMessage(LangManager.get(uuid, newState ? "gui.notify.enabled" : "gui.notify.disabled"));
                 ConfigManager.playSound(player, ConfigManager.SoundType.ACTION_SETTING_CHANGE);
                 open(player);
             }
@@ -103,12 +85,8 @@ public class MailSettingGUI implements Listener, InventoryHolder {
             }
             case BACK_SLOT -> {
                 ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
-
-                // ★ DB 동기화 후 메인 메일 GUI 열기
-                MailDataManager dataManager = MailDataManager.getInstance();
-                dataManager.flushNow();
-                dataManager.forceReloadMails(uuid);
-
+                MailDataManager.getInstance().flushNow();
+                MailDataManager.getInstance().forceReloadMails(uuid);
                 manager.mailGUI.open(player);
             }
         }
