@@ -7,45 +7,27 @@ import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ChatSearchRegistry implements Listener {
 
-    private static final long TTL_MILLIS = 2 * 60 * 1000;
-    private static final Map<UUID, CallbackEntry> registry = new ConcurrentHashMap<>();
-    private static final ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "ChatSearchRegistry-Cleanup");
-        t.setDaemon(true);
-        return t;
-    });
-
-    static {
-        cleaner.scheduleAtFixedRate(ChatSearchRegistry::cleanupExpired, TTL_MILLIS, TTL_MILLIS, TimeUnit.MILLISECONDS);
-    }
+    private static final Map<UUID, ChatCallback> registry = new ConcurrentHashMap<>();
 
     public static void register(Player player, ChatCallback callback) {
-        registry.put(player.getUniqueId(), new CallbackEntry(callback, System.currentTimeMillis()));
+        registry.put(player.getUniqueId(), callback);
     }
 
     public static ChatCallback consume(Player player) {
-        CallbackEntry entry = registry.remove(player.getUniqueId());
-        return (entry != null && !entry.isExpired(System.currentTimeMillis())) ? entry.callback : null;
+        return registry.remove(player.getUniqueId());
     }
 
-    private static void cleanupExpired() {
-        long now = System.currentTimeMillis();
-        registry.entrySet().removeIf(e -> e.getValue().isExpired(now));
+    public static boolean isSearching(Player player) {
+        return registry.containsKey(player.getUniqueId());
     }
 
     @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        registry.remove(event.getPlayer().getUniqueId());
-    }
-
-    private record CallbackEntry(ChatCallback callback, long timestamp) {
-        boolean isExpired(long now) {
-            return (now - timestamp) > TTL_MILLIS;
-        }
+    public void onQuit(PlayerQuitEvent e) {
+        registry.remove(e.getPlayer().getUniqueId());
     }
 
     @FunctionalInterface

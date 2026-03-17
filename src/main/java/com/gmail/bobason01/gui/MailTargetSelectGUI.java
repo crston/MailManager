@@ -41,6 +41,9 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
     private final Plugin plugin;
     private final Map<UUID, Integer> pageMap = new ConcurrentHashMap<>();
     private final Map<UUID, AtomicLong> cooldownMap = new ConcurrentHashMap<>();
+
+    // [수정] 메모리 누수 방지: WeakHashMap을 고려하거나 주기적인 정리가 필요함.
+    // 여기서는 간단하게 Map 크기가 너무 커지면 비우는 방식을 제안하거나 필요할 때만 생성하도록 변경.
     private final Map<UUID, ItemStack> headCache = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> searching = new ConcurrentHashMap<>();
 
@@ -50,7 +53,7 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
 
     @Override
     public @NotNull Inventory getInventory() {
-        return Bukkit.createInventory(this, 54);
+        return Bukkit.createInventory(this, 54, "Target Selection");
     }
 
     public void open(Player player) {
@@ -62,13 +65,14 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
         if (Boolean.TRUE.equals(searching.get(uuid))) return;
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            // [성능] 플레이어 캐시에서 유효한 목록 추출
             List<OfflinePlayer> players = new ArrayList<>(PlayerCache.getCachedPlayers());
             players.removeIf(p -> p == null || p.getName() == null || p.getUniqueId().equals(uuid));
             players.sort(Comparator.comparing(OfflinePlayer::getName, String.CASE_INSENSITIVE_ORDER));
 
             int maxPage = Math.max(0, (players.size() - 1) / PAGE_SIZE);
             int safePage = Math.min(Math.max(page, 0), maxPage);
-            pageMap.put(uuid, safePage); // 보정된 페이지 저장
+            pageMap.put(uuid, safePage);
 
             int start = safePage * PAGE_SIZE;
             int end = Math.min(start + PAGE_SIZE, players.size());
@@ -88,10 +92,15 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
                     inv.setItem(i, getCachedHead(pagePlayers.get(i)));
                 }
 
+                // 하단 버튼 구성
                 if (safePage > 0) inv.setItem(SLOT_PREV, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON)).name(LangManager.get(lang, "gui.previous")).build());
                 if (safePage < maxPage) inv.setItem(SLOT_NEXT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON)).name(LangManager.get(lang, "gui.next")).build());
-                inv.setItem(SLOT_SEARCH, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BLACKLIST_EXCLUDE_SEARCH)).name(LangManager.get(lang, "gui.search.name")).build());
-                inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON)).name(LangManager.get(lang, "gui.back.name")).build());
+
+                inv.setItem(SLOT_SEARCH, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BLACKLIST_EXCLUDE_SEARCH))
+                        .name(LangManager.get(lang, "gui.search.name")).build());
+
+                inv.setItem(SLOT_BACK, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.BACK_BUTTON))
+                        .name("§c" + LangManager.get(lang, "gui.back.name")).build());
 
                 player.openInventory(inv);
             });
@@ -99,6 +108,9 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
     }
 
     private ItemStack getCachedHead(OfflinePlayer target) {
+        // [수정] 캐시가 너무 커지면(예: 500개 이상) 메모리 관리를 위해 비움
+        if (headCache.size() > 500) headCache.clear();
+
         return headCache.computeIfAbsent(target.getUniqueId(), k -> {
             ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
             SkullMeta meta = (SkullMeta) skull.getItemMeta();
@@ -113,19 +125,21 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
 
     @EventHandler
     public void onClick(InventoryClickEvent e) {
-        if (!(e.getInventory().getHolder() instanceof MailTargetSelectGUI) || !(e.getWhoClicked() instanceof Player player)) return;
-        e.setCancelled(true);
+        if (!(e.getInventory().getHolder() instanceof MailTargetSelectGUI)) return;
+        if (!(e.getWhoClicked() instanceof Player player)) return;
 
+        e.setCancelled(true);
         int slot = e.getRawSlot();
         if (slot < 0) return;
 
-        // 쿨다운 체크
+        UUID uuid = player.getUniqueId();
+
+        // 쿨다운 체크 (스팸 방지)
         long now = System.currentTimeMillis();
-        AtomicLong last = cooldownMap.computeIfAbsent(player.getUniqueId(), k -> new AtomicLong(0));
+        AtomicLong last = cooldownMap.computeIfAbsent(uuid, k -> new AtomicLong(0));
         if (now - last.get() < PAGE_COOLDOWN_MS) return;
         last.set(now);
 
-        UUID uuid = player.getUniqueId();
         int page = pageMap.getOrDefault(uuid, 0);
 
         if (slot == SLOT_PREV) {
@@ -138,40 +152,50 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
             ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
             MailManager.getInstance().mailSendGUI.open(player);
         } else if (slot == SLOT_SEARCH) {
-            searching.put(uuid, true);
-            player.closeInventory();
-            player.sendMessage(LangManager.get(uuid, "gui.search.start"));
-            ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
-
-            ChatSearchRegistry.register(player, message -> {
-                searching.remove(uuid);
-                if (message == null || message.equalsIgnoreCase("cancel") || message.equalsIgnoreCase("취소")) {
-                    Bukkit.getScheduler().runTask(plugin, () -> open(player, page));
-                    return;
-                }
-                MailDataManager.getInstance().getGlobalUUID(message.trim()).thenAccept(targetUUID -> {
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        if (targetUUID == null || targetUUID.equals(uuid)) {
-                            player.sendMessage(LangManager.get(uuid, targetUUID == null ? "cmd.player.notfound" : "gui.target.self"));
-                            open(player, page);
-                        } else {
-                            selectTarget(player, Bukkit.getOfflinePlayer(targetUUID));
-                        }
-                    });
-                });
-            });
+            handleSearch(player, page);
         } else if (slot < PAGE_SIZE) {
             ItemStack clicked = e.getCurrentItem();
             if (clicked == null || clicked.getType() != Material.PLAYER_HEAD) return;
-            String name = ChatColor.stripColor(clicked.getItemMeta().getDisplayName());
-            OfflinePlayer target = PlayerCache.getByName(name);
-            if (target != null && !target.getUniqueId().equals(uuid)) selectTarget(player, target);
+
+            // 이름으로 찾는 것보다 UUID로 찾는 것이 더 정확함 (SkullMeta 활용)
+            SkullMeta meta = (SkullMeta) clicked.getItemMeta();
+            if (meta != null && meta.getOwningPlayer() != null) {
+                selectTarget(player, meta.getOwningPlayer());
+            }
         }
+    }
+
+    private void handleSearch(Player player, int currentPage) {
+        UUID uuid = player.getUniqueId();
+        searching.put(uuid, true);
+        player.closeInventory();
+        player.sendMessage(LangManager.get(uuid, "gui.search.start"));
+        ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
+
+        ChatSearchRegistry.register(player, message -> {
+            searching.remove(uuid);
+            if (message == null || message.equalsIgnoreCase("cancel") || message.equalsIgnoreCase("취소")) {
+                Bukkit.getScheduler().runTask(plugin, () -> open(player, currentPage));
+                return;
+            }
+
+            // 글로벌 UUID 검색
+            MailDataManager.getInstance().getGlobalUUID(message.trim()).thenAccept(targetUUID -> {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (targetUUID == null || targetUUID.equals(uuid)) {
+                        player.sendMessage(LangManager.get(uuid, targetUUID == null ? "cmd.player.notfound" : "gui.target.self"));
+                        open(player, currentPage);
+                    } else {
+                        selectTarget(player, Bukkit.getOfflinePlayer(targetUUID));
+                    }
+                });
+            });
+        });
     }
 
     private void selectTarget(Player player, OfflinePlayer target) {
         MailService.setTarget(player.getUniqueId(), target);
-        player.sendMessage(LangManager.get(player.getUniqueId(), "gui.target.selected").replace("%target%", target.getName()));
+        player.sendMessage(LangManager.get(player.getUniqueId(), "gui.target.selected").replace("%target%", target.getName() != null ? target.getName() : "Unknown"));
         ConfigManager.playSound(player, ConfigManager.SoundType.ACTION_SETTING_CHANGE);
         MailManager.getInstance().mailSendGUI.open(player);
     }
@@ -180,8 +204,8 @@ public class MailTargetSelectGUI implements Listener, InventoryHolder {
     public void onClose(InventoryCloseEvent e) {
         if (e.getInventory().getHolder() instanceof MailTargetSelectGUI) {
             UUID uuid = e.getPlayer().getUniqueId();
+            // 검색 중이 아닐 때만 쿨다운 정보를 지움 (페이지 정보는 유지하는 것이 유저 경험에 좋음)
             if (!Boolean.TRUE.equals(searching.get(uuid))) {
-                pageMap.remove(uuid);
                 cooldownMap.remove(uuid);
             }
         }

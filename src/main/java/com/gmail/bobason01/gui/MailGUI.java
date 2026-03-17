@@ -5,6 +5,7 @@ import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.Mail;
 import com.gmail.bobason01.mail.MailDataManager;
+import com.gmail.bobason01.utils.ItemBuilder;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -28,7 +29,15 @@ public class MailGUI implements Listener, InventoryHolder {
     private final Plugin plugin;
     private final Map<UUID, Integer> pageMap = new ConcurrentHashMap<>();
 
-    private static final int PAGE_SIZE = 44;
+    // 8번 슬롯(설정)을 제외한 메일 표시 가능 슬롯들 (총 44개)
+    private static final List<Integer> MAIL_SLOTS = new ArrayList<>();
+    static {
+        for (int i = 0; i < 45; i++) {
+            if (i != 8) MAIL_SLOTS.add(i);
+        }
+    }
+
+    private static final int PAGE_SIZE = MAIL_SLOTS.size();
     private static final int SETTING_BTN_SLOT = 8;
     private static final int PREV_BTN_SLOT = 45;
     private static final int SEND_BTN_SLOT = 49;
@@ -40,7 +49,7 @@ public class MailGUI implements Listener, InventoryHolder {
 
     @Override
     public @NotNull Inventory getInventory() {
-        return Bukkit.createInventory(this, 54);
+        return Bukkit.createInventory(this, 54, "Mail Box");
     }
 
     public void open(Player player) {
@@ -50,10 +59,10 @@ public class MailGUI implements Listener, InventoryHolder {
     public void open(Player player, int page) {
         UUID uuid = player.getUniqueId();
         MailDataManager manager = MailDataManager.getInstance();
-        manager.flushNow();
-        manager.forceReloadMails(uuid);
 
+        // [최적화] 강제 리로드 제거. 메모리에 이미 최신 데이터가 동기화되어 있다고 가정함.
         List<Mail> validMails = getValidMails(uuid);
+
         int totalPages = Math.max(1, (int) Math.ceil((double) validMails.size() / PAGE_SIZE));
         int safePage = Math.min(Math.max(page, 0), totalPages - 1);
         pageMap.put(uuid, safePage);
@@ -67,47 +76,45 @@ public class MailGUI implements Listener, InventoryHolder {
             int mailIndex = start + i;
             if (mailIndex >= validMails.size()) break;
 
-            int slot = (i < 8) ? i : (i + 1);
+            int slot = MAIL_SLOTS.get(i);
             Mail mail = validMails.get(mailIndex);
             ItemStack item = mail.toItemStack(player);
             if (item == null) continue;
 
+            // 로어 추가 (수령/삭제 안내)
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {
                 List<String> lore = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
                 lore.add(" ");
-                lore.addAll(LangManager.getList(uuid, "gui.mail.lore.claim"));
-                lore.addAll(LangManager.getList(uuid, "gui.mail.lore.delete"));
+                lore.addAll(LangManager.getList(lang, "gui.mail.lore.claim"));
+                lore.addAll(LangManager.getList(lang, "gui.mail.lore.delete"));
                 meta.setLore(lore);
                 item.setItemMeta(meta);
             }
             inv.setItem(slot, item);
         }
 
-        inv.setItem(SETTING_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SETTING_BUTTON), LangManager.get(uuid, "gui.setting.title")));
-        if (safePage > 0) inv.setItem(PREV_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON), LangManager.get(uuid, "gui.previous")));
-        if (safePage < totalPages - 1) inv.setItem(NEXT_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON), LangManager.get(uuid, "gui.next")));
-        if (player.hasPermission("mail.send")) inv.setItem(SEND_BTN_SLOT, createButton(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SEND_BUTTON), LangManager.get(uuid, "gui.send.title")));
+        // 하단 제어 버튼
+        inv.setItem(SETTING_BTN_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SETTING_BUTTON))
+                .name(LangManager.get(lang, "gui.setting.title")).build());
+
+        if (safePage > 0) inv.setItem(PREV_BTN_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_PREVIOUS_BUTTON))
+                .name(LangManager.get(lang, "gui.previous")).build());
+
+        if (safePage < totalPages - 1) inv.setItem(NEXT_BTN_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.PAGE_NEXT_BUTTON))
+                .name(LangManager.get(lang, "gui.next")).build());
+
+        if (player.hasPermission("mail.send")) inv.setItem(SEND_BTN_SLOT, new ItemBuilder(ConfigManager.getItem(ConfigManager.ItemType.MAIL_GUI_SEND_BUTTON))
+                .name(LangManager.get(lang, "gui.send.title")).build());
 
         player.openInventory(inv);
     }
 
     private List<Mail> getValidMails(UUID uuid) {
-        MailDataManager manager = MailDataManager.getInstance();
-        List<Mail> mails = new ArrayList<>(manager.getMails(uuid));
+        List<Mail> mails = new ArrayList<>(MailDataManager.getInstance().getMails(uuid));
         mails.removeIf(m -> m == null || m.isExpired());
         mails.sort(Comparator.comparingLong(Mail::getCreatedAt).reversed());
         return mails;
-    }
-
-    private ItemStack createButton(ItemStack base, String name) {
-        ItemStack item = base.clone();
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(name);
-            item.setItemMeta(meta);
-        }
-        return item;
     }
 
     @EventHandler
@@ -138,18 +145,19 @@ public class MailGUI implements Listener, InventoryHolder {
         } else if (slot == NEXT_BTN_SLOT) {
             ConfigManager.playSound(player, ConfigManager.SoundType.GUI_PAGE_TURN);
             open(player, currentPage + 1);
-        } else if (slot < 45) {
+        } else if (MAIL_SLOTS.contains(slot)) {
+            // [개선] 슬롯 리스트를 이용해 정확한 인덱스 추출
+            int listIndex = MAIL_SLOTS.indexOf(slot);
             List<Mail> validMails = getValidMails(uuid);
-            int listIndexOffset = (slot < 8) ? slot : (slot - 1);
-            int mailIndex = currentPage * PAGE_SIZE + listIndexOffset;
+            int mailIndex = currentPage * PAGE_SIZE + listIndex;
 
             if (mailIndex >= 0 && mailIndex < validMails.size()) {
                 Mail mail = validMails.get(mailIndex);
+                ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
+
                 if (e.getClick() == ClickType.RIGHT) {
-                    ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                     MailManager.getInstance().mailDeleteConfirmGUI.open(player, Collections.singletonList(mail));
                 } else {
-                    ConfigManager.playSound(player, ConfigManager.SoundType.GUI_CLICK);
                     MailManager.getInstance().mailViewGUI.open(player, mail);
                 }
             }
@@ -159,7 +167,7 @@ public class MailGUI implements Listener, InventoryHolder {
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
         if (e.getInventory().getHolder() instanceof MailGUI) {
-            pageMap.remove(e.getPlayer().getUniqueId());
+            // 페이지 정보를 삭제하면 뒤로가기 시 불편하므로, 실제 필요시에만 삭제하도록 유지하거나 맵을 관리함.
         }
     }
 

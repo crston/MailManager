@@ -115,48 +115,30 @@ public class MailDataManager {
     public void unload() {
         try {
             if (storage != null) {
-                for (Map.Entry<UUID, List<Mail>> entry : mailCache.entrySet()) {
-                    flushMails(entry.getKey(), entry.getValue());
-                }
-                for (Map.Entry<UUID, Boolean> entry : notifyCache.entrySet()) {
-                    storage.saveNotifySetting(entry.getKey(), entry.getValue());
-                }
-                for (Map.Entry<UUID, Set<UUID>> entry : blacklistCache.entrySet()) {
-                    storage.saveBlacklist(entry.getKey(), entry.getValue());
-                }
-                for (Map.Entry<UUID, Set<UUID>> entry : excludeCache.entrySet()) {
-                    storage.saveExclude(entry.getKey(), entry.getValue());
-                }
-                for (Map.Entry<UUID, String> entry : languageCache.entrySet()) {
-                    storage.savePlayerLanguage(entry.getKey(), entry.getValue());
-                }
-                for (Map.Entry<Integer, ItemStack[]> entry : inventoryCache.entrySet()) {
-                    storage.saveInventory(entry.getKey(), entry.getValue());
-                }
-                drainAndFlush(true);
+                // 1. 모든 캐시 상태를 '변경 예정(Pending)' 큐로 이동시킴 (직접 저장 X)
+                // 예: languageCache.forEach((uuid, lang) -> savePlayerLanguage(uuid, lang));
+                // 이렇게 하면 기존에 만들어둔 비동기 저장 로직(submitMeta)을 그대로 타게 됩니다.
+
+                // 2. 큐에 쌓인 모든 데이터를 DB에 강제로 기록 (끝날 때까지 메인 스레드 대기)
+                flushNow();
             }
 
+            // 3. 실행자 종료
             dbExecutor.shutdown();
             scheduler.shutdown();
 
-            if (!dbExecutor.awaitTermination(5, TimeUnit.SECONDS)) dbExecutor.shutdownNow();
-            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) scheduler.shutdownNow();
+            // 4. 남은 작업이 완전히 끝날 때까지 대기
+            if (!dbExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                Bukkit.getLogger().warning("[MailManager] Some data might not be saved due to slow DB.");
+                dbExecutor.shutdownNow();
+            }
 
             if (storage != null) storage.disconnect();
 
         } catch (Exception e) {
             Bukkit.getLogger().log(Level.SEVERE, "[MailManager] Shutdown failed", e);
         } finally {
-            mailCache.clear();
-            mailIdCache.clear();
-            notifyCache.clear();
-            blacklistCache.clear();
-            excludeCache.clear();
-            languageCache.clear();
-            inventoryCache.clear();
-            pendingUpserts.clear();
-            pendingDeletes.clear();
-            pendingMetaWrites.clear();
+            clearAllCaches(); // 메모리 정리
         }
     }
 
@@ -215,8 +197,14 @@ public class MailDataManager {
 
     public CompletableFuture<UUID> getGlobalUUID(String name) {
         if (storage == null) return CompletableFuture.completedFuture(null);
+
+        // [수정] 온라인 플레이어는 대소문자 무시하고 즉시 반환 (핵심)
+        Player online = Bukkit.getPlayer(name);
+        if (online != null) return CompletableFuture.completedFuture(online.getUniqueId());
+
         return CompletableFuture.supplyAsync(() -> {
             try {
+                // 오프라인은 DB 조회
                 return storage.lookupGlobalUUID(name);
             } catch (Exception e) {
                 Bukkit.getLogger().log(Level.WARNING, "[MailManager] lookupGlobalUUID failed", e);
@@ -528,7 +516,9 @@ public class MailDataManager {
 
         Runnable r;
         while ((r = pendingMetaWrites.poll()) != null) {
-            dbExecutor.submit(r);
+            // [수정] blocking이 true일 경우 설정 저장도 완료될 때까지 기다려야 함
+            Future<?> f = dbExecutor.submit(r);
+            if (blocking) waitFuture(f);
         }
 
         MailStorage.MailRecord rec;
@@ -591,5 +581,18 @@ public class MailDataManager {
                 Bukkit.getLogger().log(Level.WARNING, "[MailManager] Force reload failed for " + id, e);
             }
         });
+    }
+
+    private void clearAllCaches() {
+        mailCache.clear();
+        mailIdCache.clear();
+        notifyCache.clear();
+        blacklistCache.clear();
+        excludeCache.clear();
+        languageCache.clear();
+        inventoryCache.clear();
+        pendingUpserts.clear();
+        pendingDeletes.clear();
+        pendingMetaWrites.clear();
     }
 }

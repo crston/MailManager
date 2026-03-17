@@ -1,7 +1,6 @@
 package com.gmail.bobason01.utils;
 
 import com.gmail.bobason01.lang.LangManager;
-
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -12,6 +11,7 @@ public final class TimeUtil {
 
     private static final String[] UNITS = {"year", "month", "day", "hour", "minute", "second"};
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final long FOREVER_THRESHOLD = 3153600000000L; // 약 100년 후 기준
 
     private TimeUtil() {}
 
@@ -20,7 +20,7 @@ public final class TimeUtil {
             return LangManager.get(lang, "time.permanent");
         }
 
-        StringBuilder builder = new StringBuilder(32);
+        StringBuilder builder = new StringBuilder();
         boolean hasValid = false;
 
         for (String unit : UNITS) {
@@ -29,7 +29,7 @@ public final class TimeUtil {
                 hasValid = true;
                 builder.append(value)
                         .append(LangManager.get(lang, "time.unit." + unit))
-                        .append(' ');
+                        .append(" ");
             }
         }
 
@@ -37,8 +37,9 @@ public final class TimeUtil {
     }
 
     public static String formatDateTime(long epochMillis, String lang) {
-        if (epochMillis <= 0 || epochMillis >= LocalDateTime.now().plusYears(99).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()) {
-            return LangManager.get(lang, "gui.send.time.no_expire");
+        // 영구 보관 또는 터무니없이 먼 미래인 경우
+        if (epochMillis <= 0 || epochMillis > System.currentTimeMillis() + FOREVER_THRESHOLD) {
+            return LangManager.get(lang, "time.permanent");
         }
 
         LocalDateTime time = Instant.ofEpochMilli(epochMillis)
