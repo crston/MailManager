@@ -30,8 +30,6 @@ public class MailViewGUI implements Listener, InventoryHolder {
 
     private final Plugin plugin;
     private final Map<UUID, UUID> viewingMail = new ConcurrentHashMap<>();
-
-    // 핵심 보안: 중복 수령 방지용 락 세트
     private static final Set<UUID> processingMails = ConcurrentHashMap.newKeySet();
 
     public MailViewGUI(Plugin plugin) {
@@ -86,7 +84,6 @@ public class MailViewGUI implements Listener, InventoryHolder {
             return;
         }
 
-        // [중복 방지 락]
         if (processingMails.contains(mailId)) return;
 
         MailDataManager manager = MailDataManager.getInstance();
@@ -125,22 +122,21 @@ public class MailViewGUI implements Listener, InventoryHolder {
         ItemStack toAdd = clickedItem.clone();
         int originalAmount = toAdd.getAmount();
 
-        // 인벤토리에 추가
         Map<Integer, ItemStack> left = player.getInventory().addItem(toAdd);
 
         if (left.isEmpty()) {
-            // 전부 들어감
             items.remove(slot);
         } else {
-            // 일부만 들어감 또는 아예 못 들어감
-            int leftAmount = left.get(0).getAmount();
+            int leftAmount = 0;
+            for (ItemStack leftItem : left.values()) {
+                leftAmount += leftItem.getAmount();
+            }
+
             if (leftAmount == originalAmount) {
-                // 하나도 못 들어감
                 player.sendMessage(LangManager.get(player.getUniqueId(), "mail.receive.failed"));
                 ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_FAIL);
                 return;
             }
-            // 일부 수령 성공 시 남은 수량 업데이트
             clickedItem.setAmount(leftAmount);
         }
 
@@ -162,9 +158,12 @@ public class MailViewGUI implements Listener, InventoryHolder {
             if (left.isEmpty()) {
                 claimedAny = true;
             } else {
-                ItemStack leftItem = left.get(0);
-                if (leftItem.getAmount() < originalAmount) claimedAny = true;
-                remaining.add(leftItem);
+                int leftAmount = 0;
+                for (ItemStack leftItem : left.values()) {
+                    leftAmount += leftItem.getAmount();
+                    remaining.add(leftItem);
+                }
+                if (leftAmount < originalAmount) claimedAny = true;
             }
         }
 
@@ -179,7 +178,7 @@ public class MailViewGUI implements Listener, InventoryHolder {
                 MailDataManager.getInstance().updateMail(mail);
                 player.sendMessage(LangManager.get(player.getUniqueId(), "mail.inventory_full"));
                 ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
-                open(player, mail); // UI 갱신
+                open(player, mail);
             }
         } else {
             player.sendMessage(LangManager.get(player.getUniqueId(), "mail.receive.failed"));
@@ -188,7 +187,6 @@ public class MailViewGUI implements Listener, InventoryHolder {
     }
 
     private void updateMailStatus(Player player, Mail mail, List<ItemStack> items) {
-        // 아이템 리스트 정제 (null이나 Air 제거)
         items.removeIf(item -> item == null || item.getType() == Material.AIR);
 
         MailDataManager manager = MailDataManager.getInstance();
@@ -201,7 +199,7 @@ public class MailViewGUI implements Listener, InventoryHolder {
             mail.setItems(items);
             manager.updateMail(mail);
             ConfigManager.playSound(player, ConfigManager.SoundType.MAIL_CLAIM_SUCCESS);
-            open(player, mail); // UI 갱신
+            open(player, mail);
         }
     }
 

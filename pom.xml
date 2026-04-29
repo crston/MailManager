@@ -6,7 +6,7 @@
 
     <groupId>com.gmail.bobason01</groupId>
     <artifactId>MailManager</artifactId>
-    <version>200.0</version>
+    <version>300.0</version>
     <packaging>jar</packaging>
 
     <name>MailManager</name>

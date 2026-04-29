@@ -35,7 +35,7 @@ public class MailSerializer {
         }
     }
 
-    public static Mail deserialize(byte[] data) throws IOException, ClassNotFoundException {
+    public static Mail deserialize(byte[] data, UUID receiver) throws IOException, ClassNotFoundException {
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
             UUID id = new UUID(in.readLong(), in.readLong());
             UUID sender = new UUID(in.readLong(), in.readLong());
@@ -49,7 +49,7 @@ public class MailSerializer {
                 in.readFully(itemBytes);
                 items.add(deserializeItem(itemBytes));
             }
-            return new Mail(id, sender, null, items,
+            return new Mail(id, sender, receiver, items,
                     LocalDateTime.ofEpochSecond(sent, 0, ZoneOffset.UTC),
                     expire == -1 ? null : LocalDateTime.ofEpochSecond(expire, 0, ZoneOffset.UTC));
         }

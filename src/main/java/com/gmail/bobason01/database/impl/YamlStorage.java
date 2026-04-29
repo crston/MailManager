@@ -24,57 +24,52 @@ public class YamlStorage implements MailStorage {
 
     private File mailsFile;
     private FileConfiguration mailsConfig;
-
     private File playersFile;
     private FileConfiguration playersConfig;
-
     private File inventoriesFile;
     private FileConfiguration inventoriesConfig;
 
     @Override
     public void connect() throws Exception {
-        mailsFile = new File(plugin.getDataFolder(), "data/mails.yml");
-        if (!mailsFile.exists()) {
-            mailsFile.getParentFile().mkdirs();
-            mailsFile.createNewFile();
-        }
+        File dataFolder = new File(plugin.getDataFolder(), "data");
+        if (!dataFolder.exists()) dataFolder.mkdirs();
+
+        mailsFile = new File(dataFolder, "mails.yml");
+        playersFile = new File(dataFolder, "players.yml");
+        inventoriesFile = new File(dataFolder, "inventories.yml");
+
+        if (!mailsFile.exists()) mailsFile.createNewFile();
+        if (!playersFile.exists()) playersFile.createNewFile();
+        if (!inventoriesFile.exists()) inventoriesFile.createNewFile();
+
         mailsConfig = YamlConfiguration.loadConfiguration(mailsFile);
-
-        playersFile = new File(plugin.getDataFolder(), "data/players.yml");
-        if (!playersFile.exists()) {
-            playersFile.getParentFile().mkdirs();
-            playersFile.createNewFile();
-        }
         playersConfig = YamlConfiguration.loadConfiguration(playersFile);
-
-        inventoriesFile = new File(plugin.getDataFolder(), "data/inventories.yml");
-        if (!inventoriesFile.exists()) {
-            inventoriesFile.getParentFile().mkdirs();
-            inventoriesFile.createNewFile();
-        }
         inventoriesConfig = YamlConfiguration.loadConfiguration(inventoriesFile);
     }
 
     @Override
     public void disconnect() throws Exception {
+        // 종료 시에만 모든 데이터를 한꺼번에 물리 디스크에 기록 (성능 최적화)
+        saveAll();
+    }
+
+    @Override
+    public void ensureSchema() {}
+
+    private void saveAll() {
         saveMails();
         savePlayers();
         saveInventories();
     }
 
-    @Override
-    public void ensureSchema() {
-        // YAML 파일 방식은 스키마 생성이 필요 없음
-    }
-
     private void saveMails() {
-        try { mailsConfig.save(mailsFile); } catch (IOException e) { e.printStackTrace(); }
+        try { mailsConfig.save(mailsFile); } catch (IOException e) { plugin.getLogger().log(Level.SEVERE, "Could not save mails.yml", e); }
     }
     private void savePlayers() {
-        try { playersConfig.save(playersFile); } catch (IOException e) { e.printStackTrace(); }
+        try { playersConfig.save(playersFile); } catch (IOException e) { plugin.getLogger().log(Level.SEVERE, "Could not save players.yml", e); }
     }
     private void saveInventories() {
-        try { inventoriesConfig.save(inventoriesFile); } catch (IOException e) { e.printStackTrace(); }
+        try { inventoriesConfig.save(inventoriesFile); } catch (IOException e) { plugin.getLogger().log(Level.SEVERE, "Could not save inventories.yml", e); }
     }
 
     @Override
@@ -82,20 +77,18 @@ public class YamlStorage implements MailStorage {
         List<Mail> list = new ArrayList<>();
         String path = "mails." + receiver.toString();
 
-        if (mailsConfig.isConfigurationSection(path)) {
-            ConfigurationSection section = mailsConfig.getConfigurationSection(path);
-            if (section != null) {
-                for (String mailIdStr : section.getKeys(false)) {
-                    String base64 = section.getString(mailIdStr);
-                    if (base64 != null) {
-                        try {
-                            byte[] data = Base64.getDecoder().decode(base64);
-                            Mail mail = MailSerializer.deserialize(data);
-                            if (mail != null) list.add(mail);
-                        } catch (Exception e) {
-                            plugin.getLogger().log(Level.WARNING, "Failed to load mail " + mailIdStr, e);
-                        }
-                    }
+        ConfigurationSection section = mailsConfig.getConfigurationSection(path);
+        if (section != null) {
+            for (String mailIdStr : section.getKeys(false)) {
+                String base64 = section.getString(mailIdStr);
+                if (base64 == null) continue;
+                try {
+                    byte[] data = Base64.getDecoder().decode(base64);
+                    // CRITICAL: receiver UUID 전달로 복사 버그 방지
+                    Mail mail = MailSerializer.deserialize(data, receiver);
+                    if (mail != null) list.add(mail);
+                } catch (Exception e) {
+                    plugin.getLogger().log(Level.WARNING, "Failed to load mail " + mailIdStr + " for " + receiver, e);
                 }
             }
         }
@@ -105,87 +98,68 @@ public class YamlStorage implements MailStorage {
     @Override
     public void batchInsertMails(List<MailRecord> records) throws Exception {
         if (records.isEmpty()) return;
-
         for (MailRecord rec : records) {
             String path = "mails." + rec.receiver().toString() + "." + rec.mail().getMailId().toString();
             byte[] data = MailSerializer.serialize(rec.mail());
-            String base64 = Base64.getEncoder().encodeToString(data);
-            mailsConfig.set(path, base64);
+            mailsConfig.set(path, Base64.getEncoder().encodeToString(data));
         }
-        saveMails();
+        // 매 건마다 저장하지 않고 메모리 유지 (MailDataManager가 적절한 타이밍에 flush 호출 유도)
     }
 
     @Override
     public void batchDeleteMails(List<MailRecord> records) throws Exception {
         if (records.isEmpty()) return;
-
         for (MailRecord rec : records) {
             String path = "mails." + rec.receiver().toString() + "." + rec.mail().getMailId().toString();
             mailsConfig.set(path, null);
         }
-        saveMails();
     }
 
     @Override
     public void deletePlayerMails(UUID receiver) throws Exception {
         mailsConfig.set("mails." + receiver.toString(), null);
-        saveMails();
     }
 
     @Override
     public void saveNotifySetting(UUID uuid, boolean enabled) throws Exception {
         playersConfig.set("notify." + uuid.toString(), enabled);
-        savePlayers();
     }
 
     @Override
     public Boolean loadNotifySetting(UUID uuid) {
-        if (playersConfig.contains("notify." + uuid.toString())) {
-            return playersConfig.getBoolean("notify." + uuid.toString());
-        }
-        return null;
+        return playersConfig.contains("notify." + uuid.toString()) ? playersConfig.getBoolean("notify." + uuid.toString()) : null;
     }
 
     @Override
     public void saveBlacklist(UUID owner, Set<UUID> list) throws Exception {
-        List<String> strList = new ArrayList<>();
-        for (UUID uuid : list) {
-            strList.add(uuid.toString());
-        }
+        List<String> strList = list.stream().map(UUID::toString).toList();
         playersConfig.set("blacklist." + owner.toString(), strList);
-        savePlayers();
     }
 
     @Override
     public Set<UUID> loadBlacklist(UUID owner) {
         List<String> list = playersConfig.getStringList("blacklist." + owner.toString());
+        if (list.isEmpty()) return new HashSet<>();
         Set<UUID> result = new HashSet<>();
         for (String s : list) {
-            try {
-                result.add(UUID.fromString(s));
-            } catch (IllegalArgumentException ignored) {}
+            try { result.add(UUID.fromString(s)); } catch (Exception ignored) {}
         }
         return result;
     }
 
     @Override
     public void saveExclude(UUID owner, Set<UUID> list) throws Exception {
-        List<String> strList = new ArrayList<>();
-        for (UUID uuid : list) {
-            strList.add(uuid.toString());
-        }
+        List<String> strList = list.stream().map(UUID::toString).toList();
         playersConfig.set("exclude." + owner.toString(), strList);
-        savePlayers();
     }
 
     @Override
     public Set<UUID> loadExclude(UUID owner) {
         List<String> list = playersConfig.getStringList("exclude." + owner.toString());
+        if (list.isEmpty()) return new HashSet<>();
         Set<UUID> result = new HashSet<>();
         for (String s : list) {
-            try {
-                result.add(UUID.fromString(s));
-            } catch (IllegalArgumentException ignored) {}
+            try { result.add(UUID.fromString(s)); } catch (Exception ignored) {}
         }
         return result;
     }
@@ -193,7 +167,6 @@ public class YamlStorage implements MailStorage {
     @Override
     public void savePlayerLanguage(UUID uuid, String lang) throws Exception {
         playersConfig.set("lang." + uuid.toString(), lang);
-        savePlayers();
     }
 
     @Override
@@ -204,45 +177,30 @@ public class YamlStorage implements MailStorage {
     @Override
     public void saveInventory(int id, ItemStack[] contents) throws Exception {
         byte[] data = serializeItems(contents);
-        String base64 = Base64.getEncoder().encodeToString(data);
-        inventoriesConfig.set("inv." + id, base64);
-        saveInventories();
+        inventoriesConfig.set("inv." + id, Base64.getEncoder().encodeToString(data));
     }
 
     @Override
     public ItemStack[] loadInventory(int id) throws Exception {
         String base64 = inventoriesConfig.getString("inv." + id);
-        if (base64 == null) return null;
-
-        byte[] data = Base64.getDecoder().decode(base64);
-        return deserializeItems(data);
+        return base64 == null ? null : deserializeItems(Base64.getDecoder().decode(base64));
     }
 
     @Override
     public void updateGlobalPlayer(UUID uuid, String name) throws Exception {
         if (name == null) return;
-        // UUID로 이름 찾기용
         playersConfig.set("global.uuid2name." + uuid.toString(), name);
-        // 이름으로 UUID 찾기용
         playersConfig.set("global.name2uuid." + name.toLowerCase(Locale.ROOT), uuid.toString());
-        savePlayers();
     }
 
     @Override
     public UUID lookupGlobalUUID(String name) throws Exception {
-        if (name == null) return null;
         String uuidStr = playersConfig.getString("global.name2uuid." + name.toLowerCase(Locale.ROOT));
-        if (uuidStr != null) {
-            try {
-                return UUID.fromString(uuidStr);
-            } catch (IllegalArgumentException ignored) {}
-        }
-        return null;
+        try { return uuidStr != null ? UUID.fromString(uuidStr) : null; } catch (Exception e) { return null; }
     }
 
     @Override
     public String lookupGlobalName(UUID uuid) throws Exception {
-        if (uuid == null) return null;
         return playersConfig.getString("global.uuid2name." + uuid.toString());
     }
 
@@ -252,15 +210,12 @@ public class YamlStorage implements MailStorage {
         ConfigurationSection section = playersConfig.getConfigurationSection("global.uuid2name");
         if (section != null) {
             for (String key : section.getKeys(false)) {
-                try {
-                    uuids.add(UUID.fromString(key));
-                } catch (IllegalArgumentException ignored) {}
+                try { uuids.add(UUID.fromString(key)); } catch (Exception ignored) {}
             }
         }
         return uuids;
     }
 
-    // 아이템 직렬화 헬퍼
     private byte[] serializeItems(ItemStack[] items) throws IOException {
         try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
              BukkitObjectOutputStream oos = new BukkitObjectOutputStream(bos)) {
@@ -269,7 +224,6 @@ public class YamlStorage implements MailStorage {
         }
     }
 
-    // 아이템 역직렬화 헬퍼
     private ItemStack[] deserializeItems(byte[] data) throws IOException, ClassNotFoundException {
         try (ByteArrayInputStream bis = new ByteArrayInputStream(data);
              BukkitObjectInputStream ois = new BukkitObjectInputStream(bis)) {

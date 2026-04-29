@@ -22,9 +22,7 @@ public class MySqlStorage implements MailStorage {
     }
 
     @Override
-    public void connect() throws Exception {
-        // 데이터소스가 이미 연결 풀을 관리하므로 별도 동작 없음
-    }
+    public void connect() throws Exception {}
 
     @Override
     public void disconnect() throws Exception {
@@ -36,8 +34,6 @@ public class MySqlStorage implements MailStorage {
     @Override
     public void ensureSchema() throws Exception {
         try (Connection conn = ds.getConnection(); Statement st = conn.createStatement()) {
-
-            // 메일 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS mails (" +
                             "id VARCHAR(36) PRIMARY KEY," +
@@ -47,7 +43,6 @@ public class MySqlStorage implements MailStorage {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
 
-            // 인벤토리 백업 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS inventories (" +
                             "id INT PRIMARY KEY," +
@@ -55,7 +50,6 @@ public class MySqlStorage implements MailStorage {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
 
-            // 알림 설정 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS notify_settings (" +
                             "uuid VARCHAR(36) PRIMARY KEY," +
@@ -63,7 +57,6 @@ public class MySqlStorage implements MailStorage {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
 
-            // 차단 목록 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS blacklist (" +
                             "owner VARCHAR(36) NOT NULL," +
@@ -72,7 +65,6 @@ public class MySqlStorage implements MailStorage {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
 
-            // 전체 발송 제외 목록 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS exclude_list (" +
                             "owner VARCHAR(36) NOT NULL," +
@@ -81,7 +73,6 @@ public class MySqlStorage implements MailStorage {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
 
-            // 언어 설정 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS player_lang (" +
                             "uuid VARCHAR(36) PRIMARY KEY," +
@@ -89,7 +80,6 @@ public class MySqlStorage implements MailStorage {
                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
             );
 
-            // 글로벌 플레이어 정보 테이블
             st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS global_players (" +
                             "uuid VARCHAR(36) PRIMARY KEY," +
@@ -110,7 +100,7 @@ public class MySqlStorage implements MailStorage {
             ps.setString(1, receiver.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    Mail mail = MailSerializer.deserialize(rs.getBytes(1));
+                    Mail mail = MailSerializer.deserialize(rs.getBytes(1), receiver);
                     if (mail != null) list.add(mail);
                 }
             }
@@ -121,7 +111,6 @@ public class MySqlStorage implements MailStorage {
     @Override
     public void batchInsertMails(List<MailRecord> list) throws Exception {
         if (list.isEmpty()) return;
-        // MySQL 전용 문법 사용
         String sql = "INSERT INTO mails(id, receiver, data) VALUES(?,?,?) " +
                 "ON DUPLICATE KEY UPDATE receiver=VALUES(receiver), data=VALUES(data)";
 
@@ -193,7 +182,7 @@ public class MySqlStorage implements MailStorage {
 
     @Override
     public Boolean loadNotifySetting(UUID uuid) throws Exception {
-        String sql = "SELECT enabled FROM notify_settings WHERE uuid=?";
+        String sql = "SELECT enabled FROM notify_settings WHERE uuid=? LIMIT 1";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
@@ -310,7 +299,7 @@ public class MySqlStorage implements MailStorage {
 
     @Override
     public String loadPlayerLanguage(UUID uuid) throws Exception {
-        String sql = "SELECT lang FROM player_lang WHERE uuid=?";
+        String sql = "SELECT lang FROM player_lang WHERE uuid=? LIMIT 1";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
@@ -335,7 +324,7 @@ public class MySqlStorage implements MailStorage {
 
     @Override
     public ItemStack[] loadInventory(int id) throws Exception {
-        String sql = "SELECT data FROM inventories WHERE id=?";
+        String sql = "SELECT data FROM inventories WHERE id=? LIMIT 1";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
@@ -360,9 +349,9 @@ public class MySqlStorage implements MailStorage {
 
     @Override
     public UUID lookupGlobalUUID(String name) throws Exception {
-        String sql = "SELECT uuid FROM global_players WHERE name = ?";
+        String sql = "SELECT uuid FROM global_players WHERE name = ? LIMIT 1";
         try (Connection conn = ds.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+             PreparedStatement ps = conn.prepareStatement(sql)) { // conn. 추가됨
             ps.setString(1, name);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) return UUID.fromString(rs.getString(1));
@@ -373,7 +362,7 @@ public class MySqlStorage implements MailStorage {
 
     @Override
     public String lookupGlobalName(UUID uuid) throws Exception {
-        String sql = "SELECT name FROM global_players WHERE uuid = ?";
+        String sql = "SELECT name FROM global_players WHERE uuid = ? LIMIT 1";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());

@@ -24,22 +24,22 @@ public class JdbcStorage implements MailStorage {
     }
 
     @Override
-    public void connect() {
-    }
+    public void connect() {}
 
     @Override
-    public void disconnect() {
-    }
+    public void disconnect() {}
 
     @Override
     public void ensureSchema() throws Exception {
         try (Connection conn = ds.getConnection(); Statement st = conn.createStatement()) {
 
+            // SQLite 성능 극대화를 위한 PRAGMA 설정 (Folia/Paper 환경 최적화)
             if (!isMySQL) {
                 st.execute("PRAGMA journal_mode=WAL");
                 st.execute("PRAGMA synchronous=NORMAL");
                 st.execute("PRAGMA temp_store=MEMORY");
                 st.execute("PRAGMA busy_timeout=5000");
+                st.execute("PRAGMA mmap_size=268435456"); // 256MB 메모리 맵핑으로 I/O 속도 향상
             }
 
             st.executeUpdate(
@@ -102,9 +102,11 @@ public class JdbcStorage implements MailStorage {
     @Override
     public void batchInsertMails(List<MailRecord> records) throws Exception {
         if (records.isEmpty()) return;
+        // SQLite/MySQL 호환을 위해 REPLACE INTO 사용
         String sql = "REPLACE INTO mails(id, receiver, data) VALUES(?,?,?)";
 
         try (Connection conn = ds.getConnection()) {
+            boolean autoCommit = conn.getAutoCommit();
             conn.setAutoCommit(false);
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 for (MailRecord rec : records) {
@@ -114,8 +116,13 @@ public class JdbcStorage implements MailStorage {
                     ps.addBatch();
                 }
                 ps.executeBatch();
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(autoCommit);
             }
-            conn.commit();
         }
     }
 
@@ -124,6 +131,7 @@ public class JdbcStorage implements MailStorage {
         if (records.isEmpty()) return;
         String sql = "DELETE FROM mails WHERE id=?";
         try (Connection conn = ds.getConnection()) {
+            boolean autoCommit = conn.getAutoCommit();
             conn.setAutoCommit(false);
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 for (MailRecord rec : records) {
@@ -131,8 +139,13 @@ public class JdbcStorage implements MailStorage {
                     ps.addBatch();
                 }
                 ps.executeBatch();
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(autoCommit);
             }
-            conn.commit();
         }
     }
 
@@ -155,7 +168,8 @@ public class JdbcStorage implements MailStorage {
             ps.setString(1, receiver.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    Mail mail = MailSerializer.deserialize(rs.getBytes(1));
+                    // CRITICAL: receiver 인자를 추가하여 역직렬화 시 수신자 UUID 누락 방지 (복사 버그 수정)
+                    Mail mail = MailSerializer.deserialize(rs.getBytes(1), receiver);
                     if (mail != null) list.add(mail);
                 }
             }
@@ -176,7 +190,7 @@ public class JdbcStorage implements MailStorage {
 
     @Override
     public Boolean loadNotifySetting(UUID uuid) throws Exception {
-        String sql = "SELECT enabled FROM notify_settings WHERE uuid=?";
+        String sql = "SELECT enabled FROM notify_settings WHERE uuid=? LIMIT 1";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
@@ -192,22 +206,30 @@ public class JdbcStorage implements MailStorage {
         String del = "DELETE FROM blacklist WHERE owner=?";
         String ins = "INSERT INTO blacklist(owner, target) VALUES(?,?)";
         try (Connection conn = ds.getConnection()) {
+            boolean autoCommit = conn.getAutoCommit();
             conn.setAutoCommit(false);
-            try (PreparedStatement ps = conn.prepareStatement(del)) {
-                ps.setString(1, owner.toString());
-                ps.executeUpdate();
-            }
-            if (!list.isEmpty()) {
-                try (PreparedStatement ps = conn.prepareStatement(ins)) {
-                    for (UUID target : list) {
-                        ps.setString(1, owner.toString());
-                        ps.setString(2, target.toString());
-                        ps.addBatch();
-                    }
-                    ps.executeBatch();
+            try {
+                try (PreparedStatement ps = conn.prepareStatement(del)) {
+                    ps.setString(1, owner.toString());
+                    ps.executeUpdate();
                 }
+                if (!list.isEmpty()) {
+                    try (PreparedStatement ps = conn.prepareStatement(ins)) {
+                        for (UUID target : list) {
+                            ps.setString(1, owner.toString());
+                            ps.setString(2, target.toString());
+                            ps.addBatch();
+                        }
+                        ps.executeBatch();
+                    }
+                }
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(autoCommit);
             }
-            conn.commit();
         }
     }
 
@@ -230,22 +252,30 @@ public class JdbcStorage implements MailStorage {
         String del = "DELETE FROM exclude_list WHERE owner=?";
         String ins = "INSERT INTO exclude_list(owner, target) VALUES(?,?)";
         try (Connection conn = ds.getConnection()) {
+            boolean autoCommit = conn.getAutoCommit();
             conn.setAutoCommit(false);
-            try (PreparedStatement ps = conn.prepareStatement(del)) {
-                ps.setString(1, owner.toString());
-                ps.executeUpdate();
-            }
-            if (!list.isEmpty()) {
-                try (PreparedStatement ps = conn.prepareStatement(ins)) {
-                    for (UUID target : list) {
-                        ps.setString(1, owner.toString());
-                        ps.setString(2, target.toString());
-                        ps.addBatch();
-                    }
-                    ps.executeBatch();
+            try {
+                try (PreparedStatement ps = conn.prepareStatement(del)) {
+                    ps.setString(1, owner.toString());
+                    ps.executeUpdate();
                 }
+                if (!list.isEmpty()) {
+                    try (PreparedStatement ps = conn.prepareStatement(ins)) {
+                        for (UUID target : list) {
+                            ps.setString(1, owner.toString());
+                            ps.setString(2, target.toString());
+                            ps.addBatch();
+                        }
+                        ps.executeBatch();
+                    }
+                }
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(autoCommit);
             }
-            conn.commit();
         }
     }
 
@@ -276,7 +306,7 @@ public class JdbcStorage implements MailStorage {
 
     @Override
     public String loadPlayerLanguage(UUID uuid) throws Exception {
-        String sql = "SELECT lang FROM player_lang WHERE uuid=?";
+        String sql = "SELECT lang FROM player_lang WHERE uuid=? LIMIT 1";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
@@ -300,7 +330,7 @@ public class JdbcStorage implements MailStorage {
 
     @Override
     public ItemStack[] loadInventory(int id) throws Exception {
-        String sql = "SELECT data FROM inventories WHERE id=?";
+        String sql = "SELECT data FROM inventories WHERE id=? LIMIT 1";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
@@ -324,7 +354,7 @@ public class JdbcStorage implements MailStorage {
 
     @Override
     public UUID lookupGlobalUUID(String name) throws Exception {
-        String sql = "SELECT uuid FROM global_players WHERE lower(name) = lower(?)";
+        String sql = "SELECT uuid FROM global_players WHERE lower(name) = lower(?) LIMIT 1";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, name);
@@ -337,7 +367,7 @@ public class JdbcStorage implements MailStorage {
 
     @Override
     public String lookupGlobalName(UUID uuid) throws Exception {
-        String sql = "SELECT name FROM global_players WHERE uuid = ?";
+        String sql = "SELECT name FROM global_players WHERE uuid = ? LIMIT 1";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
@@ -348,7 +378,6 @@ public class JdbcStorage implements MailStorage {
         return null;
     }
 
-    // [추가된 메서드]
     @Override
     public Set<UUID> getAllGlobalUUIDs() throws Exception {
         Set<UUID> uuids = new HashSet<>();
