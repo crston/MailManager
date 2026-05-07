@@ -1,6 +1,7 @@
 package com.gmail.bobason01.gui;
 
 import com.gmail.bobason01.MailManager;
+import com.gmail.bobason01.api.events.MailClaimEvent;
 import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.Mail;
@@ -13,8 +14,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -64,7 +67,6 @@ public class MailSelectGUI implements Listener, InventoryHolder {
         MailDataManager manager = MailDataManager.getInstance();
         UUID filterSender = senderFilterMap.get(uuid);
 
-        // [최적화] 매번 flush/forceReload 하지 않고 메모리 내 데이터를 스트림으로 필터링
         List<Mail> mails = manager.getMails(uuid).stream()
                 .filter(mail -> !mail.isExpired())
                 .filter(mail -> filterSender == null || mail.getSender().equals(filterSender))
@@ -85,7 +87,6 @@ public class MailSelectGUI implements Listener, InventoryHolder {
             title = title.replace("%sender%", manager.getGlobalName(filterSender));
         }
 
-        // 타이틀 길이 방어 코드
         if (title.length() > 32) title = title.substring(0, 29) + "...";
         Inventory inv = Bukkit.createInventory(this, 54, title);
 
@@ -98,7 +99,6 @@ public class MailSelectGUI implements Listener, InventoryHolder {
             ItemStack item = mail.toItemStack(player);
             if (item == null) continue;
 
-            // 선택된 아이템 시각 효과 (인챈트 광채)
             if (currentSelected.contains(mail.getMailId())) {
                 item.addUnsafeEnchantment(Enchantment.DURABILITY, 1);
                 ItemMeta meta = item.getItemMeta();
@@ -113,7 +113,6 @@ public class MailSelectGUI implements Listener, InventoryHolder {
             inv.setItem(i - start, item);
         }
 
-        // 하단 버튼 배치
         setupButtons(inv, lang, safePage, end < mails.size());
         player.openInventory(inv);
     }
@@ -138,7 +137,6 @@ public class MailSelectGUI implements Listener, InventoryHolder {
 
         UUID uuid = player.getUniqueId();
         int currentPage = pageMap.getOrDefault(uuid, 0);
-        MailDataManager manager = MailDataManager.getInstance();
 
         if (slot == SLOT_SEARCH) {
             waitingForSearch.add(uuid);
@@ -195,6 +193,18 @@ public class MailSelectGUI implements Listener, InventoryHolder {
             Mail mail = manager.getMailById(mailId);
             if (mail == null) continue;
 
+            List<ItemStack> itemsToClaim = new ArrayList<>();
+            for (ItemStack item : mail.getItems()) {
+                if (item != null && !item.getType().isAir()) itemsToClaim.add(item.clone());
+            }
+
+            MailClaimEvent event = new MailClaimEvent(player, mail, itemsToClaim);
+            Bukkit.getPluginManager().callEvent(event);
+
+            if (event.isCancelled()) {
+                continue;
+            }
+
             List<ItemStack> items = new ArrayList<>(mail.getItems());
             List<ItemStack> remain = new ArrayList<>();
 
@@ -240,7 +250,7 @@ public class MailSelectGUI implements Listener, InventoryHolder {
         if (!waitingForSearch.contains(uuid)) return;
 
         e.setCancelled(true);
-        waitingForSearch.remove(uuid); // 즉시 제거하여 중복 방지
+        waitingForSearch.remove(uuid);
 
         String input = e.getMessage().trim();
         if (input.equalsIgnoreCase("reset") || input.equalsIgnoreCase("cancel")) {
@@ -249,7 +259,6 @@ public class MailSelectGUI implements Listener, InventoryHolder {
             return;
         }
 
-        // 비동기 스레드에서 UUID 검색 후 메인 스레드에서 GUI 오픈
         MailDataManager.getInstance().getGlobalUUID(input).thenAccept(target -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (target == null) {
@@ -269,7 +278,6 @@ public class MailSelectGUI implements Listener, InventoryHolder {
             UUID uuid = e.getPlayer().getUniqueId();
             if (!waitingForSearch.contains(uuid)) {
                 pageMap.remove(uuid);
-                // 선택 목록은 유저 편의를 위해 명시적으로 지우지 않음 (필요 시 여기서 clear)
             }
         }
     }

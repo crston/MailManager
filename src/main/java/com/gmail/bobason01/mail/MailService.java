@@ -1,5 +1,6 @@
 package com.gmail.bobason01.mail;
 
+import com.gmail.bobason01.api.events.MailPreSendEvent;
 import com.gmail.bobason01.cache.PlayerCache;
 import com.gmail.bobason01.lang.LangManager;
 import org.bukkit.Bukkit;
@@ -54,6 +55,11 @@ public class MailService {
                     .filter(targetId -> !exclude.contains(targetId))
                     .filter(targetId -> !MailDataManager.getInstance().getBlacklist(targetId).contains(senderId))
                     .map(targetId -> new Mail(senderId, targetId, baseItems, now, expireAt))
+                    .filter(mail -> {
+                        MailPreSendEvent event = new MailPreSendEvent(mail, true);
+                        Bukkit.getPluginManager().callEvent(event);
+                        return !event.isCancelled();
+                    })
                     .toList();
             for (Mail mail : mailsToSend) MailDataManager.getInstance().addMail(mail);
             int count = mailsToSend.size();
@@ -80,6 +86,14 @@ public class MailService {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expireAt = buildExpireTime(now, session.time);
         Mail mail = new Mail(senderId, session.target, baseItems, now, expireAt);
+
+        MailPreSendEvent event = new MailPreSendEvent(mail, !Bukkit.isPrimaryThread());
+        Bukkit.getPluginManager().callEvent(event);
+
+        if (event.isCancelled()) {
+            return;
+        }
+
         MailDataManager.getInstance().addMail(mail);
         sessions.remove(senderId);
         sender.sendMessage(LangManager.get(lang, "mail.send.success"));

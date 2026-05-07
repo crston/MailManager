@@ -1,6 +1,7 @@
 package com.gmail.bobason01.gui;
 
 import com.gmail.bobason01.MailManager;
+import com.gmail.bobason01.api.events.MailClaimEvent;
 import com.gmail.bobason01.config.ConfigManager;
 import com.gmail.bobason01.lang.LangManager;
 import com.gmail.bobason01.mail.Mail;
@@ -120,6 +121,14 @@ public class MailViewGUI implements Listener, InventoryHolder {
         if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
 
         ItemStack toAdd = clickedItem.clone();
+
+        MailClaimEvent event = new MailClaimEvent(player, mail, Collections.singletonList(toAdd));
+        Bukkit.getPluginManager().callEvent(event);
+
+        if (event.isCancelled()) {
+            return;
+        }
+
         int originalAmount = toAdd.getAmount();
 
         Map<Integer, ItemStack> left = player.getInventory().addItem(toAdd);
@@ -145,6 +154,19 @@ public class MailViewGUI implements Listener, InventoryHolder {
 
     private void handleAllClaim(Player player, Mail mail) {
         List<ItemStack> items = new ArrayList<>(mail.getItems());
+
+        List<ItemStack> itemsToClaim = new ArrayList<>();
+        for (ItemStack item : items) {
+            if (item != null && item.getType() != Material.AIR) itemsToClaim.add(item.clone());
+        }
+
+        MailClaimEvent event = new MailClaimEvent(player, mail, itemsToClaim);
+        Bukkit.getPluginManager().callEvent(event);
+
+        if (event.isCancelled()) {
+            return;
+        }
+
         List<ItemStack> remaining = new ArrayList<>();
         boolean claimedAny = false;
 
