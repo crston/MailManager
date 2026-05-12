@@ -18,6 +18,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -59,9 +60,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
         String sub = args[0].toLowerCase(Locale.ROOT);
         boolean isPlayer = sender instanceof Player;
 
-        // ---------------- send ----------------
         if (sub.equals("send")) {
-            // [권한 분리 로직] 인자가 3개 미만이면 GUI 창 오픈 (mail.send 권한)
             if (args.length < 3) {
                 if (!sender.hasPermission("mail.send")) {
                     sender.sendMessage(LangManager.get(lang, "cmd.send.no-permission"));
@@ -71,7 +70,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 else sender.sendMessage(LangManager.get(lang, "cmd.send.usage"));
                 return true;
             } else {
-                // [보안강화] 인자가 3개 이상(명령어 발송)이면 mail.admin 권한 확인
                 if (!sender.hasPermission("mail.admin")) {
                     sender.sendMessage(LangManager.get(lang, "cmd.inv.no-permission"));
                     return true;
@@ -82,7 +80,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
                 MailDataManager.getInstance().getGlobalUUID(targetName).thenAccept(targetUUID -> {
                     Bukkit.getScheduler().runTask(plugin, () -> {
-                        // 비동기 콜백 내부 재검증
                         Player currentSender = Bukkit.getPlayer(finalSenderId);
                         if (currentSender != null && !currentSender.hasPermission("mail.admin")) {
                             currentSender.sendMessage(LangManager.get(lang, "cmd.inv.no-permission"));
@@ -101,12 +98,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                         }
 
                         LocalDateTime now = LocalDateTime.now();
-                        LocalDateTime expire = (args.length >= 4 && !args[args.length - 1].startsWith("-"))
-                                ? parseExpireTime(args[3], now) : now.plusDays(30);
-                        if (expire == null) {
-                            sender.sendMessage(LangManager.get(lang, "expire.invalid"));
-                            return;
-                        }
+                        LocalDateTime expire = (args.length >= 4) ? parseExpireTime(args[3], now) : now.plusDays(30);
 
                         Mail mail = new Mail(finalSenderId, targetUUID, items, now, expire);
                         MailDataManager.getInstance().addMail(mail);
@@ -117,7 +109,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             }
         }
 
-        // ---------------- 관리자 전용 명령어 (mail.admin 공통 체크) ----------------
         if (!sender.hasPermission("mail.admin")) {
             sender.sendMessage(LangManager.get(lang, "cmd.inv.no-permission"));
             return true;
@@ -137,8 +128,7 @@ public class MailCommand implements CommandExecutor, TabCompleter {
             }
 
             LocalDateTime now = LocalDateTime.now();
-            LocalDateTime expire = (args.length >= 3 && !args[args.length - 1].startsWith("-"))
-                    ? parseExpireTime(args[2], now) : now.plusDays(30);
+            LocalDateTime expire = (args.length >= 3) ? parseExpireTime(args[2], now) : now.plusDays(30);
 
             sender.sendMessage(LangManager.get(lang, "mail.sendall.start"));
 
@@ -222,8 +212,6 @@ public class MailCommand implements CommandExecutor, TabCompleter {
         return false;
     }
 
-    // ---------------- 데이터 및 유틸리티 로직 (생략 없음) ----------------
-
     public static ItemStack[] getInventory(int id) {
         return invMap.getOrDefault(id, new ItemStack[36]);
     }
@@ -261,6 +249,8 @@ public class MailCommand implements CommandExecutor, TabCompleter {
         List<ItemStack> result = new ArrayList<>();
         for (String raw : parts) {
             String part = raw.trim();
+            if (part.isEmpty()) continue;
+
             if (part.startsWith("inv:")) {
                 try {
                     int id = Integer.parseInt(part.substring(4));
@@ -270,16 +260,26 @@ public class MailCommand implements CommandExecutor, TabCompleter {
                 } catch (Exception ignored) {}
                 continue;
             }
-            // 수량 파싱 (이름:수량)
+
             int amount = 1;
             String itemName = part;
-            int idx = part.lastIndexOf(':');
-            if (idx > 0 && !part.contains(MMOITEMS_PREFIX) && !part.contains(ITEMSADDER_PREFIX)) {
-                try {
-                    amount = Integer.parseInt(part.substring(idx + 1));
-                    itemName = part.substring(0, idx);
-                } catch (Exception ignored) {}
+
+            int amountIdx = part.lastIndexOf(':');
+            if (amountIdx > 0) {
+                String potentialAmount = part.substring(amountIdx + 1);
+                String potentialName = part.substring(0, amountIdx);
+
+                if (potentialAmount.matches("\\d+")) {
+                    if (!(potentialName.contains(MMOITEMS_PREFIX) || potentialName.contains(ITEMSADDER_PREFIX))) {
+                        amount = Integer.parseInt(potentialAmount);
+                        itemName = potentialName;
+                    } else if (potentialName.chars().filter(ch -> ch == ':').count() == 1 && potentialName.startsWith(MMOITEMS_PREFIX)) {
+                        amount = Integer.parseInt(potentialAmount);
+                        itemName = potentialName;
+                    }
+                }
             }
+
             ItemStack item = parseSingleItem(itemName);
             if (item != null) {
                 item.setAmount(amount);
@@ -291,16 +291,37 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
     private ItemStack parseSingleItem(String id) {
         try {
-            if (id.startsWith(MMOITEMS_PREFIX)) {
-                String[] split = id.substring(MMOITEMS_PREFIX.length()).split("\\.");
+            if (id.startsWith(MMOITEMS_PREFIX) && Bukkit.getPluginManager().isPluginEnabled("MMOItems")) {
+                String content = id.substring(MMOITEMS_PREFIX.length());
+                String[] split = content.split("\\.");
+                if (split.length < 2) return null;
                 Type type = MMOItems.plugin.getTypes().get(split[0].toUpperCase());
+                if (type == null) return null;
                 MMOItem mmo = MMOItems.plugin.getMMOItem(type, split[1].toUpperCase());
                 return mmo != null ? mmo.newBuilder().build() : null;
             }
-            if (id.startsWith(ITEMSADDER_PREFIX)) {
+
+            if (id.startsWith(ITEMSADDER_PREFIX) && Bukkit.getPluginManager().isPluginEnabled("ItemsAdder")) {
                 CustomStack cs = CustomStack.getInstance(id.substring(ITEMSADDER_PREFIX.length()));
                 return cs != null ? cs.getItemStack() : null;
             }
+
+            if (id.startsWith(MODEL_PREFIX)) {
+                String content = id.substring(MODEL_PREFIX.length());
+                String[] split = content.split("\\.");
+                if (split.length < 2) return null;
+                Material mat = Material.matchMaterial(split[0].toUpperCase());
+                if (mat == null) return null;
+                int modelData = Integer.parseInt(split[1]);
+                ItemStack item = new ItemStack(mat);
+                ItemMeta meta = item.getItemMeta();
+                if (meta != null) {
+                    meta.setCustomModelData(modelData);
+                    item.setItemMeta(meta);
+                }
+                return item;
+            }
+
             Material mat = Material.matchMaterial(id.toUpperCase());
             return mat != null ? new ItemStack(mat) : null;
         } catch (Exception e) { return null; }
@@ -308,12 +329,14 @@ public class MailCommand implements CommandExecutor, TabCompleter {
 
     private LocalDateTime parseExpireTime(String input, LocalDateTime now) {
         try {
+            if (input.startsWith("-")) return now.plusDays(30);
             int val = Integer.parseInt(input.substring(0, input.length() - 1));
             char unit = input.charAt(input.length() - 1);
             return switch (unit) {
                 case 'd' -> now.plusDays(val);
                 case 'h' -> now.plusHours(val);
                 case 'm' -> now.plusMinutes(val);
+                case 's' -> now.plusSeconds(val);
                 default -> now.plusDays(30);
             };
         } catch (Exception e) { return now.plusDays(30); }
@@ -323,10 +346,16 @@ public class MailCommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
         int len = args.length;
         String prefix = args[len - 1].toLowerCase(Locale.ROOT);
+
         if (len == 1) return filterPrefix(SUB_COMMANDS, prefix);
 
         String sub = args[0].toLowerCase(Locale.ROOT);
-        if (sub.equals("inv") && len == 2) return filterPrefix(Arrays.asList("create", "edit", "open", "delete"), prefix);
+
+        if (sub.equals("inv") && len == 2) {
+            if (!sender.hasPermission("mail.admin")) return Collections.emptyList();
+            return filterPrefix(Arrays.asList("create", "edit", "delete"), prefix);
+        }
+
         if (sub.equals("setlang") && len == 2) return filterPrefix(new ArrayList<>(LangManager.getAvailableLanguages()), prefix);
 
         if (len == 2 && (sub.equals("send") || sub.equals("reset"))) {
@@ -334,11 +363,55 @@ public class MailCommand implements CommandExecutor, TabCompleter {
         }
 
         if ((len == 2 && sub.equals("sendall")) || (len == 3 && sub.equals("send"))) {
+            // 보안 강화: 아이템 목록 조회는 mail.admin 권한이 있을 때만 허용
+            if (!sender.hasPermission("mail.admin")) return Collections.emptyList();
+
             List<String> result = new ArrayList<>();
-            for (Material mat : Material.values()) if (mat.isItem()) result.add(mat.name().toLowerCase());
-            for (Integer invId : invMap.keySet()) result.add("inv:" + invId);
+
+            if (prefix.startsWith(MMOITEMS_PREFIX) && Bukkit.getPluginManager().isPluginEnabled("MMOItems")) {
+                String currentInput = prefix.substring(MMOITEMS_PREFIX.length());
+                for (Type type : MMOItems.plugin.getTypes().getAll()) {
+                    String typeName = type.getId().toLowerCase();
+                    if (!currentInput.contains(".")) {
+                        result.add(MMOITEMS_PREFIX + typeName + ".");
+                    } else {
+                        String[] split = currentInput.split("\\.");
+                        if (split[0].equalsIgnoreCase(typeName)) {
+                            MMOItems.plugin.getTemplates().getTemplates(type).forEach(template -> {
+                                result.add(MMOITEMS_PREFIX + typeName + "." + template.getId().toLowerCase());
+                            });
+                        }
+                    }
+                }
+                return filterPrefix(result, prefix);
+            }
+
+            if (prefix.startsWith(ITEMSADDER_PREFIX) && Bukkit.getPluginManager().isPluginEnabled("ItemsAdder")) {
+                for (String namespacedId : CustomStack.getNamespacedIdsInRegistry()) {
+                    result.add(ITEMSADDER_PREFIX + namespacedId.toLowerCase());
+                }
+                return filterPrefix(result, prefix);
+            }
+
+            for (Material mat : Material.values()) {
+                if (mat.isItem()) result.add(mat.name().toLowerCase());
+            }
+            for (Integer invId : invMap.keySet()) {
+                result.add("inv:" + invId);
+            }
+
+            if (Bukkit.getPluginManager().isPluginEnabled("MMOItems")) result.add(MMOITEMS_PREFIX);
+            if (Bukkit.getPluginManager().isPluginEnabled("ItemsAdder")) result.add(ITEMSADDER_PREFIX);
+            result.add(MODEL_PREFIX);
+
             return filterPrefix(result, prefix);
         }
+
+        if ((len == 3 && sub.equals("sendall")) || (len == 4 && sub.equals("send"))) {
+            if (!sender.hasPermission("mail.admin")) return Collections.emptyList();
+            return filterPrefix(TIME_SUGGESTIONS, prefix);
+        }
+
         return Collections.emptyList();
     }
 
